@@ -11,6 +11,7 @@ interface Config {
     favorites: string[]; // 收藏的相机IP列表
     history: CameraInfo[]; // 成功添加的相机历史记录
   };
+  contexts: CameraContextConfig[]; // 持久化的上下文配置
 }
 
 // 相机收藏夹条目接口（支持别名）
@@ -30,6 +31,32 @@ interface CameraInfo {
   addedAt: Date;
 }
 
+// 相机上下文配置接口
+export interface CameraContextConfig {
+  id: string;
+  cameraIp: string;
+  alias: string;
+  isActive: boolean;
+  lastUpdated: Date;
+  cameraInfo: {
+    recording?: boolean;
+    batteryVoltage?: number;
+    temperature?: number;
+    panPosition?: number;
+    tiltPosition?: number;
+    focusDistance?: number;
+  };
+  subscriptionOptions?: {
+    basicInfo?: boolean;
+    ptz?: boolean;
+    focus?: boolean;
+    recording?: boolean;
+    battery?: boolean;
+    temperature?: boolean;
+    all?: boolean;
+  };
+}
+
 export class ConfigManager {
   private config: Config;
   private configPath: string;
@@ -39,11 +66,12 @@ export class ConfigManager {
     // 默认配置文件路径为用户主目录下的.zcammcp文件
     this.configPath = configPath || path.join(process.env.HOME || '', '.zcammcp', 'config.json');
     this.config = {
-      version: '0.0.1',
+      version: '0.0.2',
       cameras: {
         favorites: [],
         history: []
-      }
+      },
+      contexts: []
     };
     this.loadConfig();
   }
@@ -82,14 +110,29 @@ export class ConfigManager {
    */
   private migrateConfig(loadedConfig: any): Config {
     console.log('Function: migrateConfig - Migrating configuration if needed');
-    // 当前版本为0.0.1，暂不处理版本迁移
-    // 在后续版本中，如果需要修改配置结构，可以在这里处理版本兼容性
+    // 版本兼容性处理
+    const version = loadedConfig.version || '0.0.1';
+    
+    // 当前版本为0.0.2，添加contexts字段
+    if (version === '0.0.1') {
+      return {
+        version: '0.0.2',
+        cameras: {
+          favorites: loadedConfig.cameras?.favorites || [],
+          history: loadedConfig.cameras?.history || []
+        },
+        contexts: []
+      };
+    }
+    
+    // 其他版本保持不变
     return {
-      version: '0.0.1',
+      version: '0.0.2',
       cameras: {
         favorites: loadedConfig.cameras?.favorites || [],
         history: loadedConfig.cameras?.history || []
-      }
+      },
+      contexts: loadedConfig.contexts || []
     };
   }
 
@@ -208,5 +251,22 @@ export class ConfigManager {
     console.log('Function: clearCameraHistory - Clearing camera history');
     this.config.cameras.history = [];
     this.saveConfig();
+  }
+
+  /**
+   * 保存上下文配置
+   */
+  saveContexts(contexts: CameraContextConfig[]): void {
+    console.log('Function: saveContexts - Saving contexts to config');
+    this.config.contexts = contexts;
+    this.saveConfig();
+  }
+
+  /**
+   * 获取上下文配置
+   */
+  getContexts(): CameraContextConfig[] {
+    console.log('Function: getContexts - Getting contexts from config');
+    return [...this.config.contexts];
   }
 }

@@ -12,6 +12,9 @@ import { z } from 'zod';
 import * as fs from 'fs/promises';
 import { CameraManager } from './core/CameraManager.js';
 import { ConfigManager } from './core/ConfigManager.js';
+import { ContextService } from './services/ContextService.js';
+import { PersistenceManager } from './services/PersistenceService.js';
+import { WebSocketSubscriptionManager } from './services/WebSocketSubscriptionManager.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -29,11 +32,31 @@ const ZcamConfigSchema = z.object({
 class ZcamMcpServer {
   private server: Server;
   private cameraManager: CameraManager;
+  private contextService: ContextService;
+  private persistenceManager: PersistenceManager;
+  private wsManager: WebSocketSubscriptionManager;
 
   constructor() {
     // 初始化配置管理器和相机管理器
     const configManager = new ConfigManager();
     this.cameraManager = new CameraManager(configManager);
+    
+    // 初始化WebSocket管理器
+    this.wsManager = new WebSocketSubscriptionManager(
+      (cameraIp: string, info: any) => {
+        this.cameraManager.updateCameraInfo(cameraIp, info);
+      }
+    );
+    
+    // 初始化上下文服务
+    this.contextService = new ContextService(this.cameraManager);
+    
+    // 初始化持久化管理器
+    this.persistenceManager = new PersistenceManager(
+      configManager,
+      this.cameraManager,
+      this.wsManager
+    );
     
     this.server = new Server(
       {
@@ -48,6 +71,18 @@ class ZcamMcpServer {
     );
 
     this.setupToolHandlers();
+    
+    // 在服务器启动时加载持久化的上下文
+    this.loadPersistedContexts();
+  }
+
+  private async loadPersistedContexts() {
+    try {
+      await this.persistenceManager.loadContexts();
+      console.log('Persisted contexts loaded successfully');
+    } catch (error) {
+      console.error('Failed to load persisted contexts:', error);
+    }
   }
 
   private setupToolHandlers() {
@@ -63,8 +98,8 @@ class ZcamMcpServer {
               properties: {
                 action: {
                   type: 'string',
-                  description: '操作类型: add, get_status, switch, update_alias, add_favorite, remove_favorite, get_favorites, get_context',
-                  enum: ['add', 'get_status', 'switch', 'update_alias', 'add_favorite', 'remove_favorite', 'get_favorites', 'get_context']
+                  description: '操作类型: add, remove, get_status, switch, update_alias, add_favorite, remove_favorite, get_favorites, get_context',
+                  enum: ['add', 'remove', 'get_status', 'switch', 'update_alias', 'add_favorite', 'remove_favorite', 'get_favorites', 'get_context']
                 },
                 ip: {
                   type: 'string',
@@ -975,12 +1010,33 @@ class ZcamMcpServer {
               ],
             };
           }
-          await this.cameraManager.addCamera(ip);
+          await this.contextService.addCamera(ip, alias);
           return {
             content: [
               {
                 type: 'text',
-                text: `✅ 相机 ${ip} 已添加`,
+                text: `✅ 相机 ${ip} 已添加并建立WebSocket连接`,
+              },
+            ],
+          };
+
+        case 'remove':
+          if (!ip) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: '❌ 移除相机失败: 缺少IP地址参数',
+                },
+              ],
+            };
+          }
+          await this.contextService.removeCamera(ip);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `✅ 相机 ${ip} 已移除并断开WebSocket连接`,
               },
             ],
           };
@@ -1011,7 +1067,7 @@ class ZcamMcpServer {
             content: [
               {
                 type: 'text',
-                text: `📊 相机 ${ip} 状态:\n名称: ${status.name}\n型号: ${status.model}\n固件: ${status.firmware}\nMAC: ${status.mac}\n序列号: ${status.serialNumber}\n连接状态: ${status.isConnected ? '已连接' : '未连接'}`,
+                text: `📊 相机 ${ip} 状态:\n名称: ${status.name}\n型号: ${status.model}\n固件: ${status.firmware}\nMAC: ${status.mac}\n序列号: ${status.serialNumber}\n连接状态: ${status.isConnected ? '已连接' : '未连接'}\n录制状态: ${status.recording ? '录制中' : '停止'}\n电池电压: ${status.batteryVoltage || 'N/A'}\n温度: ${status.temperature || 'N/A'}°C`,
               },
             ],
           };
@@ -1027,7 +1083,7 @@ class ZcamMcpServer {
               ],
             };
           }
-          const switchResult = this.cameraManager.switchCamera(ip);
+          const switchResult = this.contextService.switchCamera(ip);
           if (switchResult) {
             return {
               content: [
@@ -1059,7 +1115,7 @@ class ZcamMcpServer {
               ],
             };
           }
-          const updateResult = await this.cameraManager.updateCameraAlias(ip, alias);
+          const updateResult = await this.contextService.updateCameraAlias(ip, alias);
           if (updateResult) {
             return {
               content: [
@@ -1091,7 +1147,7 @@ class ZcamMcpServer {
               ],
             };
           }
-          const addFavResult = await this.cameraManager.addToFavorites(ip);
+          const addFavResult = await this.contextService.addToFavorites(ip);
           if (addFavResult) {
             return {
               content: [
@@ -1123,18 +1179,29 @@ class ZcamMcpServer {
               ],
             };
           }
-          await this.cameraManager.removeFromFavorites(ip);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `✅ 相机 ${ip} 已从收藏夹移除`,
-              },
-            ],
-          };
+          const removeFavResult = await this.contextService.removeFromFavorites(ip);
+          if (removeFavResult) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `✅ 相机 ${ip} 已从收藏夹移除`,
+                },
+              ],
+            };
+          } else {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `❌ 从收藏夹移除失败: 相机 ${ip} 不存在`,
+                },
+              ],
+            };
+          }
 
         case 'get_favorites':
-          const favorites = this.cameraManager.getFavoriteCameras();
+          const favorites = this.contextService.getFavoriteCameras();
           return {
             content: [
               {
@@ -1145,7 +1212,7 @@ class ZcamMcpServer {
           };
           
         case 'get_context':
-          const context = this.cameraManager.getCurrentContext();
+          const context = this.contextService.getCurrentContext();
           return {
             content: [
               {
@@ -1181,6 +1248,19 @@ class ZcamMcpServer {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('Zcam MCP Server running on stdio');
+    
+    // 监听退出信号，保存上下文
+    process.on('SIGINT', async () => {
+      console.log('Received SIGINT, saving contexts...');
+      this.persistenceManager.saveContexts();
+      process.exit(0);
+    });
+    
+    process.on('SIGTERM', async () => {
+      console.log('Received SIGTERM, saving contexts...');
+      this.persistenceManager.saveContexts();
+      process.exit(0);
+    });
   }
 }
 
