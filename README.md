@@ -34,7 +34,7 @@ npm run build
   "mcpServers": {
     "zcammcp": {
       "command": "node",
-      "args": ["/Users/fanzhang/Documents/github/zcammcp/dist/index.js"],
+      "args": ["/Users/fanzhang/zcammcp/dist/index.js"],
       "env": {}
     }
   }
@@ -53,7 +53,7 @@ npm run build
   "mcpServers": {
     "zcammcp": {
       "command": "node",
-      "args": ["/Users/fanzhang/Documents/github/zcammcp/dist/index.js"]
+      "args": ["/Users/fanzhang/zcammcp/dist/index.js"]
     }
   }
 }

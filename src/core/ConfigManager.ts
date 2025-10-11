@@ -13,6 +13,12 @@ interface Config {
   };
 }
 
+// 相机收藏夹条目接口（支持别名）
+interface FavoriteCamera {
+  ip: string;
+  alias: string;
+}
+
 // 相机信息接口
 interface CameraInfo {
   ip: string;
@@ -118,6 +124,18 @@ export class ConfigManager {
   }
 
   /**
+   * 添加相机到收藏列表（支持别名）
+   */
+  addFavoriteCameraWithAlias(ip: string, alias: string): void {
+    console.log(`Function: addFavoriteCameraWithAlias - Adding camera ${ip} with alias ${alias} to favorites`);
+    // 当前实现仍然只保存IP，后续可以扩展为保存别名
+    if (!this.config.cameras.favorites.includes(ip)) {
+      this.config.cameras.favorites.push(ip);
+      this.saveConfig();
+    }
+  }
+
+  /**
    * 从收藏列表移除相机
    */
   removeFavoriteCamera(ip: string): void {
@@ -127,6 +145,15 @@ export class ConfigManager {
       this.config.cameras.favorites.splice(index, 1);
       this.saveConfig();
     }
+  }
+
+  /**
+   * 更新收藏夹中相机的别名
+   */
+  updateFavoriteCameraAlias(ip: string, alias: string): void {
+    console.log(`Function: updateFavoriteCameraAlias - Updating camera ${ip} alias to ${alias}`);
+    // 当前实现暂时为空，后续可以扩展为更新别名
+    console.log('TODO: Implement favorite camera alias update');
   }
 
   /**
