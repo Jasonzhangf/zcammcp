@@ -15,6 +15,7 @@ import { ConfigManager } from './core/ConfigManager.js';
 import { ContextService } from './services/ContextService.js';
 import { PersistenceManager } from './services/PersistenceService.js';
 import { WebSocketSubscriptionManager } from './services/WebSocketSubscriptionManager.js';
+import { PTZService } from './services/PTZService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -35,6 +36,7 @@ class ZcamMcpServer {
   private contextService: ContextService;
   private persistenceManager: PersistenceManager;
   private wsManager: WebSocketSubscriptionManager;
+  private ptzService: PTZService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -57,6 +59,9 @@ class ZcamMcpServer {
       this.cameraManager,
       this.wsManager
     );
+    
+    // 初始化PTZ服务
+    this.ptzService = new PTZService();
     
     this.server = new Server(
       {
@@ -401,38 +406,34 @@ class ZcamMcpServer {
           
           // PTZ控制工具
           case 'ptz_control':
-            switch (args?.action) {
+            if (!args || !args.ip) {
+              throw new McpError(
+                ErrorCode.InvalidParams,
+                'Missing required parameter: ip'
+              );
+            }
+            
+            switch (args.action) {
               case 'move':
-                // TODO: 实现PTZ移动处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🔄 正在控制相机 ${args?.ip} 云台移动: pan=${args?.pan}, tilt=${args?.tilt}`
-                  }]
-                };
+                return await this.ptzService.movePanTilt(
+                  args.ip as string, 
+                  (args.pan as number) || 0, 
+                  (args.tilt as number) || 0
+                );
               
               case 'zoom':
-                // TODO: 实现PTZ变焦处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🔍 正在控制相机 ${args?.ip} 变焦: zoom=${args?.zoomValue}`
-                  }]
-                };
+                return await this.ptzService.zoom(
+                  args.ip as string, 
+                  (args.zoomValue as number) || 0
+                );
               
               case 'get_status':
-                // TODO: 实现PTZ状态获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} PTZ状态:\nPan: 0.0\nTilt: 0.0\nZoom: 1.0`
-                  }]
-                };
+                return await this.ptzService.getPTZStatus(args.ip as string);
               
               default:
                 throw new McpError(
                   ErrorCode.InvalidParams,
-                  `Unknown PTZ action: ${args?.action}`
+                  `Unknown PTZ action: ${args.action}`
                 );
             }
           
