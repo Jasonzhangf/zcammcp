@@ -21,6 +21,7 @@ import { ExposureService } from './services/ExposureService.js';
 import { WhiteBalanceService } from './services/WhiteBalanceService.js';
 import { ImageService } from './services/ImageService.js';
 import { AutoFramingService } from './services/AutoFramingService.js';
+import { VideoService } from './services/VideoService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -47,6 +48,7 @@ class ZcamMcpServer {
   private whiteBalanceService: WhiteBalanceService;
   private imageService: ImageService;
   private autoFramingService: AutoFramingService;
+  private videoService: VideoService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -87,6 +89,9 @@ class ZcamMcpServer {
     
     // 初始化自动取景服务
     this.autoFramingService = new AutoFramingService();
+    
+    // 初始化视频设置服务
+    this.videoService = new VideoService();
     
     this.server = new Server(
       {
@@ -706,40 +711,49 @@ class ZcamMcpServer {
           case 'video_settings':
             switch (args?.action) {
               case 'set_resolution':
-                // TODO: 实现视频分辨率设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📹 已设置相机 ${args?.ip} 视频分辨率为 ${args?.resolution}`
-                  }]
-                };
+                if (!args?.ip || !args?.resolution) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and resolution'
+                  );
+                }
+                return await this.videoService.setResolution(
+                  args.ip as string,
+                  args.resolution as string
+                );
               
               case 'set_frame_rate':
-                // TODO: 实现帧率设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📹 已设置相机 ${args?.ip} 帧率为 ${args?.frameRate}fps`
-                  }]
-                };
+                if (!args?.ip || args?.frameRate === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and frameRate'
+                  );
+                }
+                return await this.videoService.setFrameRate(
+                  args.ip as string,
+                  args.frameRate as number
+                );
               
               case 'set_codec':
-                // TODO: 实现视频编码格式设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📹 已设置相机 ${args?.ip} 视频编码为 ${args?.codec}`
-                  }]
-                };
+                if (!args?.ip || !args?.codec) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and codec'
+                  );
+                }
+                return await this.videoService.setCodec(
+                  args.ip as string,
+                  args.codec as string
+                );
               
               case 'get_settings':
-                // TODO: 实现视频设置获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} 视频设置:\n分辨率: 1920x1080\n帧率: 30fps\n编码: H.264`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.videoService.getVideoSettings(args.ip as string);
               
               default:
                 throw new McpError(
