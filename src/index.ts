@@ -17,6 +17,7 @@ import { PersistenceManager } from './services/PersistenceService.js';
 import { WebSocketSubscriptionManager } from './services/WebSocketSubscriptionManager.js';
 import { PTZService } from './services/PTZService.js';
 import { PresetService } from './services/PresetService.js';
+import { ExposureService } from './services/ExposureService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -39,6 +40,7 @@ class ZcamMcpServer {
   private wsManager: WebSocketSubscriptionManager;
   private ptzService: PTZService;
   private presetService: PresetService;
+  private exposureService: ExposureService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -67,6 +69,9 @@ class ZcamMcpServer {
     
     // 初始化预设服务
     this.presetService = new PresetService();
+    
+    // 初始化曝光服务
+    this.exposureService = new ExposureService();
     
     this.server = new Server(
       {
@@ -490,40 +495,49 @@ class ZcamMcpServer {
           case 'exposure_control':
             switch (args?.action) {
               case 'set_aperture':
-                // TODO: 实现光圈设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📷 已设置相机 ${args?.ip} 光圈值为 f/${args?.aperture}`
-                  }]
-                };
+                if (!args?.ip || args?.aperture === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and aperture'
+                  );
+                }
+                return await this.exposureService.setAperture(
+                  args.ip as string,
+                  args.aperture as number
+                );
               
               case 'set_shutter_speed':
-                // TODO: 实现快门速度设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📷 已设置相机 ${args?.ip} 快门速度为 1/${args?.shutterSpeed}s`
-                  }]
-                };
+                if (!args?.ip || args?.shutterSpeed === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and shutterSpeed'
+                  );
+                }
+                return await this.exposureService.setShutterSpeed(
+                  args.ip as string,
+                  args.shutterSpeed as number
+                );
               
               case 'set_iso':
-                // TODO: 实现ISO设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📷 已设置相机 ${args?.ip} ISO值为 ${args?.iso}`
-                  }]
-                };
+                if (!args?.ip || args?.iso === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and iso'
+                  );
+                }
+                return await this.exposureService.setISO(
+                  args.ip as string,
+                  args.iso as number
+                );
               
               case 'get_settings':
-                // TODO: 实现曝光设置获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} 曝光设置:\n光圈: f/2.8\n快门速度: 1/50s\nISO: 800`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.exposureService.getExposureSettings(args.ip as string);
               
               default:
                 throw new McpError(

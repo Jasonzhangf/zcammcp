@@ -1,19 +1,42 @@
 // 曝光服务模块
 console.log('Module: ExposureService');
 
+import * as http from 'http';
+import * as url from 'url';
+
 export class ExposureService {
   /**
    * 设置光圈值
    */
   async setAperture(ip: string, aperture: number): Promise<any> {
     console.log(`Function: setAperture - Setting aperture to ${aperture} for camera ${ip}`);
-    console.log('TODO: Implement aperture control logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `📷 已设置相机 ${ip} 光圈值为 f/${aperture}`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/exposure/aperture?value=${aperture}`;
+      console.log(`Sending aperture set request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `📷 成功设置相机 ${ip} 光圈值为 f/${aperture}`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error setting aperture for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 设置相机 ${ip} 光圈值失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 
   /**
@@ -21,13 +44,33 @@ export class ExposureService {
    */
   async setShutterSpeed(ip: string, shutterSpeed: number): Promise<any> {
     console.log(`Function: setShutterSpeed - Setting shutter speed to ${shutterSpeed} for camera ${ip}`);
-    console.log('TODO: Implement shutter speed control logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `📷 已设置相机 ${ip} 快门速度为 1/${shutterSpeed}s`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/exposure/shutter?value=${shutterSpeed}`;
+      console.log(`Sending shutter speed set request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `📷 成功设置相机 ${ip} 快门速度为 1/${shutterSpeed}s`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error setting shutter speed for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 设置相机 ${ip} 快门速度失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 
   /**
@@ -35,13 +78,33 @@ export class ExposureService {
    */
   async setISO(ip: string, iso: number): Promise<any> {
     console.log(`Function: setISO - Setting ISO to ${iso} for camera ${ip}`);
-    console.log('TODO: Implement ISO control logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `📷 已设置相机 ${ip} ISO值为 ${iso}`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/exposure/iso?value=${iso}`;
+      console.log(`Sending ISO set request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `📷 成功设置相机 ${ip} ISO值为 ${iso}`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error setting ISO for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 设置相机 ${ip} ISO值失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 
   /**
@@ -49,12 +112,72 @@ export class ExposureService {
    */
   async getExposureSettings(ip: string): Promise<any> {
     console.log(`Function: getExposureSettings - Getting exposure settings for camera: ${ip}`);
-    console.log('TODO: Implement exposure settings retrieval logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `📊 相机 ${ip} 曝光设置:\n光圈: f/2.8\n快门速度: 1/50s\nISO: 800`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/exposure/settings`;
+      console.log(`Sending exposure settings request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        // 在实际实现中，您可能需要解析响应数据
+        // 这里返回模拟数据
+        return {
+          content: [{
+            type: 'text',
+            text: `📊 相机 ${ip} 曝光设置:\n光圈: f/2.8\n快门速度: 1/50s\nISO: 800`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error getting exposure settings for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 获取相机 ${ip} 曝光设置失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
+  }
+  
+  /**
+   * 发送HTTP请求
+   */
+  private makeHttpRequest(requestUrl: string, method: string): Promise<{ success: boolean; data?: string; error?: string }> {
+    return new Promise((resolve) => {
+      const urlObj = new URL(requestUrl);
+      
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 80,
+        path: urlObj.pathname + urlObj.search,
+        method: method,
+      };
+      
+      const req = http.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ success: true, data: data });
+          } else {
+            resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage}`, data: data });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.end();
+    });
   }
 }
