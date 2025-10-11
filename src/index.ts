@@ -20,6 +20,7 @@ import { PresetService } from './services/PresetService.js';
 import { ExposureService } from './services/ExposureService.js';
 import { WhiteBalanceService } from './services/WhiteBalanceService.js';
 import { ImageService } from './services/ImageService.js';
+import { AutoFramingService } from './services/AutoFramingService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -45,6 +46,7 @@ class ZcamMcpServer {
   private exposureService: ExposureService;
   private whiteBalanceService: WhiteBalanceService;
   private imageService: ImageService;
+  private autoFramingService: AutoFramingService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -82,6 +84,9 @@ class ZcamMcpServer {
     
     // 初始化图像调整服务
     this.imageService = new ImageService();
+    
+    // 初始化自动取景服务
+    this.autoFramingService = new AutoFramingService();
     
     this.server = new Server(
       {
@@ -658,31 +663,37 @@ class ZcamMcpServer {
           case 'auto_framing':
             switch (args?.action) {
               case 'set_enabled':
-                // TODO: 实现自动取景启用/禁用处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🤖 ${args?.enabled ? '已启用' : '已禁用'} 相机 ${args?.ip} 自动取景功能`
-                  }]
-                };
+                if (!args?.ip || args?.enabled === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and enabled'
+                  );
+                }
+                return await this.autoFramingService.setAutoFraming(
+                  args.ip as string,
+                  args.enabled as boolean
+                );
               
               case 'set_mode':
-                // TODO: 实现自动取景模式设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🤖 已设置相机 ${args?.ip} 自动取景模式为 ${args?.mode}`
-                  }]
-                };
+                if (!args?.ip || !args?.mode) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and mode'
+                  );
+                }
+                return await this.autoFramingService.setAutoFramingMode(
+                  args.ip as string,
+                  args.mode as string
+                );
               
               case 'get_settings':
-                // TODO: 实现自动取景设置获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} 自动取景设置:\n启用: true\n模式: FaceDetection`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.autoFramingService.getAutoFramingSettings(args.ip as string);
               
               default:
                 throw new McpError(
