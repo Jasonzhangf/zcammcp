@@ -18,6 +18,7 @@ import { WebSocketSubscriptionManager } from './services/WebSocketSubscriptionMa
 import { PTZService } from './services/PTZService.js';
 import { PresetService } from './services/PresetService.js';
 import { ExposureService } from './services/ExposureService.js';
+import { WhiteBalanceService } from './services/WhiteBalanceService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -41,6 +42,7 @@ class ZcamMcpServer {
   private ptzService: PTZService;
   private presetService: PresetService;
   private exposureService: ExposureService;
+  private whiteBalanceService: WhiteBalanceService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -72,6 +74,9 @@ class ZcamMcpServer {
     
     // 初始化曝光服务
     this.exposureService = new ExposureService();
+    
+    // 初始化白平衡服务
+    this.whiteBalanceService = new WhiteBalanceService();
     
     this.server = new Server(
       {
@@ -550,31 +555,37 @@ class ZcamMcpServer {
           case 'white_balance':
             switch (args?.action) {
               case 'set_mode':
-                // TODO: 实现白平衡模式设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🌈 已设置相机 ${args?.ip} 白平衡模式为 ${args?.mode}`
-                  }]
-                };
+                if (!args?.ip || !args?.mode) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and mode'
+                  );
+                }
+                return await this.whiteBalanceService.setMode(
+                  args.ip as string,
+                  args.mode as string
+                );
               
               case 'set_temperature':
-                // TODO: 实现色温设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🌈 已设置相机 ${args?.ip} 色温为 ${args?.temperature}K`
-                  }]
-                };
+                if (!args?.ip || args?.temperature === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and temperature'
+                  );
+                }
+                return await this.whiteBalanceService.setTemperature(
+                  args.ip as string,
+                  args.temperature as number
+                );
               
               case 'get_settings':
-                // TODO: 实现白平衡设置获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} 白平衡设置:\n模式: Auto\n色温: 5600K`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.whiteBalanceService.getWhiteBalanceSettings(args.ip as string);
               
               default:
                 throw new McpError(
