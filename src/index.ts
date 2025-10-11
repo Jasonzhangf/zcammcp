@@ -19,6 +19,7 @@ import { PTZService } from './services/PTZService.js';
 import { PresetService } from './services/PresetService.js';
 import { ExposureService } from './services/ExposureService.js';
 import { WhiteBalanceService } from './services/WhiteBalanceService.js';
+import { ImageService } from './services/ImageService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -43,6 +44,7 @@ class ZcamMcpServer {
   private presetService: PresetService;
   private exposureService: ExposureService;
   private whiteBalanceService: WhiteBalanceService;
+  private imageService: ImageService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -77,6 +79,9 @@ class ZcamMcpServer {
     
     // 初始化白平衡服务
     this.whiteBalanceService = new WhiteBalanceService();
+    
+    // 初始化图像调整服务
+    this.imageService = new ImageService();
     
     this.server = new Server(
       {
@@ -598,40 +603,49 @@ class ZcamMcpServer {
           case 'image_adjustment':
             switch (args?.action) {
               case 'set_brightness':
-                // TODO: 实现亮度设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `밝️ 已设置相机 ${args?.ip} 亮度为 ${args?.brightness}`
-                  }]
-                };
+                if (!args?.ip || args?.brightness === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and brightness'
+                  );
+                }
+                return await this.imageService.setBrightness(
+                  args.ip as string,
+                  args.brightness as number
+                );
               
               case 'set_contrast':
-                // TODO: 实现对比度设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🌈 已设置相机 ${args?.ip} 对比度为 ${args?.contrast}`
-                  }]
-                };
+                if (!args?.ip || args?.contrast === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and contrast'
+                  );
+                }
+                return await this.imageService.setContrast(
+                  args.ip as string,
+                  args.contrast as number
+                );
               
               case 'set_saturation':
-                // TODO: 实现饱和度设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `🌈 已设置相机 ${args?.ip} 饱和度为 ${args?.saturation}`
-                  }]
-                };
+                if (!args?.ip || args?.saturation === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and saturation'
+                  );
+                }
+                return await this.imageService.setSaturation(
+                  args.ip as string,
+                  args.saturation as number
+                );
               
               case 'get_settings':
-                // TODO: 实现图像设置获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} 图像设置:\n亮度: 50\n对比度: 50\n饱和度: 50`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.imageService.getImageSettings(args.ip as string);
               
               default:
                 throw new McpError(
