@@ -16,6 +16,7 @@ import { ContextService } from './services/ContextService.js';
 import { PersistenceManager } from './services/PersistenceService.js';
 import { WebSocketSubscriptionManager } from './services/WebSocketSubscriptionManager.js';
 import { PTZService } from './services/PTZService.js';
+import { PresetService } from './services/PresetService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -37,6 +38,7 @@ class ZcamMcpServer {
   private persistenceManager: PersistenceManager;
   private wsManager: WebSocketSubscriptionManager;
   private ptzService: PTZService;
+  private presetService: PresetService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -62,6 +64,9 @@ class ZcamMcpServer {
     
     // 初始化PTZ服务
     this.ptzService = new PTZService();
+    
+    // 初始化预设服务
+    this.presetService = new PresetService();
     
     this.server = new Server(
       {
@@ -441,31 +446,38 @@ class ZcamMcpServer {
           case 'preset_manager':
             switch (args?.action) {
               case 'save':
-                // TODO: 实现预设保存处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📍 已保存预设位置 ${args?.presetId} (${args?.name}) 到相机 ${args?.ip}`
-                  }]
-                };
+                if (!args?.ip || args?.presetId === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and presetId'
+                  );
+                }
+                return await this.presetService.savePreset(
+                  args.ip as string,
+                  args.presetId as number,
+                  (args.name as string) || `预设${args.presetId}`
+                );
               
               case 'recall':
-                // TODO: 实现预设调用处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `↩️ 已调用相机 ${args?.ip} 的预设位置 ${args?.presetId}`
-                  }]
-                };
+                if (!args?.ip || args?.presetId === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and presetId'
+                  );
+                }
+                return await this.presetService.recallPreset(
+                  args.ip as string,
+                  args.presetId as number
+                );
               
               case 'list':
-                // TODO: 实现预设列表获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📋 相机 ${args?.ip} 的预设列表:\n1. 预设1\n2. 预设2\n3. 预设3`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.presetService.listPresets(args.ip as string);
               
               default:
                 throw new McpError(
