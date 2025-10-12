@@ -22,6 +22,7 @@ import { WhiteBalanceService } from './services/WhiteBalanceService.js';
 import { ImageService } from './services/ImageService.js';
 import { AutoFramingService } from './services/AutoFramingService.js';
 import { VideoService } from './services/VideoService.js';
+import { StreamingService } from './services/StreamingService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -49,6 +50,7 @@ class ZcamMcpServer {
   private imageService: ImageService;
   private autoFramingService: AutoFramingService;
   private videoService: VideoService;
+  private streamingService: StreamingService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -92,6 +94,9 @@ class ZcamMcpServer {
     
     // 初始化视频设置服务
     this.videoService = new VideoService();
+    
+    // 初始化流媒体服务
+    this.streamingService = new StreamingService();
     
     this.server = new Server(
       {
@@ -766,31 +771,37 @@ class ZcamMcpServer {
           case 'streaming_control':
             switch (args?.action) {
               case 'set_enabled':
-                // TODO: 实现流媒体启用/禁用处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📡 ${args?.enabled ? '已启用' : '已禁用'} 相机 ${args?.ip} RTMP流媒体`
-                  }]
-                };
+                if (!args?.ip || args?.enabled === undefined) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and enabled'
+                  );
+                }
+                return await this.streamingService.setEnabled(
+                  args.ip as string,
+                  args.enabled as boolean
+                );
               
               case 'set_rtmp_url':
-                // TODO: 实现RTMP服务器地址设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📡 已设置相机 ${args?.ip} RTMP服务器地址为 ${args?.url}`
-                  }]
-                };
+                if (!args?.ip || !args?.url) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and url'
+                  );
+                }
+                return await this.streamingService.setRtmpUrl(
+                  args.ip as string,
+                  args.url as string
+                );
               
               case 'get_settings':
-                // TODO: 实现流媒体设置获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} 流媒体设置:\n启用: true\nRTMP地址: rtmp://example.com/live/stream`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.streamingService.getStreamingSettings(args.ip as string);
               
               default:
                 throw new McpError(
