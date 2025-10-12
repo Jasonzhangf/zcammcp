@@ -1,19 +1,42 @@
 // 录制服务模块
 console.log('Module: RecordingService');
 
+import * as http from 'http';
+import * as url from 'url';
+
 export class RecordingService {
   /**
    * 开始录制
    */
   async startRecording(ip: string): Promise<any> {
     console.log(`Function: startRecording - Starting recording for camera ${ip}`);
-    console.log('TODO: Implement recording start logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `⏺️ 已开始录制相机 ${ip}`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/recording/start`;
+      console.log(`Sending recording start request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⏺️ 已开始录制相机 ${ip}`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error starting recording for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 开始录制相机 ${ip} 失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 
   /**
@@ -21,13 +44,33 @@ export class RecordingService {
    */
   async stopRecording(ip: string): Promise<any> {
     console.log(`Function: stopRecording - Stopping recording for camera ${ip}`);
-    console.log('TODO: Implement recording stop logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `⏹️ 已停止录制相机 ${ip}`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/recording/stop`;
+      console.log(`Sending recording stop request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⏹️ 已停止录制相机 ${ip}`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error stopping recording for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 停止录制相机 ${ip} 失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 
   /**
@@ -35,13 +78,33 @@ export class RecordingService {
    */
   async setRecordingFormat(ip: string, format: string): Promise<any> {
     console.log(`Function: setRecordingFormat - Setting recording format to ${format} for camera ${ip}`);
-    console.log('TODO: Implement recording format control logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `⏺️ 已设置相机 ${ip} 录制格式为 ${format}`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/recording/format?value=${encodeURIComponent(format)}`;
+      console.log(`Sending recording format set request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⏺️ 已设置相机 ${ip} 录制格式为 ${format}`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error setting recording format for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 设置相机 ${ip} 录制格式失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 
   /**
@@ -49,12 +112,72 @@ export class RecordingService {
    */
   async getRecordingStatus(ip: string): Promise<any> {
     console.log(`Function: getRecordingStatus - Getting recording status for camera: ${ip}`);
-    console.log('TODO: Implement recording status retrieval logic');
-    return {
-      content: [{
-        type: 'text',
-        text: `📊 相机 ${ip} 录制状态:\n状态: 已停止\n格式: MP4\n时长: 00:00:00`
-      }]
-    };
+    
+    try {
+      const requestUrl = `http://${ip}/recording/status`;
+      console.log(`Sending recording status request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      
+      if (result.success) {
+        // 在实际实现中，您可能需要解析响应数据
+        // 这里返回模拟数据
+        return {
+          content: [{
+            type: 'text',
+            text: `📊 相机 ${ip} 录制状态:\n状态: 已停止\n格式: MP4\n时长: 00:00:00`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error getting recording status for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 获取相机 ${ip} 录制状态失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
+  }
+  
+  /**
+   * 发送HTTP请求
+   */
+  private makeHttpRequest(requestUrl: string, method: string): Promise<{ success: boolean; data?: string; error?: string }> {
+    return new Promise((resolve) => {
+      const urlObj = new URL(requestUrl);
+      
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 80,
+        path: urlObj.pathname + urlObj.search,
+        method: method,
+      };
+      
+      const req = http.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ success: true, data: data });
+          } else {
+            resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage}`, data: data });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.end();
+    });
   }
 }

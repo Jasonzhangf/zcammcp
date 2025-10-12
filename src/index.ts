@@ -23,6 +23,7 @@ import { ImageService } from './services/ImageService.js';
 import { AutoFramingService } from './services/AutoFramingService.js';
 import { VideoService } from './services/VideoService.js';
 import { StreamingService } from './services/StreamingService.js';
+import { RecordingService } from './services/RecordingService.js';
 
 const ZcamConfigSchema = z.object({
   server: z.object({
@@ -51,6 +52,7 @@ class ZcamMcpServer {
   private autoFramingService: AutoFramingService;
   private videoService: VideoService;
   private streamingService: StreamingService;
+  private recordingService: RecordingService;
 
   constructor() {
     // 初始化配置管理器和相机管理器
@@ -97,6 +99,9 @@ class ZcamMcpServer {
     
     // 初始化流媒体服务
     this.streamingService = new StreamingService();
+    
+    // 初始化录制服务
+    this.recordingService = new RecordingService();
     
     this.server = new Server(
       {
@@ -814,40 +819,43 @@ class ZcamMcpServer {
           case 'recording_control':
             switch (args?.action) {
               case 'start':
-                // TODO: 实现录制开始处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `⏺️ 已开始录制相机 ${args?.ip}`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.recordingService.startRecording(args.ip as string);
               
               case 'stop':
-                // TODO: 实现录制停止处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `⏹️ 已停止录制相机 ${args?.ip}`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.recordingService.stopRecording(args.ip as string);
               
               case 'set_format':
-                // TODO: 实现录制格式设置处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `⏺️ 已设置相机 ${args?.ip} 录制格式为 ${args?.format}`
-                  }]
-                };
+                if (!args?.ip || !args?.format) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameters: ip and format'
+                  );
+                }
+                return await this.recordingService.setRecordingFormat(
+                  args.ip as string,
+                  args.format as string
+                );
               
               case 'get_status':
-                // TODO: 实现录制状态获取处理
-                return {
-                  content: [{
-                    type: 'text',
-                    text: `📊 相机 ${args?.ip} 录制状态:\n状态: 已停止\n格式: MP4\n时长: 00:00:00`
-                  }]
-                };
+                if (!args?.ip) {
+                  throw new McpError(
+                    ErrorCode.InvalidParams,
+                    'Missing required parameter: ip'
+                  );
+                }
+                return await this.recordingService.getRecordingStatus(args.ip as string);
               
               default:
                 throw new McpError(
