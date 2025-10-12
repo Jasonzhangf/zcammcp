@@ -9,6 +9,7 @@ This document describes the architecture of the ZCAM MCP (Model Context Protocol
 - 0.0.1: Initial version
 - 0.0.2: Updated MCP framework and design documentation. Implementation has not started yet.
 - 0.0.3: Implementation started. Core components and services partially implemented.
+- 0.2.0: All camera control services implemented with real HTTP requests. Full MCP server implementation completed.
 
 ## Architecture Components
 
@@ -28,39 +29,39 @@ Each service corresponds to a specific aspect of camera functionality:
 
 #### PTZService
 Controls Pan-Tilt-Zoom functionality of the cameras.
-- Implemented: ❌
+- Implemented: ✅
 
 #### PresetService
 Manages camera position presets (save/recall positions).
-- Implemented: ❌
+- Implemented: ✅
 
 #### ExposureService
 Controls exposure settings including aperture, shutter speed, and ISO.
-- Implemented: ❌
+- Implemented: ✅
 
 #### WhiteBalanceService
 Manages white balance settings including color temperature and mode.
-- Implemented: ❌
+- Implemented: ✅
 
 #### ImageService
 Controls image adjustment settings like brightness, contrast, and saturation.
-- Implemented: ❌
+- Implemented: ✅
 
 #### AutoFramingService
 Manages auto framing features of the camera.
-- Implemented: ❌
+- Implemented: ✅
 
 #### VideoService
 Handles video related settings.
-- Implemented: ❌
+- Implemented: ✅
 
 #### StreamingService
 Manages RTMP streaming functionality.
-- Implemented: ❌
+- Implemented: ✅
 
 #### RecordingService
 Controls video recording functionality.
-- Implemented: ❌
+- Implemented: ✅
 
 #### WebSocketSubscriptionManager
 Manages WebSocket connections and real-time camera status updates.
@@ -73,7 +74,7 @@ Handles persistent storage of camera contexts and settings.
 ### 3. MCP Server
 
 The MCP server acts as the interface between the Z CAM camera services and MCP clients. It translates MCP requests into camera control operations.
-- Implemented: Partially ✅
+- Implemented: ✅
 
 ## Design Principles
 
@@ -83,12 +84,10 @@ The MCP server acts as the interface between the Z CAM camera services and MCP c
 
 ## Implementation Status
 
-As of version 0.0.3, the core components (CameraManager, ContextService, WebSocketSubscriptionManager, and PersistenceService) have been implemented. The MCP server framework is partially implemented with camera management functionality. Other camera control services have not yet been implemented.
+As of version 0.2.0, all core components and service components have been implemented. The MCP server framework is fully implemented with complete camera management functionality and all camera control services. All services now use real HTTP requests to communicate with Z CAM cameras instead of mock data.
 
 ## Next Implementation Priorities
 
-1. Implement remaining camera control services (PTZService, PresetService, etc.)
-2. Complete MCP server implementation with full tool support
-3. Add comprehensive error handling and logging
-4. Implement unit tests for all components
-5. Add documentation and usage examples
+1. Add comprehensive error handling and logging
+2. Implement unit tests for all components
+3. Add documentation and usage examples

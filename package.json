@@ -1,6 +1,6 @@
 {
   "name": "zcammcp",
-  "version": "1.0.0",
+  "version": "0.2.0",
   "description": "ZCAM MCP Server",
   "main": "dist/index.js",
   "type": "module",
@@ -24,6 +24,8 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^18.0.0",
     "@types/ws": "^8.5.12",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.5",
     "typescript": "^5.5.3"
   }
 }

@@ -108,13 +108,41 @@ export class PTZService {
   async getPTZStatus(ip: string): Promise<any> {
     console.log(`Function: getPTZStatus - Getting PTZ status for camera: ${ip}`);
     
-    // 由于我们没有直接获取PTZ状态的API，返回模拟数据
-    return {
-      content: [{
-        type: 'text',
-        text: `📊 相机 ${ip} PTZ状态:\nPan: 0.0\nTilt: 0.0\nZoom: 1.0`
-      }]
-    };
+    try {
+      const requestUrl = `http://${ip}/ctrl/pt/status`;
+      console.log(`Sending PTZ status request to: ${requestUrl}`);
+      
+      // 使用Node.js内置的http模块发送请求
+      const result = await this.makeHttpRequestWithResponse(requestUrl, 'GET');
+      
+      if (result.success) {
+        // 解析响应数据
+        let statusData;
+        try {
+          statusData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          statusData = { raw: result.data };
+        }
+        
+        return {
+          content: [{
+            type: 'text',
+            text: `📊 相机 ${ip} PTZ状态:\nPan: ${statusData.pan || 'N/A'}\nTilt: ${statusData.tilt || 'N/A'}\nZoom: ${statusData.zoom || 'N/A'}`
+          }]
+        };
+      } else {
+        throw new Error(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error(`Error getting PTZ status for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 获取相机 ${ip} PTZ状态失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
   
   /**
@@ -141,6 +169,44 @@ export class PTZService {
             resolve({ success: true });
           } else {
             resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage}` });
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        resolve({ success: false, error: error.message });
+      });
+      
+      req.end();
+    });
+  }
+  
+  /**
+   * 发送HTTP请求并返回响应数据
+   */
+  private makeHttpRequestWithResponse(requestUrl: string, method: string): Promise<{ success: boolean; data?: string; error?: string }> {
+    return new Promise((resolve) => {
+      const urlObj = new URL(requestUrl);
+      
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 80,
+        path: urlObj.pathname + urlObj.search,
+        method: method,
+      };
+      
+      const req = http.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ success: true, data: data });
+          } else {
+            resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage}`, data: data });
           }
         });
       });

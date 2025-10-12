@@ -87,12 +87,23 @@ export class StreamingService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 在实际实现中，您可能需要解析响应数据
-        // 这里返回模拟数据
+        // 解析响应数据
+        let streamingData;
+        try {
+          streamingData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          streamingData = { raw: result.data };
+        }
+        
+        // 格式化流媒体设置信息
+        const enabled = streamingData.enabled !== undefined ? streamingData.enabled : 'N/A';
+        const rtmpUrl = streamingData.rtmpUrl !== undefined ? streamingData.rtmpUrl : 'N/A';
+        
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 流媒体设置:\n启用: true\nRTMP地址: rtmp://example.com/live/stream`
+            text: `📊 相机 ${ip} 流媒体设置:\n启用: ${enabled}\nRTMP地址: ${rtmpUrl}`
           }]
         };
       } else {

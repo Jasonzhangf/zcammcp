@@ -87,12 +87,23 @@ export class AutoFramingService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 在实际实现中，您可能需要解析响应数据
-        // 这里返回模拟数据
+        // 解析响应数据
+        let autoFramingData;
+        try {
+          autoFramingData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          autoFramingData = { raw: result.data };
+        }
+        
+        // 格式化自动取景设置信息
+        const enabled = autoFramingData.enabled !== undefined ? autoFramingData.enabled : 'N/A';
+        const mode = autoFramingData.mode !== undefined ? autoFramingData.mode : 'N/A';
+        
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 自动取景设置:\n启用: true\n模式: FaceDetection`
+            text: `📊 相机 ${ip} 自动取景设置:\n启用: ${enabled}\n模式: ${mode}`
           }]
         };
       } else {

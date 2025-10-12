@@ -121,12 +121,24 @@ export class VideoService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 在实际实现中，您可能需要解析响应数据
-        // 这里返回模拟数据
+        // 解析响应数据
+        let videoData;
+        try {
+          videoData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          videoData = { raw: result.data };
+        }
+        
+        // 格式化视频设置信息
+        const resolution = videoData.resolution !== undefined ? videoData.resolution : 'N/A';
+        const frameRate = videoData.frameRate !== undefined ? `${videoData.frameRate}fps` : 'N/A';
+        const codec = videoData.codec !== undefined ? videoData.codec : 'N/A';
+        
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 视频设置:\n分辨率: 1920x1080\n帧率: 30fps\n编码: H.264`
+            text: `📊 相机 ${ip} 视频设置:\n分辨率: ${resolution}\n帧率: ${frameRate}\n编码: ${codec}`
           }]
         };
       } else {

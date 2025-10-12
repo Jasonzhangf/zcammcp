@@ -121,12 +121,24 @@ export class ExposureService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 在实际实现中，您可能需要解析响应数据
-        // 这里返回模拟数据
+        // 解析响应数据
+        let exposureData;
+        try {
+          exposureData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          exposureData = { raw: result.data };
+        }
+        
+        // 格式化曝光设置信息
+        const aperture = exposureData.aperture !== undefined ? `f/${exposureData.aperture}` : 'N/A';
+        const shutter = exposureData.shutter !== undefined ? `1/${exposureData.shutter}s` : 'N/A';
+        const iso = exposureData.iso !== undefined ? exposureData.iso : 'N/A';
+        
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 曝光设置:\n光圈: f/2.8\n快门速度: 1/50s\nISO: 800`
+            text: `📊 相机 ${ip} 曝光设置:\n光圈: ${aperture}\n快门速度: ${shutter}\nISO: ${iso}`
           }]
         };
       } else {

@@ -121,12 +121,24 @@ export class RecordingService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 在实际实现中，您可能需要解析响应数据
-        // 这里返回模拟数据
+        // 解析响应数据
+        let recordingData;
+        try {
+          recordingData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          recordingData = { raw: result.data };
+        }
+        
+        // 格式化录制状态信息
+        const status = recordingData.status !== undefined ? recordingData.status : 'N/A';
+        const format = recordingData.format !== undefined ? recordingData.format : 'N/A';
+        const duration = recordingData.duration !== undefined ? recordingData.duration : '00:00:00';
+        
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 录制状态:\n状态: 已停止\n格式: MP4\n时长: 00:00:00`
+            text: `📊 相机 ${ip} 录制状态:\n状态: ${status}\n格式: ${format}\n时长: ${duration}`
           }]
         };
       } else {

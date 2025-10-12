@@ -121,12 +121,24 @@ export class ImageService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 在实际实现中，您可能需要解析响应数据
-        // 这里返回模拟数据
+        // 解析响应数据
+        let imageData;
+        try {
+          imageData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          imageData = { raw: result.data };
+        }
+        
+        // 格式化图像设置信息
+        const brightness = imageData.brightness !== undefined ? imageData.brightness : 'N/A';
+        const contrast = imageData.contrast !== undefined ? imageData.contrast : 'N/A';
+        const saturation = imageData.saturation !== undefined ? imageData.saturation : 'N/A';
+        
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 图像设置:\n亮度: 50\n对比度: 50\n饱和度: 50`
+            text: `📊 相机 ${ip} 图像设置:\n亮度: ${brightness}\n对比度: ${contrast}\n饱和度: ${saturation}`
           }]
         };
       } else {

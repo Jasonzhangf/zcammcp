@@ -88,12 +88,35 @@ export class PresetService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 由于我们没有实际的API来获取预设列表，返回模拟数据
-        // 在实际实现中，您可能需要解析响应数据
+        // 解析响应数据
+        let presetData;
+        try {
+          presetData = JSON.parse(result.data || '[]');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          presetData = result.data;
+        }
+        
+        // 格式化预设列表
+        let presetList = '📋 相机 ' + ip + ' 的预设列表:\n';
+        if (Array.isArray(presetData)) {
+          if (presetData.length === 0) {
+            presetList += '无预设';
+          } else {
+            presetData.forEach((preset: any, index: number) => {
+              const id = preset.id || index;
+              const name = preset.name || `预设${id}`;
+              presetList += `${id}. ${name}\n`;
+            });
+          }
+        } else {
+          presetList += presetData || '无数据';
+        }
+        
         return {
           content: [{
             type: 'text',
-            text: `📋 相机 ${ip} 的预设列表:\n1. 预设1\n2. 预设2\n3. 预设3`
+            text: presetList.trim()
           }]
         };
       } else {

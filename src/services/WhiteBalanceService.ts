@@ -87,12 +87,23 @@ export class WhiteBalanceService {
       const result = await this.makeHttpRequest(requestUrl, 'GET');
       
       if (result.success) {
-        // 在实际实现中，您可能需要解析响应数据
-        // 这里返回模拟数据
+        // 解析响应数据
+        let whiteBalanceData;
+        try {
+          whiteBalanceData = JSON.parse(result.data || '{}');
+        } catch (parseError) {
+          // 如果解析失败，使用原始数据
+          whiteBalanceData = { raw: result.data };
+        }
+        
+        // 格式化白平衡设置信息
+        const mode = whiteBalanceData.mode !== undefined ? whiteBalanceData.mode : 'N/A';
+        const temperature = whiteBalanceData.temperature !== undefined ? `${whiteBalanceData.temperature}K` : 'N/A';
+        
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 白平衡设置:\n模式: Auto\n色温: 5600K`
+            text: `📊 相机 ${ip} 白平衡设置:\n模式: ${mode}\n色温: ${temperature}`
           }]
         };
       } else {
