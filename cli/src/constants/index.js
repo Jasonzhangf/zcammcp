@@ -69,8 +69,10 @@ module.exports = {
 
   // 验证常量
   VALIDATION: {
-    HOST_PATTERN: /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$|^[a-zA-Z0-9.-]+$/,
+    HOST_PATTERN: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
     PORT_RANGE: { min: 1, max: 65535 },
+    MIN_TIMEOUT: 1000,
+    MAX_TIMEOUT: 300000,
     ISO_RANGE: { min: 100, max: 25600 },
     SHUTTER_RANGE: { min: 1, max: 8000 },
     IRIS_RANGE: { min: 1.4, max: 22 },

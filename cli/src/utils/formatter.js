@@ -14,6 +14,14 @@ const { resolveOutputFormat } = require('./cli-helpers');
  * @param {Object} options 格式化选项
  */
 function formatOutput(data, format = 'table', options = {}) {
+  // 处理null和undefined
+  if (data === null) {
+    return format === 'json' ? 'null' : 'No data';
+  }
+  if (data === undefined) {
+    return format === 'json' ? 'undefined' : 'No data';
+  }
+
   // 处理布尔值格式（兼容 --json 标志）
   let outputFormat = format;
   if (typeof format === 'boolean') {
@@ -27,15 +35,12 @@ function formatOutput(data, format = 'table', options = {}) {
 
   switch (outputFormat.toLowerCase()) {
     case 'json':
-      formatJSON(data, options);
-      break;
+      return formatJSON(data, options);
     case 'csv':
-      formatCSV(data, options);
-      break;
+      return formatCSV(data, options);
     case 'table':
     default:
-      formatTable(data, options);
-      break;
+      return formatTable(data, options);
   }
 }
 
@@ -46,28 +51,32 @@ function formatOutput(data, format = 'table', options = {}) {
  */
 function formatTable(data, options = {}) {
   if (data === null || data === undefined) {
-    console.log(chalk.gray('No data'));
-    return;
+    return 'No data';
   }
 
   if (typeof data === 'string') {
-    console.log(data);
-    return;
+    return data;
   }
 
   if (typeof data === 'object' && !Array.isArray(data)) {
     // 单个对象，转换为键值对表格
-    formatObjectTable(data, options);
+    if (Object.keys(data).length === 0) {
+      return 'No data';
+    }
+    return formatObjectTable(data, options);
   } else if (Array.isArray(data)) {
     // 数组，检查是否为对象数组
+    if (data.length === 0) {
+      return 'No data';
+    }
     if (data.length > 0 && typeof data[0] === 'object') {
-      formatArrayTable(data, options);
+      return formatArrayTable(data, options);
     } else {
       // 简单数组
-      formatSimpleArray(data, options);
+      return formatSimpleArray(data, options);
     }
   } else {
-    console.log(String(data));
+    return String(data);
   }
 }
 
@@ -104,7 +113,7 @@ function formatObjectTable(obj, options = {}) {
     table.push([formattedKey, formattedValue]);
   });
 
-  console.log(table.toString());
+  return table.toString();
 }
 
 /**
@@ -114,8 +123,7 @@ function formatObjectTable(obj, options = {}) {
  */
 function formatArrayTable(arr, options = {}) {
   if (arr.length === 0) {
-    console.log(chalk.gray('No data'));
-    return;
+    return 'No data';
   }
 
   // 获取所有列名
@@ -151,7 +159,7 @@ function formatArrayTable(arr, options = {}) {
     table.push(row);
   });
 
-  console.log(table.toString());
+  return table.toString();
 }
 
 /**
@@ -160,11 +168,12 @@ function formatArrayTable(arr, options = {}) {
  * @param {Object} options 选项
  */
 function formatSimpleArray(arr, options = {}) {
-  arr.forEach((item, index) => {
+  const lines = arr.map((item, index) => {
     const prefix = options.numbered ? `${index + 1}. ` : '';
     const formattedValue = formatValue(item, options);
-    console.log(`${prefix}${formattedValue}`);
+    return `${prefix}${formattedValue}`;
   });
+  return lines.join('\n');
 }
 
 /**
@@ -174,15 +183,24 @@ function formatSimpleArray(arr, options = {}) {
  */
 function formatJSON(data, options = {}) {
   const indent = options.indent || 2;
-  const colorize = options.colorize !== false;
 
-  if (colorize) {
-    console.log(JSON.stringify(data, null, indent));
-  } else {
-    // 移除颜色转义序列
-    const json = JSON.stringify(data, null, indent);
-    console.log(json);
-  }
+  // 处理null和undefined
+  if (data === null) return 'null';
+  if (data === undefined) return 'undefined';
+
+  // 处理循环引用
+  const seen = new WeakSet();
+  const jsonString = JSON.stringify(data, (key, val) => {
+    if (val != null && typeof val === 'object') {
+      if (seen.has(val)) {
+        return '[Circular]';
+      }
+      seen.add(val);
+    }
+    return val;
+  }, indent);
+
+  return jsonString;
 }
 
 /**
@@ -195,17 +213,17 @@ function formatCSV(data, options = {}) {
     data = [data];
   }
 
-  if (data.length === 0) {
-    console.log('');
-    return;
+  if (data.length === 0 || Object.keys(data[0]).length === 0) {
+    return '';
   }
 
   // 获取列名
   const columns = Object.keys(data[0]);
+  const lines = [];
 
   // 输出标题行
   if (options.header !== false) {
-    console.log(columns.join(','));
+    lines.push(columns.join(','));
   }
 
   // 输出数据行
@@ -214,8 +232,10 @@ function formatCSV(data, options = {}) {
       const value = item[col];
       return formatCSVValue(value);
     });
-    console.log(row.join(','));
+    lines.push(row.join(','));
   });
+
+  return lines.join('\n');
 }
 
 /**
@@ -242,6 +262,9 @@ function formatValue(value, options = {}) {
   }
 
   if (typeof value === 'object') {
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
     if (Array.isArray(value)) {
       return `[${value.length} items]`;
     } else {
