@@ -1,0 +1,23 @@
+{
+  "cameras": {
+    "6d1c237437b9a2a1": {
+      "name": "测试相机1",
+      "ip": "192.168.1.100",
+      "host": "192.168.1.100",
+      "port": 80,
+      "username": "admin",
+      "password": "password",
+      "description": "用于测试的相机",
+      "tags": [
+        "测试",
+        "演示"
+      ],
+      "created_at": "2025-11-06T06:55:10.577Z",
+      "updated_at": "2025-11-06T06:55:10.578Z",
+      "is_default": true,
+      "last_connected": null,
+      "connection_status": "unknown"
+    }
+  },
+  "presets": {}
+}

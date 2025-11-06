@@ -1,0 +1,10 @@
+{
+  "key": "test-key",
+  "category": "test",
+  "created": "2025-11-06T06:55:10.593Z",
+  "modified": "2025-11-06T06:55:10.593Z",
+  "size": 81,
+  "encrypted": false,
+  "compressed": true,
+  "ttl": null
+}

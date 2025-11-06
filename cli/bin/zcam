@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+
+const path = require('path');
+
+// 确保我们是从正确的目录运行
+const scriptDir = path.dirname(__filename);
+const projectRoot = path.resolve(scriptDir, '..');
+
+// 切换到项目根目录
+process.chdir(projectRoot);
+
+// 启动CLI
+require('../src/index.js');
