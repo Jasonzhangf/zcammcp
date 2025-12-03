@@ -4,12 +4,19 @@
 import type { CliChannel as CliChannelInterface, CliRequest, CliResponse } from '../state/PageStore.js';
 
 export class MockCliChannel implements CliChannelInterface {
+  private requests: CliRequest[] = [];
+
   async send(request: CliRequest): Promise<CliResponse> {
+    this.requests.push(request);
     // 测试用: 直接返回 ok, 并回显命令
     return {
       id: request.id,
       ok: true,
       data: { echo: request },
     };
+  }
+
+  getRequests(): CliRequest[] {
+    return this.requests;
   }
 }

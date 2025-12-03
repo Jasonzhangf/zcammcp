@@ -5,16 +5,24 @@ import { StatusCard } from './status/StatusCard.js';
 import { PtzCard } from './ptz/PtzCard.js';
 import { ImageControlCard } from './imageControl/ImageControlCard.js';
 import { ShortcutsCard } from './shortcuts/ShortcutsCard.js';
+import { PageShell } from '../../components/PageShell.js';
+import type { PageShellConfig } from '../../framework/ui/PageShellConfig.js';
 
 import '../../../styles/main.css';
 
+const mainPageShellConfig: PageShellConfig = {
+  pagePath: 'zcam.camera.root',
+  dock: {
+    enabled: true,
+    side: 'right',
+    peek: 32,
+    transitionMs: 160,
+  },
+};
+
 export function MainPage() {
   return (
-    <div
-      id="zcam-camera-root"
-      data-path="zcam.camera.root"
-      className="zcam-panel"
-    >
+    <PageShell config={mainPageShellConfig}>
       {/* Header 先用静态结构，后续接 PageStore */}
       <div
         className="zcam-header"
@@ -87,7 +95,6 @@ export function MainPage() {
           <ShortcutsCard />
         </section>
       </div>
-    </div>
+    </PageShell>
   );
 }
-

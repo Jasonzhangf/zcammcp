@@ -1,8 +1,7 @@
 // PreferencesPersistence.ts
-// 持久化用户偏好、页面布局配置和快捷设置到 ~/.zcam/zcammcp-ui/prefs
+import type { ShortcutItem } from '../ui/ShortcutConfig.js';
 
-import { promises as fs } from 'node:fs';
-import path from 'node:path';
+import { promises as fs } from 'node:fs';import path from 'node:path';
 import os from 'node:os';
 
 // 这里的类型只定义基础结构, 具体字段可由应用层扩展
@@ -27,7 +26,7 @@ export interface PageLayoutConfig {
 
 export interface PageShortcutsConfig {
   pagePath: string;
-  shortcuts: unknown[]; // 应用层可在此基础上定义具体结构
+  shortcuts: ShortcutItem[];
 }
 
 export class PreferencesPersistence {

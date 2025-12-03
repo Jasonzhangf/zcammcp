@@ -4,6 +4,8 @@
 import React from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
+import { SliderControl } from '../../../components/SliderControl.js';
+import type { SliderControlConfig } from '../../../framework/ui/ControlConfig.js';
 import { focusGroupNode, FocusGroup } from './FocusGroup.js';
 
 export const ptzCardNode: ContainerNode = {
@@ -91,6 +93,31 @@ export function PtzCard() {
     }
   };
 
+  // 使用配置描述 Zoom / Speed 控件
+  const zoomSliderConfig: SliderControlConfig = {
+    type: 'slider',
+    nodePath: zoomPath,
+    kind: 'ptz.zoom',
+    label: 'Zoom',
+    size: 'medium',
+    valueRange: { min: 0, max: 100, step: 1 },
+    readValue: (v) => v.camera.ptz?.zoom?.value ?? 50,
+    formatValue: (v) => String(v),
+    operationId: 'ptz.setZoom',
+  };
+
+  const speedSliderConfig: SliderControlConfig = {
+    type: 'slider',
+    nodePath: speedPath,
+    kind: 'ptz.speed',
+    label: 'Speed',
+    size: 'medium',
+    valueRange: { min: 0, max: 100, step: 1 },
+    readValue: (v) => v.camera.ptz?.speed?.value ?? 50,
+    formatValue: (v) => String(v),
+    operationId: 'ptz.setSpeed',
+  };
+
   return (
     <div
       className="zcam-card"
@@ -150,70 +177,8 @@ export function PtzCard() {
             className="zcam-ptz-sliders"
             data-path="zcam.camera.pages.main.ptz.sliders"
           >
-            <div
-              className={
-                'zcam-ptz-slider-wrap zcam-debug-container-primary ' +
-                (zoomHighlight === 'hover' ? 'zcam-control-hover ' : '') +
-                (zoomIsActive ? 'zcam-control-active' : '')
-              }
-              data-path="zcam.camera.pages.main.ptz.zoom"
-              onMouseEnter={() => {
-                store.setHighlight(zoomPath, 'hover');
-                store.setHighlight(speedPath, 'none');
-              }}
-              onMouseLeave={() => {
-                if (store.uiState.activeNodePath !== zoomPath) {
-                  store.setHighlight(zoomPath, 'none');
-                }
-              }}
-            >
-              {zoomHighlight === 'hover' && (
-                <span className="zcam-debug-hover-marker" />
-              )}
-              <span className="zcam-ptz-slider-label">Zoom</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={zoomVal}
-                onChange={handleZoomChange}
-                onMouseDown={handleZoomMouseDown}
-                onWheel={handleZoomWheel}
-              />
-              <span className="zcam-ptz-slider-value">{zoomVal}</span>
-            </div>
-            <div
-              className={
-                'zcam-ptz-slider-wrap zcam-debug-container-secondary ' +
-                (speedHighlight === 'hover' ? 'zcam-control-hover ' : '') +
-                (speedIsActive ? 'zcam-control-active' : '')
-              }
-              data-path="zcam.camera.pages.main.ptz.speed"
-              onMouseEnter={() => {
-                store.setHighlight(speedPath, 'hover');
-                store.setHighlight(zoomPath, 'none');
-              }}
-              onMouseLeave={() => {
-                if (store.uiState.activeNodePath !== speedPath) {
-                  store.setHighlight(speedPath, 'none');
-                }
-              }}
-            >
-              {speedHighlight === 'hover' && (
-                <span className="zcam-debug-hover-marker" />
-              )}
-              <span className="zcam-ptz-slider-label">Speed</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={speedVal}
-                onChange={handleSpeedChange}
-                onMouseDown={handleSpeedMouseDown}
-                onWheel={handleSpeedWheel}
-              />
-              <span className="zcam-ptz-slider-value">{speedVal}</span>
-            </div>
+            <SliderControl config={zoomSliderConfig} />
+            <SliderControl config={speedSliderConfig} />
           </div>
         </div>
 

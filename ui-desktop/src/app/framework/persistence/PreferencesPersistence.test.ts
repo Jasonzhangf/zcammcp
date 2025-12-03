@@ -1,8 +1,7 @@
 // PreferencesPersistence.test.ts
-// 验证 PreferencesPersistence 能读写 UI 偏好、布局和快捷设置
-
 import test from 'node:test';
 import assert from 'node:assert';
+import type { ShortcutItem } from '../ui/ShortcutConfig.js';
 import os from 'node:os';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
@@ -15,24 +14,23 @@ import {
 } from './PreferencesPersistence.js';
 
 test('PreferencesPersistence save/load ui preferences, layout, shortcuts', async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'zcammcp-ui-prefs-test-'));
-  const prefs = new PreferencesPersistence(tmpDir);
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'prefs-test-'));
+  const prefs = new PreferencesPersistence(baseDir);
+  const pagePath = 'zcam.camera.pages.main';
 
   const uiPrefs: UiPreferences = {
     theme: 'dark',
     language: 'zh-CN',
-    window: { alwaysOnTop: true, defaultMode: 'panel' },
+    window: { alwaysOnTop: true },
   };
 
   await prefs.saveUiPreferences(uiPrefs);
-  const loadedUi = await prefs.loadUiPreferences();
-  assert.deepEqual(loadedUi, uiPrefs);
+  const loadedUiPrefs = await prefs.loadUiPreferences();
+  assert.deepEqual(loadedUiPrefs, uiPrefs);
 
-  const pagePath = 'zcam.camera.pages.main';
   const layout: PageLayoutConfig = {
     pagePath,
-    visibleSections: ['status', 'ptz'],
-    sectionOrder: ['status', 'ptz', 'imageControl', 'shortcuts'],
+    layout: { grid: '2x2' },
   };
 
   await prefs.saveLayout(pagePath, layout);
@@ -41,11 +39,10 @@ test('PreferencesPersistence save/load ui preferences, layout, shortcuts', async
 
   const shortcuts: PageShortcutsConfig = {
     pagePath,
-    shortcuts: [{ id: 's1', label: '快捷1' } as any],
+    shortcuts: [{ id: 's1', label: '快捷1' }],
   };
 
   await prefs.saveShortcuts(pagePath, shortcuts);
   const loadedShortcuts = await prefs.loadShortcuts(pagePath);
   assert.deepEqual(loadedShortcuts, shortcuts);
 });
-
