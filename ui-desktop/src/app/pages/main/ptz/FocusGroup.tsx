@@ -5,7 +5,8 @@
 import React, { useState } from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
-import { useContainerFocus } from '../../../hooks/useContainerFocus.js';
+import { SliderControl } from '../../../components/SliderControl.js';
+import type { SliderControlConfig } from '../../../framework/ui/ControlConfig.js';
 
 export const focusGroupNode: ContainerNode = {
   path: 'zcam.camera.pages.main.ptz.focusGroup',
@@ -18,21 +19,22 @@ export const focusGroupNode: ContainerNode = {
 export function FocusGroup() {
   const store = usePageStore();
   const view = useViewState();
-  const focusVal = view.camera.ptz?.focus?.value ?? 40;
-
   const [afOn, setAfOn] = useState(true);
+  const [editRange, setEditRange] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<'far' | 'near' | null>(null);
 
   const focusPath = 'zcam.camera.pages.main.ptz.focus';
-  const focusFocus = useContainerFocus(focusPath);
-
-  const handleFocusChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = Number(e.target.value);
-    await store.runOperation(
-      'zcam.camera.pages.main.ptz.focus',
-      'ptz.focus',
-      'ptz.setFocus',
-      { value: v },
-    );
+  const focusSliderConfig: SliderControlConfig = {
+    type: 'slider',
+    nodePath: focusPath,
+    kind: 'ptz.focus',
+    label: 'Focus',
+    orientation: 'horizontal',
+    size: 'medium',
+    valueRange: { min: 0, max: 100, step: 1 },
+    readValue: (v) => v.camera.ptz?.focus?.value ?? 40,
+    formatValue: (v) => String(v),
+    operationId: 'ptz.setFocus',
   };
 
   const toggleAf = () => {
@@ -42,41 +44,28 @@ export function FocusGroup() {
 
   const gotoFar = () => {
     // 预留: 实际可调用 ptz.gotoFocusFar
+    if (editRange) {
+      setEditingPreset('far');
+    }
   };
 
   const gotoNear = () => {
     // 预留: 实际可调用 ptz.gotoFocusNear
+    if (editRange) {
+      setEditingPreset('near');
+    }
   };
 
   return (
     <div
-      className="zcam-ptz-focus-wrap zcam-debug-container-primary"
+      className="zcam-ptz-focus-wrap"
       data-path="zcam.camera.pages.main.ptz.focusGroup"
     >
-      <div
-        className={
-          'zcam-slider-row ' +
-          (focusFocus.highlight === 'hover' ? 'zcam-control-hover ' : '') +
-          (focusFocus.isActive ? 'zcam-control-active' : '')
-        }
-        data-path="zcam.camera.pages.main.ptz.focus"
-        {...focusFocus.eventHandlers}
-      >
-        {focusFocus.highlight === 'hover' && (
-          <span className="zcam-debug-hover-marker" />
-        )}
-        <label>Focus</label>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={focusVal}
-          onChange={handleFocusChange}
+      <div className="zcam-slider-row">
+        <SliderControl
+          config={focusSliderConfig}
+          disabled={afOn && !editRange}
         />
-        <div className="zcam-slider-meta">
-          <span className="zcam-slider-value">{focusVal}</span>
-          <span className="zcam-slider-range">0 - 100</span>
-        </div>
         <div
           className="zcam-toggle-group"
           data-path="zcam.camera.pages.main.ptz.focusMode"
@@ -103,6 +92,10 @@ export function FocusGroup() {
           <button
             type="button"
             className="zcam-ptz-focus-limit-btn"
+            style={{
+              background: editingPreset === 'far' ? '#ff6b35' : 'transparent',
+              color: editingPreset === 'far' ? 'white' : '#ccc'
+            }}
             onClick={gotoFar}
           >
             远
@@ -110,9 +103,25 @@ export function FocusGroup() {
           <button
             type="button"
             className="zcam-ptz-focus-limit-btn"
+            style={{
+              background: editingPreset === 'near' ? '#ff6b35' : 'transparent',
+              color: editingPreset === 'near' ? 'white' : '#ccc'
+            }}
             onClick={gotoNear}
           >
             近
+          </button>
+          <button
+            type="button"
+            className="zcam-ptz-focus-limit-btn"
+            onClick={() => {
+              setEditRange((v) => !v);
+              if (editRange) {
+                setEditingPreset(null);
+              }
+            }}
+          >
+            {editRange ? '编辑完成' : '编辑'}
           </button>
         </div>
       </div>

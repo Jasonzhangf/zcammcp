@@ -271,10 +271,13 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  color: #d9d9d9;
 }
 
 .zcam-ptz-btn:hover {
-  background: #333;
+  background: #262626;
+  border-color: #ff7a45;
+  color: #ffffff;
 }
 
 .zcam-ptz-btn-main {
@@ -283,6 +286,7 @@
   border-radius: 50%;
   border: 1px solid #ff7a45;
   background: #1d1d1d;
+  color: #ffd8bf;
 }
 
 .zcam-ptz-sliders {
@@ -306,6 +310,54 @@
   gap: 2px;
   box-sizing: border-box;
   overflow: hidden; /* 限制内部 slider 不要溢出到相邻容器, 保证命中区域与边框一致 */
+}
+
+/* 通用 Slider 尺寸, 供 SliderControl 使用 */
+.zcam-slider-size-small {
+  width: 36px;
+}
+
+.zcam-slider-size-medium {
+  width: 44px;
+}
+
+.zcam-slider-size-large {
+  width: 56px;
+}
+
+/* Slider 方向: 垂直 / 水平, 由 SliderControl 的 orientation 决定 */
+.zcam-slider-orientation-vertical input[type='range'] {
+  writing-mode: bt-lr;
+  -webkit-appearance: slider-vertical;
+  height: 80px;
+}
+
+.zcam-slider-orientation-horizontal {
+  width: 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.zcam-slider-orientation-horizontal input[type='range'] {
+  writing-mode: horizontal-tb;
+  -webkit-appearance: slider-horizontal;
+  width: 100%;
+  height: auto;
+}
+
+.zcam-slider-orientation-horizontal .zcam-ptz-slider-label {
+  min-width: 48px;
+  text-align: right;
+}
+
+.zcam-slider-orientation-horizontal .zcam-ptz-slider-value {
+  min-width: 32px;
+  text-align: right;
+}
+
+.zcam-control-disabled {
+  opacity: 0.5;
 }
 
 .zcam-ptz-slider-label {
@@ -340,10 +392,7 @@
 }
 
 .zcam-ptz-slider-wrap input[type='range'] {
-  width: auto;
-  writing-mode: bt-lr;
-  -webkit-appearance: slider-vertical;
-  height: 80px;
+  width: 100%;
 }
 
 .zcam-ptz-status-row {
@@ -413,6 +462,14 @@
 .zcam-ptz-focus-limit-btn:hover {
   background: #333;
   border-color: #666;
+}
+
+.zcam-ptz-focus-limit-btn-active {
+  /* 高亮时主要通过文字/描边强调, 背景保持一致避免闪烁感 */
+  background: #1f1f1f;
+  border-color: #ff7a45;
+  color: #ffec3d;
+  font-weight: 600;
 }
 
 .zcam-slider-row {
