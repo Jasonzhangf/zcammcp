@@ -5,49 +5,77 @@
 ```
 cli/
 ├── src/
-│   ├── index.js                 # CLI入口点
-│   ├── core/                    # 核心组件
-│   │   └── api.js              # HTTP API客户端
+│   ├── index.js                 # CLI入口点（兼容版）
+│   ├── index.js                # CLI入口点
 │   ├── config/                  # 配置管理
-│   │   └── config.js           # 配置文件处理
-│   ├── modules/                 # 功能模块（独立目录）
-│   │   ├── camera/             # 相机管理模块
-│   │   │   ├── index.js        # 命令定义
-│   │   │   └── service.js      # API服务层
-│   │   ├── control/            # 运动控制模块
-│   │   │   ├── index.js        # 命令定义
-│   │   │   └── service.js      # API服务层
-│   │   ├── preset/             # 预设管理模块
-│   │   │   ├── index.js        # 命令定义
-│   │   │   └── service.js      # API服务层
-│   │   ├── record/             # 录制控制模块
-│   │   │   ├── index.js        # 命令定义
-│   │   │   └── service.js      # API服务层
-│   │   ├── stream/             # 流媒体模块
-│   │   │   ├── index.js        # 命令定义
-│   │   │   └── service.js      # API服务层
-│   │   ├── image/              # 图像设置模块
-│   │   │   ├── index.js        # 命令定义
-│   │   │   └── service.js      # API服务层
-│   │   ├── system/             # 系统管理模块
-│   │   │   ├── index.js        # 命令定义
-│   │   │   └── service.js      # API服务层
-│   │   └── network/            # 网络配置模块
-│   │       ├── index.js        # 命令定义
-│   │       └── service.js      # API服务层
+│   │   ├── config.js           # 配置管理器
+│   │   ├── strict-config.js    # 严格配置管理器
+│   │   ├── exact-resolver.js   # 精确配置解析器
+│   │   └── env.js              # 环境变量配置
+│   ├── core/                    # 核心模块
+│   │   ├── api.js              # API客户端
+│   │   ├── exact-api.js        # 精确API客户端
+│   │   ├── base-service.js     # 服务基类
+│   │   └── constants.js        # 全局常量定义
+│   ├── modules/                 # 功能模块
+│   │   ├── camera/             # 相机基础管理
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   ├── control/            # 运动控制（PTZ + 镜头）
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   ├── preset/             # 预设位置管理
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   ├── record/             # 录制控制
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   ├── stream/             # 流媒体控制
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   ├── image/              # 图像视频设置
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   ├── system/             # 系统管理
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   ├── network/            # 网络配置
+│   │   │   ├── index.js        # 命令行接口
+│   │   │   ├── service.js      # 业务逻辑实现
+│   │   │   └── README.md       # 模块文档
+│   │   └── config/             # 配置管理
+│   │       ├── index.js        # 命令行接口
+│   │       ├── service.js      # 业务逻辑实现
+│   │       └── README.md       # 模块文档
 │   └── utils/                   # 工具函数
-│       ├── errors.js           # 错误定义
+│       ├── cli-helpers.js      # CLI辅助工具
+│       ├── exact-cli-helpers.js # 精确CLI辅助工具
 │       ├── formatter.js        # 输出格式化
-│       └── error-handler.js    # 错误处理器
+│       ├── error-handler.js    # 错误处理器
+│       ├── errors.js           # 错误类型定义
+│       └── validators/         # 验证器
+│           └── network.js      # 网络参数验证器
 ├── tests/                       # 测试文件
 │   ├── unit/                   # 单元测试
-│   │   ├── modules/            # 模块单元测试
-│   │   └── utils/              # 工具函数测试
+│   │   ├── core/               # 核心模块测试
+│   │   └── utils/              # 工具模块测试
 │   ├── integration/            # 集成测试
 │   └── fixtures/               # 测试数据
 ├── examples/                    # 使用示例
 ├── docs/                       # 文档
+│   ├── API_MAPPING.md          # API映射文档
+│   ├── ARCHITECTURE.md         # 架构设计文档
+│   ├── EXAMPLES.md             # 使用示例
+│   └── IMPLEMENTATION_PLAN.md  # 实现计划
 ├── bin/                        # 可执行文件
+│   └── zcam                    # CLI入口脚本
 │   └── zcam                    # CLI入口脚本
 └── package.json               # 包配置
 ```
@@ -76,12 +104,12 @@ program
   .name('zcam')
   .description('Z CAM Camera Control CLI')
   .version(pkg.version)
-  .option('-h, --host <host>', '相机IP地址', '192.168.1.100')
-  .option('-p, --port <port>', 'HTTP端口', '80')
-  .option('-t, --timeout <timeout>', '超时时间(ms)', '20000')
+  .requiredOption('-h, --host <host>', '相机IP地址')
+  .requiredOption('-p, --port <port>', 'HTTP端口')
+  .requiredOption('-t, --timeout <timeout>', '超时时间(ms)')
   .option('--json', 'JSON格式输出')
   .option('--verbose', '详细输出')
-  .option('--profile <profile>', '配置文件profile', 'default');
+  .option('--profile <profile>', '配置文件profile');
 
 // 动态加载模块
 const modules = ['camera', 'control', 'preset', 'record', 'stream', 'image', 'system', 'network'];
@@ -102,13 +130,17 @@ program.parse(process.argv);
 ```javascript
 class ZCamAPI {
   constructor(options = {}) {
-    this.host = options.host || '192.168.1.100';
-    this.port = options.port || 80;
-    this.timeout = options.timeout || 20000;
+    if (!options.host) throw new Error('host参数是必需的');
+    if (!options.port) throw new Error('port参数是必需的');
+    if (!options.timeout) throw new Error('timeout参数是必需的');
+    
+    this.host = options.host;
+    this.port = options.port;
+    this.timeout = options.timeout;
     this.baseURL = `http://${this.host}:${this.port}`;
     this.sessionCookie = null;
     this.lastRequestTime = 0;
-    this.minRequestInterval = 50; // 请求限流
+    this.minRequestInterval = options.requestInterval || 50; // 请求限流
   }
 
   async request(endpoint, options = {}) {
@@ -202,13 +234,17 @@ verbose = false
 
 [studio]
 host = 192.168.1.101
+port = 80
 timeout = 30000
 output = json
 
 [live]
 host = 192.168.1.102
 port = 8080
+timeout = 20000
 ```
+
+**注意**: 配置文件中的所有参数都是必需的，CLI不会使用默认值。
 
 ### 配置加载器
 ```javascript
@@ -237,17 +273,7 @@ class ConfigManager {
   }
 
   createDefaultConfig() {
-    const defaultConfig = {
-      default: {
-        host: '192.168.1.100',
-        port: '80',
-        timeout: '20000',
-        output: 'table'
-      }
-    };
-
-    this.saveConfig(defaultConfig);
-    return defaultConfig;
+    throw new Error('不允许创建默认配置，必须显式指定所有参数');
   }
 }
 ```
@@ -368,17 +394,17 @@ function formatTable(data) {
 ```javascript
 // tests/unit/services/camera.test.js
 const CameraService = require('../../../src/services/camera');
-const MockAPI = require('../mocks/api');
+
 
 describe('CameraService', () => {
   let api;
 
   beforeEach(() => {
-    api = new MockAPI();
+    // API implementation
   });
 
   test('should get camera info', async () => {
-    api.mockResponse('/info', { model: 'ZCAM E2' });
+    const result = await api.get('/info');
 
     const result = await CameraService.getInfo(api);
 
@@ -404,6 +430,9 @@ describe('CLI Integration', () => {
     expect(result).toHaveProperty('model');
   });
 });
+```
+
+}
 ```
 
 ## 发布流程

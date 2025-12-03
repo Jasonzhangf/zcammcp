@@ -4,13 +4,14 @@ const { Command } = require('commander');
 const pkg = require('../package.json');
 const { handleErrors } = require('./utils/error-handler');
 const constants = require('./constants');
-const NetworkValidator = require('./validators/network');
-const FallbackManager = require('./config/fallback');
-const EnvConfig = require('./config/env');
+const ExactConfigResolver = require('./config/exact-resolver');
+const { getProfile, validateProfileCompleteness } = require('./config/strict-config');
+const { ValidationError } = require('./utils/errors');
+const { getServiceContainer } = require('./core/service-container');
 
 /**
- * Z CAM CLI 主入口
- * 负责初始化命令行界面和加载所有功能模块
+ * 精确Z CAM CLI 主入口
+ * 移除所有回退策略，实现严格的参数验证和错误处理
  */
 
 const program = new Command();
@@ -22,11 +23,11 @@ program
   .version(pkg.version, '-v, --version', '显示版本号')
   .helpOption('-h, --help', '显示帮助信息');
 
-// 全局选项 - 使用常量避免硬编码
+// 全局选项 - 移除默认值，要求显式指定或使用配置文件
 program
-  .option('-h, --host <host>', `相机IP地址 (默认: ${constants.NETWORK.DEFAULT_HOST})`, constants.NETWORK.DEFAULT_HOST)
-  .option('-p, --port <port>', `HTTP端口 (默认: ${constants.NETWORK.DEFAULT_PORT})`, constants.NETWORK.DEFAULT_PORT)
-  .option('-t, --timeout <timeout>', `请求超时时间毫秒 (默认: ${constants.NETWORK.DEFAULT_TIMEOUT})`, constants.NETWORK.DEFAULT_TIMEOUT)
+  .option('-H, --host <host>', '相机IP地址 (必需)')
+  .option('-p, --port <port>', 'HTTP端口 (必需)')
+  .option('-t, --timeout <timeout>', '请求超时时间毫秒 (必需)')
   .option('--json', 'JSON格式输出')
   .option('--verbose', '详细输出模式')
   .option('--profile <profile>', `使用配置文件中的profile (默认: ${constants.CONFIG.DEFAULT_PROFILE})`, constants.CONFIG.DEFAULT_PROFILE)
@@ -45,28 +46,21 @@ const modules = [
   'config'
 ];
 
-// 改进的模块加载 - 无静默fallback，严格错误处理
+// 初始化服务容器 - 支持依赖注入
+console.log('Z CAM CLI - 启动...');
+console.log('🔧 初始化服务容器...');
+const serviceContainer = getServiceContainer();
+console.log(`✓ 服务容器已初始化，支持 ${serviceContainer.getRegisteredServices().length} 个服务`);
+
+// 严格模块加载 - 失败时直接报错
 let loadedModules = 0;
 let failedModules = [];
-
-// 只在详细模式或开发模式下显示加载信息
-const isVerbose = process.argv.includes('--verbose') || process.env.NODE_ENV === 'development';
-if (isVerbose) {
-  console.log('Z CAM CLI - Loading modules...');
-}
 
 modules.forEach(moduleName => {
   try {
     const moduleCmd = require(`./modules/${moduleName}`);
-    if (moduleCmd && typeof moduleCmd === 'object') {
-      program.addCommand(moduleCmd);
-      loadedModules++;
-      if (isVerbose) {
-        console.log(`✓ 模块加载成功: ${moduleName}`);
-      }
-    } else {
-      throw new Error(`模块导出格式无效: 期望Command对象，实际为${typeof moduleCmd}`);
-    }
+    program.addCommand(moduleCmd);
+    loadedModules++;
   } catch (error) {
     failedModules.push({
       name: moduleName,
@@ -74,37 +68,16 @@ modules.forEach(moduleName => {
       stack: error.stack
     });
 
-    // 在所有模式下都显示模块加载失败 - 不静默fallback
+    // 模块加载失败时直接报错，不继续运行
     console.error(`❌ 模块加载失败: ${moduleName} - ${error.message}`);
-
-    // 在详细模式下显示堆栈信息
-    if (isVerbose && error.stack) {
-      console.error(`   堆栈: ${error.stack.split('\n')[1]?.trim()}`);
-    }
+    console.error('请检查模块文件是否存在且格式正确');
+    process.exit(1);
   }
 });
 
-// 显示加载总结
-if (loadedModules === 0) {
-  console.error('🚫 严重错误: 没有成功加载任何模块！');
-  console.error('请检查模块文件是否存在且格式正确。');
-  process.exit(1);
-}
-
-if (failedModules.length > 0) {
-  console.warn(`⚠️ 警告: ${failedModules.length} 个模块加载失败，${loadedModules} 个模块可用`);
-
-  if (isVerbose) {
-    console.log('\n失败的模块详情:');
-    failedModules.forEach(({ name, error, stack }) => {
-      console.log(`  - ${name}: ${error}`);
-      if (process.env.NODE_ENV === 'development' && stack) {
-        console.log(`    ${stack.split('\n').slice(1, 4).join('\n    ')}`);
-      }
-    });
-  }
-} else if (isVerbose) {
-  console.log(`✓ 所有 ${loadedModules} 个模块加载成功`);
+// 显示加载统计
+if (loadedModules > 0) {
+  console.log(`✓ 成功加载 ${loadedModules} 个必需模块`);
 }
 
 /**
@@ -129,7 +102,7 @@ function getModuleDescription(moduleName) {
 
 // 在开发模式下显示模块状态
 if (process.env.NODE_ENV === 'development') {
-  console.log(`Z CAM CLI - ${Object.keys(moduleMap).length} modules registered for lazy loading`);
+  console.log(`Z CAM CLI - ${modules.length} modules registered`);
 }
 
 // 全局错误处理

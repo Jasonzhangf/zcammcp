@@ -1,6 +1,5 @@
 const Table = require('cli-table3');
 const chalk = require('chalk');
-const { resolveOutputFormat } = require('./cli-helpers');
 
 /**
  * 输出格式化工具
@@ -16,10 +15,10 @@ const { resolveOutputFormat } = require('./cli-helpers');
 function formatOutput(data, format = 'table', options = {}) {
   // 处理null和undefined
   if (data === null) {
-    return format === 'json' ? 'null' : 'No data';
+    return emitOutput(format === 'json' ? 'null' : 'No data', options);
   }
   if (data === undefined) {
-    return format === 'json' ? 'undefined' : 'No data';
+    return emitOutput(format === 'json' ? 'undefined' : 'No data', options);
   }
 
   // 处理布尔值格式（兼容 --json 标志）
@@ -33,15 +32,20 @@ function formatOutput(data, format = 'table', options = {}) {
     outputFormat = 'table';
   }
 
+  let formatted;
   switch (outputFormat.toLowerCase()) {
     case 'json':
-      return formatJSON(data, options);
+      formatted = formatJSON(data, options);
+      break;
     case 'csv':
-      return formatCSV(data, options);
+      formatted = formatCSV(data, options);
+      break;
     case 'table':
     default:
-      return formatTable(data, options);
+      formatted = formatTable(data, options);
   }
+
+  return emitOutput(formatted, options);
 }
 
 /**
@@ -88,23 +92,23 @@ function formatTable(data, options = {}) {
 function formatObjectTable(obj, options = {}) {
   const table = new Table({
     chars: {
-      'top': '═',
+      top: '═',
       'top-mid': '╤',
       'top-left': '╔',
       'top-right': '╗',
-      'bottom': '═',
+      bottom: '═',
       'bottom-mid': '╧',
       'bottom-left': '╚',
       'bottom-right': '╝',
-      'left': '║',
+      left: '║',
       'left-mid': '╟',
-      'mid': '─',
+      mid: '─',
       'mid-mid': '┼',
-      'right': '║',
+      right: '║',
       'right-mid': '╢',
-      'middle': '│'
+      middle: '│',
     },
-    style: { 'padding-left': 1, 'padding-right': 1 }
+    style: { 'padding-left': 1, 'padding-right': 1 },
   });
 
   Object.entries(obj).forEach(([key, value]) => {
@@ -127,32 +131,32 @@ function formatArrayTable(arr, options = {}) {
   }
 
   // 获取所有列名
-  const columns = [...new Set(arr.flatMap(item => Object.keys(item)))];
+  const columns = [...new Set(arr.flatMap((item) => Object.keys(item)))];
 
   const table = new Table({
-    head: options.highlight ? columns.map(col => chalk.cyan(col)) : columns,
+    head: options.highlight ? columns.map((col) => chalk.cyan(col)) : columns,
     chars: {
-      'top': '═',
+      top: '═',
       'top-mid': '╤',
       'top-left': '╔',
       'top-right': '╗',
-      'bottom': '═',
+      bottom: '═',
       'bottom-mid': '╧',
       'bottom-left': '╚',
       'bottom-right': '╝',
-      'left': '║',
+      left: '║',
       'left-mid': '╟',
-      'mid': '─',
+      mid: '─',
       'mid-mid': '┼',
-      'right': '║',
+      right: '║',
       'right-mid': '╢',
-      'middle': '│'
+      middle: '│',
     },
-    style: { 'padding-left': 1, 'padding-right': 1 }
+    style: { 'padding-left': 1, 'padding-right': 1 },
   });
 
-  arr.forEach(item => {
-    const row = columns.map(col => {
+  arr.forEach((item) => {
+    const row = columns.map((col) => {
       const value = item[col];
       return formatValue(value, options);
     });
@@ -190,15 +194,19 @@ function formatJSON(data, options = {}) {
 
   // 处理循环引用
   const seen = new WeakSet();
-  const jsonString = JSON.stringify(data, (key, val) => {
-    if (val != null && typeof val === 'object') {
-      if (seen.has(val)) {
-        return '[Circular]';
+  const jsonString = JSON.stringify(
+    data,
+    (key, val) => {
+      if (val != null && typeof val === 'object') {
+        if (seen.has(val)) {
+          return '[Circular]';
+        }
+        seen.add(val);
       }
-      seen.add(val);
-    }
-    return val;
-  }, indent);
+      return val;
+    },
+    indent
+  );
 
   return jsonString;
 }
@@ -227,8 +235,8 @@ function formatCSV(data, options = {}) {
   }
 
   // 输出数据行
-  data.forEach(item => {
-    const row = columns.map(col => {
+  data.forEach((item) => {
+    const row = columns.map((col) => {
       const value = item[col];
       return formatCSVValue(value);
     });
@@ -244,7 +252,7 @@ function formatCSV(data, options = {}) {
  * @param {Object} options 选项
  * @returns {string} 格式化后的字符串
  */
-function formatValue(value, options = {}) {
+function formatValue(value, _options = {}) {
   if (value === null || value === undefined) {
     return chalk.gray('null');
   }
@@ -366,6 +374,19 @@ function formatTimestamp(timestamp) {
 }
 
 /**
+ * 根据选项决定是否打印输出
+ * @param {string} output 格式化后的字符串
+ * @param {Object} options 选项
+ */
+function emitOutput(output, options = {}) {
+  if (options && options.silent === true) {
+    return output;
+  }
+  console.log(output);
+  return output;
+}
+
+/**
  * 成功消息
  * @param {string} message 消息
  */
@@ -421,5 +442,5 @@ module.exports = {
   error,
   warn,
   info,
-  debug
+  debug,
 };

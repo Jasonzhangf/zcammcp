@@ -1,0 +1,15 @@
+{
+  "sessionId": "system",
+  "pipelineId": "unknown",
+  "startTime": 1760335046690,
+  "status": "active",
+  "operations": [
+    {
+      "operationId": "initialization-complete",
+      "moduleId": "provider-1760335046688",
+      "position": "middle",
+      "startTime": 1760335046690,
+      "status": "running"
+    }
+  ]
+}

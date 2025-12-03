@@ -1,0 +1,15 @@
+{
+  "sessionId": "session_1760334719473",
+  "pipelineId": "unknown",
+  "startTime": 1760334719473,
+  "status": "active",
+  "operations": [
+    {
+      "operationId": "error_handler_registry_initialized",
+      "moduleId": "error-handler-registry",
+      "position": "middle",
+      "startTime": 1760334719473,
+      "status": "running"
+    }
+  ]
+}

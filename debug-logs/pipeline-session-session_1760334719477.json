@@ -1,0 +1,29 @@
+{
+  "sessionId": "session_1760334719477",
+  "pipelineId": "unknown",
+  "startTime": 1760334719477,
+  "status": "active",
+  "operations": [
+    {
+      "operationId": "initialization_start",
+      "moduleId": "protocol-handler",
+      "position": "middle",
+      "startTime": 1760334719477,
+      "status": "running"
+    },
+    {
+      "operationId": "initialization_complete",
+      "moduleId": "protocol-handler",
+      "position": "middle",
+      "startTime": 1760334719477,
+      "status": "running"
+    },
+    {
+      "operationId": "openai_router_initialized",
+      "moduleId": "protocol-handler",
+      "position": "middle",
+      "startTime": 1760334719477,
+      "status": "running"
+    }
+  ]
+}

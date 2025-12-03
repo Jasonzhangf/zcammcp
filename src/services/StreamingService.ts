@@ -1,73 +1,85 @@
-// 流媒体服务模块
-console.log('Module: StreamingService');
+/**
+ * 重构的流媒体服务模块
+ * 使用共享HTTP客户端，替代重复的HTTP plumbing
+ */
 
-import * as http from 'http';
-import * as url from 'url';
+import { ZCamHttpClient } from '../core/ZCamHttpClient.js';
 
 export class StreamingService {
+  private httpClient: ZCamHttpClient;
+
+  constructor(httpClient?: ZCamHttpClient) {
+    console.log('StreamingService initialized with shared HTTP client');
+    this.httpClient = httpClient || new ZCamHttpClient();
+  }
+
   /**
-   * 启用/禁用流媒体
+   * 设置RTMP推流
    */
-  async setEnabled(ip: string, enabled: boolean): Promise<any> {
-    console.log(`Function: setEnabled - Setting streaming to ${enabled ? 'enabled' : 'disabled'} for camera ${ip}`);
+  async setRtmpStreaming(ip: string, enabled: boolean, url?: string, key?: string): Promise<any> {
+    console.log(`Function: setRtmpStreaming - Setting RTMP streaming for camera: ${ip}`);
     
     try {
-      const requestUrl = `http://${ip}/streaming/enabled?value=${enabled}`;
-      console.log(`Sending streaming enable/disable request to: ${requestUrl}`);
+      const requestUrl = this.httpClient.buildStreamingUrl(ip, 'rtmp', enabled ? 'start' : 'stop');
+      console.log(`Sending RTMP streaming request to: ${requestUrl}`);
       
-      // 使用Node.js内置的http模块发送请求
-      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
       
-      if (result.success) {
+      if (response.success) {
         return {
           content: [{
             type: 'text',
-            text: `📡 ${enabled ? '已启用' : '已禁用'} 相机 ${ip} RTMP流媒体`
+            text: `${enabled ? '✅' : '⏹️'} 相机 ${ip} RTMP流媒体${enabled ? '已启用' : '已禁用'}`
           }]
         };
       } else {
-        throw new Error(result.error || 'Unknown error');
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
       }
     } catch (error) {
-      console.error(`Error setting streaming enabled for camera ${ip}:`, error);
+      console.error(`Error setting RTMP streaming for camera ${ip}:`, error);
       return {
         content: [{
           type: 'text',
-          text: `❌ ${enabled ? '启用' : '禁用'} 相机 ${ip} RTMP流媒体失败: ${error instanceof Error ? error.message : String(error)}`
+          text: `❌ 设置相机 ${ip} RTMP流媒体失败: ${error instanceof Error ? error.message : String(error)}`
         }]
       };
     }
   }
 
   /**
-   * 设置RTMP服务器地址
+   * 设置流媒体地址
    */
-  async setRtmpUrl(ip: string, rtmpUrl: string): Promise<any> {
-    console.log(`Function: setRtmpUrl - Setting RTMP URL to ${rtmpUrl} for camera ${ip}`);
+  async setStreamingUrl(ip: string, type: 'rtmp' | 'srt' | 'ndi', url: string): Promise<any> {
+    console.log(`Function: setStreamingUrl - Setting streaming URL for camera: ${ip}`);
     
     try {
-      const requestUrl = `http://${ip}/streaming/rtmp?url=${encodeURIComponent(rtmpUrl)}`;
-      console.log(`Sending RTMP URL set request to: ${requestUrl}`);
+      if (!url) {
+        throw new Error('流媒体地址不能为空');
+      }
       
-      // 使用Node.js内置的http模块发送请求
-      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      const requestUrl = this.httpClient.buildStreamingUrl(ip, type, 'set', { url });
+      console.log(`Sending streaming URL request to: ${requestUrl}`);
       
-      if (result.success) {
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
+      
+      if (response.success) {
         return {
           content: [{
             type: 'text',
-            text: `📡 已设置相机 ${ip} RTMP服务器地址为 ${rtmpUrl}`
+            text: `🌐 成功设置相机 ${ip} ${type.toUpperCase()}流媒体地址: ${url}`
           }]
         };
       } else {
-        throw new Error(result.error || 'Unknown error');
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
       }
     } catch (error) {
-      console.error(`Error setting RTMP URL for camera ${ip}:`, error);
+      console.error(`Error setting streaming URL for camera ${ip}:`, error);
       return {
         content: [{
           type: 'text',
-          text: `❌ 设置相机 ${ip} RTMP服务器地址失败: ${error instanceof Error ? error.message : String(error)}`
+          text: `❌ 设置相机 ${ip} ${type.toUpperCase()}流媒体地址失败: ${error instanceof Error ? error.message : String(error)}`
         }]
       };
     }
@@ -80,34 +92,34 @@ export class StreamingService {
     console.log(`Function: getStreamingSettings - Getting streaming settings for camera: ${ip}`);
     
     try {
-      const requestUrl = `http://${ip}/streaming/settings`;
+      const requestUrl = this.httpClient.buildStreamingUrl(ip, 'rtmp', 'query');
       console.log(`Sending streaming settings request to: ${requestUrl}`);
       
-      // 使用Node.js内置的http模块发送请求
-      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
       
-      if (result.success) {
+      if (response.success) {
         // 解析响应数据
         let streamingData;
         try {
-          streamingData = JSON.parse(result.data || '{}');
+          streamingData = this.httpClient.parseJsonResponse(response);
         } catch (parseError) {
           // 如果解析失败，使用原始数据
-          streamingData = { raw: result.data };
+          streamingData = { raw: response.data };
         }
         
         // 格式化流媒体设置信息
         const enabled = streamingData.enabled !== undefined ? streamingData.enabled : 'N/A';
-        const rtmpUrl = streamingData.rtmpUrl !== undefined ? streamingData.rtmpUrl : 'N/A';
+        const url = streamingData.url !== undefined ? streamingData.url : 'N/A';
         
         return {
           content: [{
             type: 'text',
-            text: `📊 相机 ${ip} 流媒体设置:\n启用: ${enabled}\nRTMP地址: ${rtmpUrl}`
+            text: `📊 相机 ${ip} 流媒体设置:\n启用: ${enabled}\n地址: ${url}`
           }]
         };
       } else {
-        throw new Error(result.error || 'Unknown error');
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
       }
     } catch (error) {
       console.error(`Error getting streaming settings for camera ${ip}:`, error);
@@ -119,42 +131,125 @@ export class StreamingService {
       };
     }
   }
-  
+
   /**
-   * 发送HTTP请求
+   * 停止所有流媒体
    */
-  private makeHttpRequest(requestUrl: string, method: string): Promise<{ success: boolean; data?: string; error?: string }> {
-    return new Promise((resolve) => {
-      const urlObj = new URL(requestUrl);
+  async stopAllStreaming(ip: string): Promise<any> {
+    console.log(`Function: stopAllStreaming - Stopping all streaming for camera: ${ip}`);
+    
+    try {
+      // 停止RTMP
+      const rtmpUrl = this.httpClient.buildStreamingUrl(ip, 'rtmp', 'stop');
+      const rtmpResponse = await this.httpClient.get(rtmpUrl);
       
-      const options = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 80,
-        path: urlObj.pathname + urlObj.search,
-        method: method,
+      // 停止SRT
+      const srtUrl = this.httpClient.buildStreamingUrl(ip, 'srt', 'stop');
+      const srtResponse = await this.httpClient.get(srtUrl);
+      
+      // 停止NDI
+      const ndiUrl = this.httpClient.buildStreamingUrl(ip, 'ndi', 'stop');
+      const ndiResponse = await this.httpClient.get(ndiUrl);
+      
+      const results = [];
+      if (rtmpResponse.success) results.push('RTMP');
+      if (srtResponse.success) results.push('SRT');
+      if (ndiResponse.success) results.push('NDI');
+      
+      if (results.length > 0) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⏹️ 成功停止相机 ${ip} 流媒体: ${results.join(', ')}`
+          }]
+        };
+      } else {
+        throw new Error('所有流媒体停止失败');
+      }
+    } catch (error) {
+      console.error(`Error stopping all streaming for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 停止相机 ${ip} 所有流媒体失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
       };
+    }
+  }
+
+  /**
+   * 测试流媒体连接
+   */
+  async testStreamingConnection(ip: string, type: 'rtmp' | 'srt' | 'ndi' = 'rtmp'): Promise<any> {
+    console.log(`Function: testStreamingConnection - Testing ${type} streaming connection for camera: ${ip}`);
+    
+    try {
+      // 首先测试基本HTTP连接
+      const basicConnection = await this.httpClient.testCameraConnection(ip);
+      if (!basicConnection) {
+        throw new Error('相机HTTP连接失败');
+      }
       
-      const req = http.request(options, (res) => {
-        let data = '';
-        
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        
-        res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ success: true, data: data });
-          } else {
-            resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage}`, data: data });
-          }
-        });
-      });
+      // 测试流媒体特定端点
+      const requestUrl = this.httpClient.buildStreamingUrl(ip, type, 'query');
+      const response = await this.httpClient.get(requestUrl);
       
-      req.on('error', (error) => {
-        resolve({ success: false, error: error.message });
-      });
+      if (response.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `✅ 相机 ${ip} ${type.toUpperCase()}流媒体连接正常`
+          }]
+        };
+      } else {
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
+      }
+    } catch (error) {
+      console.error(`Error testing streaming connection for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 相机 ${ip} ${type.toUpperCase()}流媒体连接测试失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
+  }
+
+  /**
+   * 设置流媒体参数
+   */
+  async setStreamingParameters(
+    ip: string, 
+    type: 'rtmp' | 'srt' | 'ndi', 
+    params: Record<string, string | number>
+  ): Promise<any> {
+    console.log(`Function: setStreamingParameters - Setting ${type} parameters for camera: ${ip}`);
+    
+    try {
+      const requestUrl = this.httpClient.buildStreamingUrl(ip, type, 'set', params);
+      console.log(`Sending streaming parameters request to: ${requestUrl}`);
       
-      req.end();
-    });
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
+      
+      if (response.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⚙️ 成功设置相机 ${ip} ${type.toUpperCase()}流媒体参数`
+          }]
+        };
+      } else {
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
+      }
+    } catch (error) {
+      console.error(`Error setting streaming parameters for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 设置相机 ${ip} ${type.toUpperCase()}流媒体参数失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 }

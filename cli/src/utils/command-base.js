@@ -10,7 +10,6 @@ const {
   resolveTimeout,
   isVerboseMode,
   isColorDisabled,
-  formatErrorMessage
 } = require('./cli-helpers');
 const { formatOutput } = require('./formatter');
 const { handleErrors } = require('./error-handler');
@@ -38,7 +37,7 @@ class CommandBase {
       connection: resolveConnectionOptions(options, globalOptions),
       timeout: resolveTimeout(options, globalOptions),
       verbose: isVerboseMode(options, globalOptions),
-      noColor: isColorDisabled(options, globalOptions)
+      noColor: isColorDisabled(options, globalOptions),
     };
   }
 
@@ -49,12 +48,11 @@ class CommandBase {
    */
   initAPI(context) {
     if (!this.api) {
-      this.api = createAPI(context.connection.host, {
-        port: context.connection.port,
+      const config = {
+        ...context.connection,
         timeout: context.timeout,
-        username: context.connection.username,
-        password: context.connection.password
-      });
+      };
+      this.api = createAPI(config);
     }
     return this.api;
   }
@@ -78,7 +76,7 @@ class CommandBase {
     } catch (error) {
       handleErrors(error, {
         ...context.globalOptions,
-        verbose: context.verbose
+        verbose: context.verbose,
       });
     }
   }
@@ -91,7 +89,7 @@ class CommandBase {
   formatResult(result, context) {
     const formatOptions = {
       verbose: context.verbose,
-      noColor: context.noColor
+      noColor: context.noColor,
     };
 
     formatOutput(result, context.outputFormat, formatOptions);
@@ -111,8 +109,8 @@ class CommandBase {
       options: {
         title: options.title,
         emptyMessage: options.emptyMessage || '暂无数据',
-        ...options
-      }
+        ...options,
+      },
     };
   }
 
@@ -123,7 +121,7 @@ class CommandBase {
    * @throws {Error} 如果缺少必需参数
    */
   validateRequiredParams(params, requiredFields) {
-    const missing = requiredFields.filter(field => !params[field]);
+    const missing = requiredFields.filter((field) => !params[field]);
 
     if (missing.length > 0) {
       throw new Error(`缺少必需参数: ${missing.join(', ')}`);
@@ -137,7 +135,8 @@ class CommandBase {
    * @throws {Error} 如果IP地址无效
    */
   validateIP(ip, fieldName = 'IP地址') {
-    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    const ipRegex =
+      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
 
     if (!ipRegex.test(ip)) {
       throw new Error(`${fieldName}格式无效: ${ip}`);
@@ -169,7 +168,7 @@ class CommandBase {
       success: true,
       message,
       data,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -186,7 +185,7 @@ class CommandBase {
       message,
       code,
       details,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 
@@ -253,5 +252,5 @@ function wrapCommand(commandFunction) {
 
 module.exports = {
   CommandBase,
-  wrapCommand
+  wrapCommand,
 };

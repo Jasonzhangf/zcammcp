@@ -27,7 +27,7 @@ class ZCamError extends Error {
       code: this.code,
       details: this.details,
       timestamp: this.timestamp,
-      stack: this.stack
+      stack: this.stack,
     };
   }
 }
@@ -41,7 +41,7 @@ class APIError extends ZCamError {
     const details = {
       status,
       url,
-      statusText: message
+      statusText: message,
     };
 
     let userMessage = `Camera API Error`;
@@ -88,7 +88,7 @@ class ConnectionError extends ZCamError {
   constructor(message, url = '', originalError = null) {
     const details = {
       url,
-      originalError: originalError ? originalError.message : null
+      originalError: originalError ? originalError.message : null,
     };
 
     let userMessage = `Connection Error`;
@@ -124,7 +124,7 @@ class ValidationError extends ZCamError {
   constructor(message, field = null, value = null) {
     const details = {
       field,
-      value
+      value,
     };
 
     super(message, 'VALIDATION_ERROR', details);
@@ -141,7 +141,7 @@ class ConfigError extends ZCamError {
   constructor(message, configPath = '', line = null) {
     const details = {
       configPath,
-      line
+      line,
     };
 
     super(message, 'CONFIG_ERROR', details);
@@ -158,7 +158,7 @@ class ModuleError extends ZCamError {
   constructor(message, moduleName = '', originalError = null) {
     const details = {
       moduleName,
-      originalError: originalError ? originalError.message : null
+      originalError: originalError ? originalError.message : null,
     };
 
     super(message, 'MODULE_ERROR', details);
@@ -175,7 +175,7 @@ class CameraStateError extends ZCamError {
   constructor(message, currentState = '', requiredState = '') {
     const details = {
       currentState,
-      requiredState
+      requiredState,
     };
 
     super(message, 'CAMERA_STATE_ERROR', details);
@@ -192,7 +192,7 @@ class PermissionError extends ZCamError {
   constructor(message, requiredPermission = '', currentUser = '') {
     const details = {
       requiredPermission,
-      currentUser
+      currentUser,
     };
 
     super(message, 'PERMISSION_ERROR', details);
@@ -209,7 +209,7 @@ class HardwareError extends ZCamError {
   constructor(message, component = '', errorCode = null) {
     const details = {
       component,
-      errorCode
+      errorCode,
     };
 
     super(message, 'HARDWARE_ERROR', details);
@@ -226,7 +226,7 @@ class TimeoutError extends ZCamError {
   constructor(message, operation = '', timeout = null) {
     const details = {
       operation,
-      timeout
+      timeout,
     };
 
     super(message, 'TIMEOUT_ERROR', details);
@@ -345,7 +345,7 @@ function formatError(error, includeStack = false) {
   const errorObj = {
     type: error.name || 'Error',
     message: error.message,
-    code: error.code || 'UNKNOWN'
+    code: error.code || 'UNKNOWN',
   };
 
   if (error.details && Object.keys(error.details).length > 0) {
@@ -399,5 +399,5 @@ module.exports = {
   isTimeoutError,
 
   // 工具函数
-  formatError
+  formatError,
 };

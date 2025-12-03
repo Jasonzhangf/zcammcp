@@ -73,6 +73,45 @@ class StreamService {
   }
 
   /**
+   * 设置指定RTMP流的URL
+   */
+  static async setRtmpStreamUrl(api, index, url) {
+    const streamIndex = this.validateStreamIndex(index);
+    if (!url || typeof url !== 'string') {
+      throw new Error('RTMP URL不能为空');
+    }
+    this.validateRtmpUrl(url);
+    return await api.get(`/ctrl/rtmp?action=set_url&index=${streamIndex}&url=${encodeURIComponent(url)}`);
+  }
+
+  /**
+   * 设置指定RTMP流的密钥
+   */
+  static async setRtmpStreamKey(api, index, key) {
+    const streamIndex = this.validateStreamIndex(index);
+    if (!key || typeof key !== 'string') {
+      throw new Error('RTMP密钥不能为空');
+    }
+    return await api.get(`/ctrl/rtmp?action=set_key&index=${streamIndex}&key=${encodeURIComponent(key)}`);
+  }
+
+  /**
+   * 获取RTMP流URL
+   */
+  static async getRtmpStreamUrl(api, index) {
+    const streamIndex = this.validateStreamIndex(index);
+    return await api.get(`/ctrl/rtmp?action=get_url&index=${streamIndex}`);
+  }
+
+  /**
+   * 获取RTMP流密钥
+   */
+  static async getRtmpStreamKey(api, index) {
+    const streamIndex = this.validateStreamIndex(index);
+    return await api.get(`/ctrl/rtmp?action=get_key&index=${streamIndex}`);
+  }
+
+  /**
    * 设置RTMP自动重启
    * API: /ctrl/rtmp?action=set&autoRestart={enable}
    */
@@ -97,13 +136,12 @@ class StreamService {
    * 启动SRT推流
    * API: /ctrl/srt?action=start&url={url}
    */
-  static async startSrtStream(api, url) {
-    if (!url || typeof url !== 'string') {
-      throw new Error('SRT URL不能为空');
+  static async startSrtStream(api, url = '') {
+    if (url && typeof url === 'string' && url.length > 0) {
+      this.validateSrtUrl(url);
+      return await api.get(`/ctrl/srt?action=start&url=${encodeURIComponent(url)}`);
     }
-
-    this.validateSrtUrl(url);
-    return await api.get(`/ctrl/srt?action=start&url=${encodeURIComponent(url)}`);
+    return await api.get('/ctrl/srt?action=start');
   }
 
   /**
@@ -120,6 +158,20 @@ class StreamService {
    */
   static async getSrtStreamStatus(api) {
     return await api.get('/ctrl/srt?action=query');
+  }
+
+  /**
+   * 设置SRT流URL
+   */
+  static async setSrtStreamUrl(api, url) {
+    return await this.setSrtUrl(api, url);
+  }
+
+  /**
+   * 获取SRT流URL
+   */
+  static async getSrtStreamUrl(api) {
+    return await api.get('/ctrl/srt?action=get_url');
   }
 
   /**
@@ -213,6 +265,44 @@ class StreamService {
    */
   static async getNdiStreamStatus(api) {
     return await api.get('/ctrl/ndi?action=query');
+  }
+
+  /**
+   * 启动NDI输出
+   */
+  static async startNdiOutput(api) {
+    return await api.get('/ctrl/ndi?action=start');
+  }
+
+  /**
+   * 停止NDI输出
+   */
+  static async stopNdiOutput(api) {
+    return await api.get('/ctrl/ndi?action=stop');
+  }
+
+  /**
+   * 获取NDI状态（别名）
+   */
+  static async getNdiStatus(api) {
+    return await this.getNdiStreamStatus(api);
+  }
+
+  /**
+   * 设置NDI名称
+   */
+  static async setNdiName(api, name) {
+    if (!name || typeof name !== 'string') {
+      throw new Error('NDI名称不能为空');
+    }
+    return await api.get(`/ctrl/ndi?action=set_name&name=${encodeURIComponent(name)}`);
+  }
+
+  /**
+   * 获取NDI名称
+   */
+  static async getNdiName(api) {
+    return await api.get('/ctrl/ndi?action=get_name');
   }
 
   /**
@@ -618,6 +708,62 @@ class StreamService {
     }
 
     return true;
+  }
+
+  /**
+   * 设置流帧率（别名）
+   */
+  static async setStreamFrameRate(api, index, fps) {
+    return await this.setStreamFps(api, index, fps);
+  }
+
+  /**
+   * 设置流媒体质量预设
+   */
+  static async setStreamQualityPreset(api, preset) {
+    if (!preset || typeof preset !== 'string') {
+      throw new Error('质量预设不能为空');
+    }
+    return await api.get(`/ctrl/stream_setting?action=preset&value=${encodeURIComponent(preset)}`);
+  }
+
+  /**
+   * 启用/禁用自适应码率
+   */
+  static async enableAdaptiveBitrate(api, enable) {
+    const value = enable === true || enable === '1' || enable === 'on' ? 'on' : 'off';
+    return await api.get(`/ctrl/stream_setting?action=adaptive_bitrate&enable=${value}`);
+  }
+
+  /**
+   * 获取流媒体质量状态
+   */
+  static async getStreamQualityStatus(api) {
+    return await api.get('/ctrl/stream_setting?action=quality_status');
+  }
+
+  /**
+   * 获取流媒体参数
+   */
+  static async getStreamParam(api, key) {
+    if (!key || typeof key !== 'string') {
+      throw new Error('参数名不能为空');
+    }
+    return await api.get(`/ctrl/get?k=${key}`);
+  }
+
+  /**
+   * 获取RTMP状态（别名）
+   */
+  static async getRtmpStatus(api) {
+    return await this.getRtmpStreamStatus(api, 1);
+  }
+
+  /**
+   * 获取录制状态
+   */
+  static async getRecordingStatus(api) {
+    return await api.get('/ctrl/rec?action=query');
   }
 }
 

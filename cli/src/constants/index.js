@@ -35,6 +35,7 @@ module.exports = {
       LOGIN_PSWD: '/login/pswd',
       LOGIN_QUIT: '/login/quit',
       CTRL_SESSION: '/ctrl/session',
+      CTRL_MODE: '/ctrl/mode',
       CTRL_REBOOT: '/ctrl/reboot',
       CTRL_SHUTDOWN: '/ctrl/shUTDOWN',
       CTRL_GET: '/ctrl/get',

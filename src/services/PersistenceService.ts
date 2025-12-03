@@ -1,16 +1,17 @@
-import { ConfigManager, CameraContextConfig } from '../core/ConfigManager';
-import { CameraManager, CameraStatus } from '../core/CameraManager';
-import { WebSocketSubscriptionManager, SubscriptionOptions } from './WebSocketSubscriptionManager';
+import { ConfigManager } from '../core/ConfigManager.js';
+import { CameraManager, CameraStatus } from '../core/CameraManager.js';
+import { UnifiedWebSocketSubscriptionManager, SubscriptionOptions } from '../core/UnifiedWebSocketSubscriptionManager.js';
+import { CameraContextConfig } from '../config/schema.js';
 
 export class PersistenceManager {
   private configManager: ConfigManager;
   private cameraManager: CameraManager;
-  private wsManager: WebSocketSubscriptionManager;
+  private wsManager: UnifiedWebSocketSubscriptionManager;
 
   constructor(
     configManager: ConfigManager,
     cameraManager: CameraManager,
-    wsManager: WebSocketSubscriptionManager
+    wsManager: UnifiedWebSocketSubscriptionManager
   ) {
     this.configManager = configManager;
     this.cameraManager = cameraManager;
@@ -33,6 +34,16 @@ export class PersistenceManager {
       
       // 获取订阅选项
       const subscriptionOptions = this.wsManager.getSubscriptionOptions(ip);
+      const normalizedOptions = subscriptionOptions
+        ? {
+            basicInfo: subscriptionOptions.basicInfo ?? true,
+            statusUpdates: subscriptionOptions.statusUpdates ?? true,
+            recordingStatus: subscriptionOptions.recordingStatus ?? true,
+            ptzPosition: subscriptionOptions.ptzPosition ?? false,
+            batteryStatus: subscriptionOptions.batteryStatus ?? false,
+            temperatureStatus: subscriptionOptions.temperatureStatus ?? false,
+          }
+        : undefined;
       
       // 创建上下文配置
       const contextConfig: CameraContextConfig = {
@@ -49,7 +60,7 @@ export class PersistenceManager {
           tiltPosition: cameraStatus?.tiltPosition,
           focusDistance: cameraStatus?.focusDistance
         },
-        subscriptionOptions: subscriptionOptions
+        subscriptionOptions: normalizedOptions
       };
       
       return contextConfig;

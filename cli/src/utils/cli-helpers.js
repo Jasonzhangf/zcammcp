@@ -3,10 +3,9 @@
  * 统一处理命令行参数和格式
  */
 
+const { ValidationError } = require('./errors');
 const constants = require('../constants');
 const NetworkValidator = require('../validators/network');
-const FallbackManager = require('../config/fallback');
-const EnvConfig = require('../config/env');
 
 /**
  * 解析输出格式
@@ -15,18 +14,22 @@ const EnvConfig = require('../config/env');
  * @returns {string} 输出格式 ('table'|'json'|'csv')
  */
 function resolveOutputFormat(options = {}, globalOptions = {}) {
-  // 使用FallbackManager解析输出格式，避免硬编码
-  return FallbackManager.resolveWithMultipleFallbacks(
-    [
-      options.json === true ? 'json' : null,
-      globalOptions.json === true ? 'json' : null,
-      typeof globalOptions.output === 'string' ? globalOptions.output.toLowerCase() : null,
-      typeof options.output === 'string' ? options.output.toLowerCase() : null
-    ],
-    constants.OUTPUT.DEFAULT_FORMAT,
-    (value) => constants.OUTPUT.FORMATS.includes(value?.toLowerCase()),
-    '输出格式'
-  );
+  // 精确解析，无回退
+  const format = options.json === true ? 'json' :
+    globalOptions.json === true ? 'json' :
+    typeof globalOptions.output === 'string' ? globalOptions.output.toLowerCase() :
+    typeof options.output === 'string' ? options.output.toLowerCase() :
+    null;
+
+  if (!format) {
+    return constants.OUTPUT.DEFAULT_FORMAT;
+  }
+
+  if (!constants.OUTPUT.FORMATS.includes(format.toLowerCase())) {
+    throw new ValidationError(`无效的输出格式: ${format}，支持的格式: ${constants.OUTPUT.FORMATS.join(', ')}`);
+  }
+
+  return format.toLowerCase();
 }
 
 /**
@@ -62,28 +65,46 @@ function getGlobalOptions(cmd) {
  * @returns {Object} 连接配置
  */
 function resolveConnectionOptions(options = {}, globalOptions = {}) {
-  // 使用FallbackManager和验证器，避免硬编码
-  const envConfig = EnvConfig.load();
+  // 精确解析，无回退
+  const config = {
+    host: options.host || globalOptions.host,
+    port: options.port || globalOptions.port,
+    timeout: options.timeout || globalOptions.timeout,
+    username: options.username || globalOptions.username,
+    password: options.password || globalOptions.password,
+  };
 
-  return FallbackManager.resolveConfig(
-    options,
-    globalOptions,
-    envConfig,
-    {
-      host: constants.NETWORK.DEFAULT_HOST,
-      port: constants.NETWORK.DEFAULT_PORT,
-      timeout: constants.NETWORK.DEFAULT_TIMEOUT,
-      username: '',
-      password: ''
-    },
-    {
-      host: NetworkValidator.isValidHost,
-      port: NetworkValidator.isValidPort,
-      timeout: NetworkValidator.isValidTimeout,
-      username: (value) => typeof value === 'string',
-      password: (value) => typeof value === 'string'
-    }
-  );
+  // 验证必需的参数
+  if (!config.host) {
+    throw new ValidationError('host参数是必需的');
+  }
+  if (!NetworkValidator.isValidHost(config.host)) {
+    throw new ValidationError(`无效的主机地址: ${config.host}`);
+  }
+
+  if (!config.port) {
+    throw new ValidationError('port参数是必需的');
+  }
+  if (!NetworkValidator.isValidPort(config.port)) {
+    throw new ValidationError(`无效的端口号: ${config.port}`);
+  }
+
+  if (!config.timeout) {
+    throw new ValidationError('timeout参数是必需的');
+  }
+  if (!NetworkValidator.isValidTimeout(config.timeout)) {
+    throw new ValidationError(`无效的超时时间: ${config.timeout}`);
+  }
+
+  if (config.username && typeof config.username !== 'string') {
+    throw new ValidationError(`无效的用户名: ${config.username}`);
+  }
+
+  if (config.password && typeof config.password !== 'string') {
+    throw new ValidationError(`无效的密码`);
+  }
+
+  return config;
 }
 
 /**
@@ -93,16 +114,16 @@ function resolveConnectionOptions(options = {}, globalOptions = {}) {
  * @returns {number} 超时时间（毫秒）
  */
 function resolveTimeout(options = {}, globalOptions = {}) {
-  const timeout = FallbackManager.resolveWithMultipleFallbacks(
-    [
-      options.timeout,
-      globalOptions.timeout,
-      EnvConfig.get('timeout')
-    ],
-    constants.NETWORK.DEFAULT_TIMEOUT,
-    NetworkValidator.isValidTimeout,
-    '超时时间'
-  );
+  // 精确解析，无回退
+  const timeout = options.timeout || globalOptions.timeout;
+
+  if (!timeout) {
+    throw new ValidationError('timeout参数是必需的');
+  }
+
+  if (!NetworkValidator.isValidTimeout(timeout)) {
+    throw new ValidationError(`无效的超时时间: ${timeout}`);
+  }
 
   return NetworkValidator.normalizeTimeout(timeout);
 }
@@ -193,7 +214,7 @@ function formatOptionsHelp(options) {
   }
 
   return options
-    .map(opt => {
+    .map((opt) => {
       const flags = opt.flags || '';
       const description = opt.description || '';
       const defaultValue = opt.defaultValue !== undefined ? ` (默认: ${opt.defaultValue})` : '';
@@ -208,7 +229,7 @@ function formatOptionsHelp(options) {
  * @returns {Promise} Promise对象
  */
 function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -252,5 +273,5 @@ module.exports = {
   safeParseJSON,
   formatOptionsHelp,
   delay,
-  retry
+  retry,
 };

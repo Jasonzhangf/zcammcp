@@ -1,0 +1,212 @@
+// PageStore.ts
+// 页面数据中心骨架: 维护 cameraState / uiState, 对外提供只读视图和写操作入口
+
+export interface CameraState {
+  // PTZ 区: 后续可扩展 pan/tilt 等字段
+  ptz?: {
+    zoom?: { value: number; view: string };
+    speed?: { value: number; view: string };
+    focus?: { value: number; view: string };
+  };
+
+  // 曝光设置
+  exposure?: {
+    aeEnabled?: boolean;
+    shutter?: { value: number; view: string };
+    iso?: { value: number; view: string };
+  };
+
+  // 白平衡设置
+  whiteBalance?: {
+    awbEnabled?: boolean;
+    temperature?: { value: number; view: string };
+  };
+
+  // 图像调节
+  image?: {
+    brightness?: number; // 0-100
+    contrast?: number;   // 0-100
+    saturation?: number; // 0-100
+  };
+}
+
+export interface UiState {
+  selectedNodes: string[];
+  debugMode: 'normal' | 'debug';
+  highlightMap: Record<string, 'none' | 'hover' | 'active' | 'error' | 'replay'>;
+  activeNodePath?: string;
+}
+
+export interface ViewState {
+  camera: CameraState;
+  ui: UiState;
+}
+
+export interface OperationContext {
+  pagePath: string;
+  nodePath: string;
+  kind: string;
+  timestamp: number;
+  cameraState: CameraState;
+  uiState: UiState;
+}
+
+export interface OperationPayload {
+  value?: unknown;
+  params?: Record<string, unknown>;
+}
+
+export interface CliRequest {
+  id: string;
+  command: string;
+  params: Record<string, unknown>;
+}
+
+export interface CliResponse {
+  id: string;
+  ok: boolean;
+  data?: unknown;
+  error?: string;
+}
+
+export interface OperationResult {
+  newStatePartial?: Partial<CameraState>;
+  cliRequest?: CliRequest;
+}
+
+export type OperationHandler = (
+  ctx: OperationContext,
+  payload: OperationPayload
+) => Promise<OperationResult>;
+
+export interface OperationDefinition {
+  id: string;
+  cliCommand: string;
+  handler: OperationHandler;
+}
+
+export interface OperationRegistry {
+  run(id: string, ctx: OperationContext, payload: OperationPayload): Promise<OperationResult>;
+}
+
+export interface CliChannel {
+  send(request: CliRequest): Promise<CliResponse>;
+}
+
+/**
+ * PageStore: 页面级数据中心
+ * - 管理 cameraState / uiState
+ * - 负责调用 OperationRegistry 和 CliChannel
+ */
+export class PageStore {
+  readonly path: string;
+  cameraState: CameraState;
+  uiState: UiState;
+  private readonly operations: OperationRegistry;
+  private readonly cli: CliChannel;
+  private readonly listeners: Set<() => void> = new Set();
+
+  constructor(opts: {
+    path: string;
+    initialCameraState?: CameraState;
+    initialUiState?: UiState;
+    operations: OperationRegistry;
+    cli: CliChannel;
+  }) {
+    this.path = opts.path;
+    this.cameraState = opts.initialCameraState ?? {};
+    this.uiState =
+      opts.initialUiState ?? ({
+        selectedNodes: [],
+        debugMode: 'normal',
+        highlightMap: {},
+      } as UiState);
+    this.operations = opts.operations;
+    this.cli = opts.cli;
+  }
+
+  /** 返回只读视图状态 */
+  getViewState(): ViewState {
+    return {
+      camera: this.cameraState,
+      ui: this.uiState,
+    };
+  }
+
+  /** 将某个容器设为当前焦点 / 选中节点 */
+  setActiveNode(path: string): void {
+    this.uiState = {
+      ...this.uiState,
+      activeNodePath: path,
+      selectedNodes: [path],
+    };
+    this.notify();
+  }
+
+  /** 设置某个容器的高亮状态（hover/active 等） */
+  setHighlight(path: string, state: 'none' | 'hover' | 'active' | 'error' | 'replay'): void {
+    const next = { ...this.uiState.highlightMap };
+    if (state === 'none') {
+      delete next[path];
+    } else {
+      next[path] = state;
+    }
+    this.uiState = {
+      ...this.uiState,
+      highlightMap: next,
+    };
+    this.notify();
+  }
+
+  /**
+   * 订阅状态变化, 返回取消订阅函数
+   */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(): void {
+    for (const listener of this.listeners) {
+      try {
+        listener();
+      } catch {
+        // 订阅方错误不影响其他 listener
+      }
+    }
+  }
+
+  /**
+   * 运行一个写操作: 调用 OperationRegistry -> 可选 CLI -> 更新 cameraState
+   */
+  async runOperation(nodePath: string, kind: string, operationId: string, payload: OperationPayload): Promise<void> {
+    const ctx: OperationContext = {
+      pagePath: this.path,
+      nodePath,
+      kind,
+      timestamp: Date.now(),
+      cameraState: this.cameraState,
+      uiState: this.uiState,
+    };
+
+    const result = await this.operations.run(operationId, ctx, payload);
+
+    // 更新本地状态
+    if (result.newStatePartial) {
+      this.cameraState = {
+        ...this.cameraState,
+        ...result.newStatePartial,
+      };
+    }
+
+    // 调用 CLI（如果有）
+    if (result.cliRequest) {
+      await this.cli.send(result.cliRequest);
+    }
+
+    // 通知订阅者有新状态
+    this.notify();
+  }
+}

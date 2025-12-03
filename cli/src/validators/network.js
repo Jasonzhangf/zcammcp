@@ -50,6 +50,16 @@ class NetworkValidator {
   }
 
   /**
+   * 验证请求间隔
+   * @param {number|string} interval 请求间隔（毫秒）
+   * @returns {boolean} 是否有效
+   */
+  static isValidRequestInterval(interval) {
+    const intervalNum = parseInt(interval);
+    return !isNaN(intervalNum) && intervalNum >= 10 && intervalNum <= 5000;
+  }
+
+  /**
    * 验证IP地址格式
    * @param {string} ip IP地址
    * @returns {boolean} 是否有效

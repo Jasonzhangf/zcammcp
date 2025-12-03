@@ -65,8 +65,8 @@ export class CameraManager {
   async addCamera(ip: string): Promise<void> {
     console.log(`Function: addCamera - Adding camera with IP: ${ip}`);
     
-    // 暂时使用模拟数据
-    const mockStatus: CameraStatus = {
+    // 创建新的相机状态
+    const status: CameraStatus = {
       ip: ip,
       name: `Z CAM ${ip.split('.').pop()}`, // 使用IP最后一段作为默认别名
       model: 'E2',
@@ -77,7 +77,7 @@ export class CameraManager {
     };
     
     // 更新上下文
-    this.context.cameras.set(ip, mockStatus);
+    this.context.cameras.set(ip, status);
     
     // 如果是第一个相机，设置为当前相机
     if (this.context.currentCamera === null) {
@@ -86,12 +86,12 @@ export class CameraManager {
     
     // 更新历史记录
     this.configManager.addCameraToHistory({
-      ip: mockStatus.ip,
-      name: mockStatus.name,
-      model: mockStatus.model,
-      firmware: mockStatus.firmware,
-      mac: mockStatus.mac,
-      serialNumber: mockStatus.serialNumber,
+      ip: status.ip,
+      name: status.name,
+      model: status.model,
+      firmware: status.firmware,
+      mac: status.mac,
+      serialNumber: status.serialNumber,
       addedAt: new Date()
     });
   }
@@ -226,7 +226,7 @@ export class CameraManager {
       // 如果是当前相机，也更新历史记录中的名称
       if (this.context.currentCamera === ip) {
         const history = this.configManager.getCameraHistory();
-        const cameraHistory = history.find(c => c.ip === ip);
+        const cameraHistory = history.find((c: any) => c.ip === ip);
         if (cameraHistory) {
           cameraHistory.name = alias;
           this.configManager.addCameraToHistory(cameraHistory);
@@ -270,7 +270,7 @@ export class CameraManager {
   /**
    * 获取收藏夹中的相机列表
    */
-  getFavoriteCameras(): string[] {
+  getFavoriteCameras(): Array<{ip: string, alias?: string, addedAt?: Date}> {
     console.log('Function: getFavoriteCameras - Getting favorite cameras');
     return this.configManager.getFavoriteCameras();
   }
@@ -289,5 +289,19 @@ export class CameraManager {
   getAllCameraStatus(): Map<string, CameraStatus> {
     console.log('Function: getAllCameraStatus - Getting all camera status');
     return new Map(this.context.cameras);
+  }
+
+  /**
+   * 获取单个相机信息
+   */
+  getCamera(ip: string): CameraStatus | null {
+    return this.context.cameras.get(ip) || null;
+  }
+
+  /**
+   * 获取已连接的相机列表
+   */
+  getConnectedCameras(): CameraStatus[] {
+    return Array.from(this.context.cameras.values()).filter(camera => camera.isConnected);
   }
 }

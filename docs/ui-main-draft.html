@@ -1,0 +1,1262 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>ZCAM Camera Control UI (Draft)</title>
+    <style>
+      /* 整体面板：浮窗模式 */
+      #zcam-camera-root {
+        position: fixed;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%); /* 居中，避免左右被裁切 */
+        width: 640px; /* 主容器更宽，避免右侧被裁切 */
+        max-width: 96vw; /* 小屏自适应收缩 */
+        min-width: 560px; /* 保证两列横向排版的最小宽度 */
+        min-height: 360px;
+        resize: both; /* 外部容器可调整大小（设计稿演示用） */
+        overflow: hidden; /* 由窗口尺寸约束内容，不主动显示滚轴 */
+        box-sizing: border-box;
+        background: #151515;
+        color: #f5f5f5;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        border-radius: 12px;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* 顶部栏 */
+      .zcam-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 12px;
+        background: linear-gradient(90deg, #202020, #262626);
+        border-bottom: 1px solid #333;
+        cursor: move; /* 预留给拖动区域 */
+      }
+
+      .zcam-header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .zcam-badge {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        background: #ff7a45;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .zcam-title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .zcam-header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+      }
+
+      .zcam-camera-select {
+        max-width: 160px;
+        font-size: 11px;
+        background: #202020;
+        color: #f5f5f5;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 2px 6px;
+      }
+
+      .zcam-status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #52c41a; /* connected */
+      }
+
+      .zcam-header-btn {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 1px solid #444;
+        background: #1f1f1f;
+        font-size: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      .zcam-header-btn:hover {
+        background: #333;
+      }
+
+      /* 内容区域：分为状态区 / 控制区 / 快捷方式区 */
+      .zcam-main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 8px 10px 10px;
+        gap: 8px;
+        overflow: visible; /* 不使用滚动条，由主容器尺寸保证空间 */
+      }
+
+      .zcam-section {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .zcam-section-controls {
+        flex: 1;
+        min-height: 160px;
+      }
+
+      .zcam-controls-grid {
+        flex: 1;
+        display: grid;
+        grid-template-columns: 1.4fr 0.9fr; /* 左侧 PTZ 更宽，右侧图像区略窄 */
+        grid-template-rows: auto;
+        gap: 6px;
+        overflow: visible; /* 不滚动，交给外层窗口尺寸控制 */
+      }
+
+      .zcam-status-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 1fr; /* 左侧相机信息略宽 */
+        column-gap: 16px;
+        row-gap: 4px;
+        padding: 0 32px 4px 32px; /* 与下方控制区左右内边距对齐 */
+        box-sizing: border-box;
+      }
+
+      .zcam-status-item-label {
+        font-size: 10px;
+        color: #777;
+      }
+
+      .zcam-status-item-value {
+        font-size: 11px;
+      }
+
+      .zcam-status-item-sub {
+        font-size: 10px;
+        color: #666;
+      }
+
+      .zcam-subsection {
+        border-top: 1px solid #222;
+        margin-top: 4px;
+        padding-top: 4px;
+      }
+
+      .zcam-subsection-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2px;
+      }
+
+      .zcam-subsection-title {
+        font-size: 10px;
+        color: #777;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .zcam-control-select {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid #333;
+        background: #151515;
+        display: inline-block; /* 预览阶段始终显示，实际实现可在编辑模式下控制显示 */
+        box-sizing: border-box;
+      }
+
+      .zcam-control-select-checked {
+        background: #135200;   /* 选中时绿色 */
+        border-color: #52c41a;
+      }
+
+      .zcam-shortcut-edit-on .zcam-control-select {
+        display: inline-block;
+      }
+
+      .zcam-card {
+        background: #141414;
+        border-radius: 8px;
+        border: 1px solid #2a2a2a;
+        padding: 6px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        box-sizing: border-box;
+      }
+
+      .zcam-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 11px;
+        color: #999;
+      }
+
+      .zcam-card-title {
+        font-weight: 500;
+      }
+
+      .zcam-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 11px;
+      }
+
+      /* PTZ 区：方向键更大，整体略向右偏；Zoom/Speed 竖向排布在右侧 */
+      .zcam-ptz-layout {
+        display: grid;
+        grid-template-columns: auto 96px; /* 左：方向操作，右：Zoom/Speed 控件列 */
+        column-gap: 10px;
+        align-items: center;
+        justify-content: center; /* 整体略向右偏 */
+        margin-bottom: 4px;
+      }
+
+      .zcam-ptz-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 42px);
+        grid-template-rows: repeat(3, 42px);
+        column-gap: 6px;
+        row-gap: 6px;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .zcam-ptz-btn {
+        width: 42px;
+        height: 42px;
+        border-radius: 8px;
+        border: 1px solid #2f2f2f;
+        background: #1d1d1d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      .zcam-ptz-btn:hover {
+        background: #333;
+      }
+
+      .zcam-ptz-btn-main {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        border: 1px solid #ff7a45;
+        background: #1d1d1d;
+      }
+
+      .zcam-ptz-sliders {
+        display: flex;
+        flex-direction: row;  /* Zoom / Speed 左右排布 */
+        align-items: flex-start;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .zcam-ptz-slider-wrap {
+        width: 44px; /* 两个竖向滑块左右排布，整体适配 96px 列宽 */
+        padding: 6px 4px;
+        border-radius: 999px; /* 圈出控件范围 */
+        border: 1px solid #333;
+        background: #1b1b1b;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+        box-sizing: border-box;
+      }
+
+      .zcam-ptz-slider-label {
+        font-size: 10px;
+        color: #888;
+      }
+
+      .zcam-ptz-slider-value {
+        font-size: 10px;
+        color: #999;
+      }
+
+      .zcam-ptz-slider-wrap input[type="range"] {
+        width: auto;
+        writing-mode: bt-lr;
+        -webkit-appearance: slider-vertical;
+        height: 80px; /* 保持竖向滑块方向 */
+      }
+
+      .zcam-ptz-status-row {
+        margin-top: 4px;
+        display: flex;
+        justify-content: space-between; /* 横向延展占满 PTZ 区两侧留白 */
+        align-items: center;
+        gap: 8px;
+      }
+
+      .zcam-ptz-status-chip {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid #52c41a;
+        background: #092b00;
+        color: #f6ffed;
+        font-size: 12px; /* 比普通 chip 略大一号 */
+      }
+
+      .zcam-ptz-focus-wrap {
+        margin-top: 4px;
+        padding: 6px 8px;
+        border-radius: 8px; /* Focus 单独外框 */
+        border: 1px solid #333;
+        background: #1b1b1b;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        box-sizing: border-box;
+      }
+
+      .zcam-ptz-focus-limit-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        color: #888;
+      }
+
+      .zcam-ptz-focus-limit-label {
+        font-size: 10px;
+        color: #888;
+      }
+
+      .zcam-ptz-focus-limit-buttons {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .zcam-ptz-focus-limit-btn {
+        min-width: 32px;
+        height: 18px;
+        padding: 0 8px;
+        border-radius: 999px;
+        border: 1px solid #444;
+        background: #1f1f1f;
+        font-size: 10px;
+        color: #f5f5f5;
+        cursor: pointer;
+      }
+
+      .zcam-ptz-focus-limit-btn:hover {
+        background: #333;
+        border-color: #666;
+      }
+
+      .zcam-slider-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .zcam-slider-row label {
+        width: 48px;
+        color: #888;
+      }
+
+      .zcam-slider-row input[type="range"] {
+        flex: 1;
+      }
+
+      .zcam-slider-meta {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        min-width: 60px;
+      }
+
+      .zcam-slider-value {
+        font-size: 11px;
+        color: #ddd;
+      }
+
+      .zcam-slider-range {
+        font-size: 10px;
+        color: #666;
+      }
+
+      /* 曝光 / WB / 图像卡片 */
+      .zcam-field-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .zcam-field-row label {
+        width: 60px;
+        color: #888;
+      }
+
+      .zcam-field-row select,
+      .zcam-field-row input[type="number"] {
+        flex: 1;
+        font-size: 11px;
+        background: #202020;
+        color: #f5f5f5;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 2px 4px;
+      }
+
+      .zcam-field-range {
+        font-size: 10px;
+        color: #666;
+        white-space: nowrap;
+      }
+
+      /* AE / AF / AWB ON/OFF 开关样式 */
+      .zcam-toggle-group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .zcam-toggle {
+        width: 34px;
+        height: 18px;
+        border-radius: 999px;
+        border: 1px solid #333;
+        background: #1f1f1f;
+        display: flex;
+        align-items: center;
+        padding: 1px;
+        box-sizing: border-box;
+      }
+
+      .zcam-toggle-knob {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 0.12s ease-out;
+      }
+
+      .zcam-toggle-on {
+        justify-content: flex-end;
+        border-color: #237804;
+        background: #135200;
+      }
+
+      .zcam-toggle-off {
+        justify-content: flex-start;
+        border-color: #a8071a;
+        background: #3f1e1e;
+      }
+
+      .zcam-toggle-label-on {
+        font-size: 10px;
+        color: #52c41a;
+      }
+
+      .zcam-toggle-label-off {
+        font-size: 10px;
+        color: #ff4d4f;
+      }
+
+      /* 快门 / 光圈 等多选项 Grid 弹出样式 */
+      .zcam-grid-trigger {
+        flex: 0 0 auto;          /* 不占满整行 */
+        min-width: 64px;
+        max-width: 96px;         /* 框体更窄 */
+        font-size: 11px;
+        background: #151515;     /* 黑灰配色 */
+        color: #f5f5f5;
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 2px 6px;
+        text-align: center;
+        cursor: pointer;
+      }
+
+      .zcam-option-grid {
+        display: grid; /* 预览阶段默认展开，实际实现可由 JS 控制显示/隐藏 */
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 3px;
+        margin-top: 3px;
+        background: #151515; /* 黑灰配色 */
+        border-radius: 6px;
+        border: 1px solid #333;
+        padding: 3px;
+        max-width: 200px; /* 框体更窄 */
+      }
+
+      .zcam-option-grid button {
+        font-size: 10px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        border: 1px solid #444;
+        background: #202020;
+        color: #f5f5f5;
+        cursor: pointer;
+      }
+
+      .zcam-option-grid button:hover {
+        background: #333;
+        border-color: #666;
+      }
+
+      /* 快捷区域布局与按钮：左右两个方形区域 */
+      .zcam-shortcuts-layout {
+        display: grid;
+        grid-template-columns: 0.8fr 1.2fr; /* 左控制区略窄，右快捷按钮区略宽 */
+        grid-template-rows: auto;
+        gap: 6px;
+      }
+
+      .zcam-shortcut-btn {
+        padding: 4px 6px;
+        border-radius: 6px;
+        font-size: 11px;
+        border: 1px solid #333;
+        background: #1f1f1f;
+        color: #f5f5f5;
+        cursor: pointer;
+        min-height: 26px;
+        text-align: center;
+      }
+
+      .zcam-shortcut-btn:hover {
+        background: #333;
+      }
+
+      .zcam-shortcut-add {
+        border-style: dashed;
+        color: #ff9c6e;
+        border-color: #ff9c6e;
+      }
+
+      /* 模态框：用于展示快门 / ISO 等完整选项 */
+      .zcam-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+      }
+
+      .zcam-modal {
+        background: #151515;
+        border-radius: 10px;
+        border: 1px solid #333;
+        padding: 10px 12px;
+        width: 260px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        box-sizing: border-box;
+      }
+
+      .zcam-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+        font-size: 11px;
+        color: #f5f5f5;
+      }
+
+      .zcam-modal-title {
+        font-weight: 500;
+      }
+
+      .zcam-modal-body {
+        margin-bottom: 6px;
+      }
+
+      .zcam-modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+        font-size: 11px;
+      }
+
+      .zcam-modal-btn {
+        padding: 2px 10px;
+        border-radius: 999px;
+        border: 1px solid #333;
+        background: #1f1f1f;
+        color: #f5f5f5;
+        cursor: pointer;
+      }
+
+      .zcam-modal-btn-primary {
+        border-color: #ff7a45;
+        color: #ffd8bf;
+      }
+
+      .zcam-shortcut-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+        gap: 4px;
+      }
+
+      /* 录制 / 推流状态 */
+      .zcam-chip-row {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+      }
+
+      .zcam-chip {
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-size: 10px;
+        border: 1px solid #333;
+      }
+
+      .zcam-chip-active {
+        border-color: #ff4d4f;
+        color: #ff4d4f;
+      }
+
+      /* 悬浮球模式容器（未来用 JS 切换显示） */
+      #zcam-camera-ball {
+        position: fixed;
+        right: 32px;
+        bottom: 120px;
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #ff9c6e, #d4380d);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        display: none; /* 默认隐藏，panel 模式时不显示 */
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 11px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      /* 简单响应：高度不够时收缩预览 */
+      @media (max-height: 700px) {
+        .zcam-section-controls {
+          min-height: 120px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 主浮窗面板：zcam.camera.root -->
+    <div
+      id="zcam-camera-root"
+      data-path="zcam.camera.root"
+      class="zcam-panel"
+    >
+      <!-- Header: zcam.camera.header -->
+      <div
+        class="zcam-header"
+        data-path="zcam.camera.header"
+      >
+        <div class="zcam-header-left">
+          <div
+            class="zcam-badge"
+            data-path="zcam.camera.header.badge"
+          >
+            Z
+          </div>
+          <div
+            class="zcam-title"
+            data-path="zcam.camera.header.title"
+          >
+            ZCAM Camera
+          </div>
+        </div>
+        <div class="zcam-header-right">
+          <div
+            class="zcam-status"
+            data-path="zcam.camera.header.status"
+          >
+            <span class="zcam-status-dot"></span>
+          </div>
+          <select
+            class="zcam-camera-select"
+            data-path="zcam.camera.header.cameraSelector"
+          >
+            <option>Camera 1 (192.168.0.10)</option>
+            <option>Camera 2 (Mock)</option>
+          </select>
+          <!-- 最小化为球 -->
+          <button
+            class="zcam-header-btn"
+            data-path="zcam.camera.header.toBall"
+            title="最小化为悬浮球"
+          >
+            ●
+          </button>
+        </div>
+      </div>
+
+      <!-- Main: zcam.camera.pages.main -->
+      <div
+        class="zcam-main"
+        data-path="zcam.camera.pages.main"
+      >
+        <!-- 状态区：zcam.camera.pages.main.status -->
+        <section
+          class="zcam-section zcam-section-status"
+          data-path="zcam.camera.pages.main.status"
+        >
+          <div
+            class="zcam-card"
+            data-path="zcam.camera.pages.main.status.card"
+          >
+            <div class="zcam-card-header">
+              <span class="zcam-card-title">状态</span>
+              <span style="font-size:10px;color:#777;">实时相机参数</span>
+            </div>
+            <div class="zcam-card-body">
+              <div class="zcam-status-grid">
+                <!-- 左上：相机信息 -->
+                <div
+                  data-path="zcam.camera.pages.main.status.cameraInfo"
+                >
+                  <div class="zcam-status-item-label">相机</div>
+                  <div class="zcam-status-item-value">ZCAM PTZ-01</div>
+                  <div class="zcam-status-item-sub">192.168.0.10</div>
+                </div>
+
+                <!-- 右上：视频格式 -->
+                <div
+                  data-path="zcam.camera.pages.main.status.videoFormat"
+                >
+                  <div class="zcam-status-item-label">格式</div>
+                  <div class="zcam-status-item-value">3840x2160 @ 59.94</div>
+                  <div class="zcam-status-item-sub">H.264 · 8Mbps</div>
+                </div>
+
+                <!-- 左下：曝光 / 白平衡 -->
+                <div
+                  data-path="zcam.camera.pages.main.status.exposure"
+                >
+                  <div class="zcam-status-item-label">曝光</div>
+                  <div class="zcam-status-item-value">ISO 800 · 1/60</div>
+                  <div
+                    class="zcam-status-item-sub"
+                    data-path="zcam.camera.pages.main.status.whiteBalance"
+                  >
+                    5600K · AWB
+                  </div>
+                </div>
+
+                <!-- 右下：PTZ / 录制 / 推流 摘要 -->
+                <div>
+                  <div
+                    class="zcam-status-item-label"
+                    data-path="zcam.camera.pages.main.status.ptz"
+                  >
+                    PTZ
+                  </div>
+                  <div class="zcam-status-item-value">Pan 123 · Tilt -45</div>
+                  <div class="zcam-status-item-sub">Zoom 50</div>
+                </div>
+              </div>
+
+              <!-- 录制 / 推流状态：一行左右排布 -->
+              <div class="zcam-chip-row">
+                <div
+                  class="zcam-chip-row"
+                  style="flex:1; justify-content:flex-start;"
+                  data-path="zcam.camera.pages.main.status.recording"
+                >
+                  <span class="zcam-chip zcam-chip-active">
+                    REC ● 00:12:34
+                  </span>
+                  <span class="zcam-chip">剩余 2h 15m</span>
+                </div>
+                <div
+                  class="zcam-chip-row"
+                  style="flex:1; justify-content:flex-end;"
+                  data-path="zcam.camera.pages.main.status.streaming"
+                >
+                  <span class="zcam-chip zcam-chip-active">
+                    STREAM ● RTMP
+                  </span>
+                  <span class="zcam-chip">1080p60 / 8Mbps</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 控制区：zcam.camera.pages.main.controls -->
+        <section
+          class="zcam-section zcam-section-controls"
+          data-path="zcam.camera.pages.main.controls"
+        >
+          <div class="zcam-controls-grid">
+          <!-- 左列：PTZ + AF/MF 对焦 控制 -->
+          <!-- PTZ 控制卡片：zcam.camera.pages.main.ptz -->
+          <div
+            class="zcam-card"
+            data-path="zcam.camera.pages.main.ptz"
+          >
+            <div class="zcam-card-header">
+              <span class="zcam-card-title">PTZ</span>
+              <span class="zcam-card-header-right">
+                <span
+                  class="zcam-control-select"
+                  data-path="zcam.camera.pages.main.ptz.shortcutSelect"
+                ></span>
+              </span>
+            </div>
+            <div class="zcam-card-body">
+              <div
+                class="zcam-ptz-layout"
+                data-path="zcam.camera.pages.main.ptz.layout"
+              >
+                <!-- 左侧：方向键九宫格（稍微偏右） -->
+                <div
+                  class="zcam-ptz-grid"
+                  data-path="zcam.camera.pages.main.ptz.dpad"
+                >
+                  <!-- 上一排 -->
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveUp"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveUpCenter"
+                  >
+                    ↟
+                  </button>
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveUpRight"
+                  >
+                    ↗
+                  </button>
+                  <!-- 中间一排 -->
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveLeft"
+                  >
+                    ←
+                  </button>
+                  <button
+                    class="zcam-ptz-btn zcam-ptz-btn-main"
+                    data-path="zcam.camera.pages.main.ptz.stop"
+                  >
+                    ■
+                  </button>
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveRight"
+                  >
+                    →
+                  </button>
+                  <!-- 下方一排 -->
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveDownLeft"
+                  >
+                    ↙
+                  </button>
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveDown"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    class="zcam-ptz-btn"
+                    data-path="zcam.camera.pages.main.ptz.moveDownRight"
+                  >
+                    ↘
+                  </button>
+                </div>
+
+                <!-- 右侧：Zoom / Speed 竖向滑块，左右排布，每个控件有自己的圆角边界 -->
+                <div
+                  class="zcam-ptz-sliders"
+                  data-path="zcam.camera.pages.main.ptz.sliders"
+                >
+                  <div
+                    class="zcam-ptz-slider-wrap"
+                    data-path="zcam.camera.pages.main.ptz.zoomSlider"
+                  >
+                    <span class="zcam-ptz-slider-label">Zoom</span>
+                    <input type="range" min="0" max="100" value="50" />
+                    <span class="zcam-ptz-slider-value">50</span>
+                  </div>
+                  <div
+                    class="zcam-ptz-slider-wrap"
+                    data-path="zcam.camera.pages.main.ptz.speedSlider"
+                  >
+                    <span class="zcam-ptz-slider-label">Speed</span>
+                    <input type="range" min="0" max="100" value="50" />
+                    <span class="zcam-ptz-slider-value">50</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Focus 区域：单独外框，包含 Focus 滑块 + AF/MF 开关 + 限位控制 -->
+              <div
+                class="zcam-ptz-focus-wrap"
+                data-path="zcam.camera.pages.main.ptz.focusGroup"
+              >
+                <div
+                  class="zcam-slider-row"
+                  data-path="zcam.camera.pages.main.ptz.focus"
+                >
+                  <label>Focus</label>
+                  <input type="range" min="0" max="100" value="40" />
+                  <div class="zcam-slider-meta">
+                    <span class="zcam-slider-value">40</span>
+                    <span class="zcam-slider-range">0 - 100</span>
+                  </div>
+                  <!-- AF/MF 开关与对焦滑块同一行，紧凑布局 -->
+                  <div
+                    class="zcam-toggle-group"
+                    data-path="zcam.camera.pages.main.ptz.focusMode"
+                  >
+                    <div
+                      class="zcam-toggle zcam-toggle-on"
+                      data-path="zcam.camera.pages.main.ptz.afToggle"
+                    >
+                      <div class="zcam-toggle-knob"></div>
+                    </div>
+                    <span class="zcam-toggle-label-on">AF</span>
+                  </div>
+                </div>
+
+                <!-- Focus 限位：远 / 近 两个区域 -->
+                <div
+                  class="zcam-ptz-focus-limit-row"
+                  data-path="zcam.camera.pages.main.ptz.focusLimit"
+                >
+                  <span class="zcam-ptz-focus-limit-label">Focus 限位</span>
+                  <div class="zcam-ptz-focus-limit-buttons">
+                    <button
+                      class="zcam-ptz-focus-limit-btn"
+                      data-path="zcam.camera.pages.main.ptz.focusFar"
+                    >
+                      远
+                    </button>
+                    <button
+                      class="zcam-ptz-focus-limit-btn"
+                      data-path="zcam.camera.pages.main.ptz.focusNear"
+                    >
+                      近
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="zcam-ptz-status-row">
+                <div
+                  class="zcam-ptz-status-chip"
+                  data-path="zcam.camera.pages.main.ptz.status"
+                >
+                  PTZ Pan 123 · Tilt -45 · Zoom 50 · Focus 40
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 右列：图像控制（曝光 + 白平衡 + 图像参数） -->
+          <div
+            class="zcam-card"
+            data-path="zcam.camera.pages.main.imageControl"
+          >
+            <div class="zcam-card-header">
+              <span class="zcam-card-title">图像控制</span>
+              <span class="zcam-card-header-right">
+                <span
+                  class="zcam-control-select"
+                  data-path="zcam.camera.pages.main.imageControl.shortcutSelect"
+                ></span>
+              </span>
+            </div>
+            <div class="zcam-card-body">
+              <!-- 曝光子区 -->
+              <div
+                class="zcam-subsection"
+                data-path="zcam.camera.pages.main.exposure"
+              >
+                <div class="zcam-subsection-header">
+                  <div class="zcam-subsection-title">曝光</div>
+                  <span
+                    class="zcam-control-select"
+                    data-path="zcam.camera.pages.main.exposure.shortcutSelect"
+                  ></span>
+                </div>
+              <div
+                class="zcam-field-row"
+                data-path="zcam.camera.pages.main.exposure.aeMode"
+              >
+                <label>AE</label>
+                  <div class="zcam-toggle-group">
+                    <div
+                      class="zcam-toggle zcam-toggle-on"
+                      data-path="zcam.camera.pages.main.exposure.aeToggle"
+                    >
+                      <div class="zcam-toggle-knob"></div>
+                    </div>
+                    <span class="zcam-toggle-label-on">ON</span>
+                  </div>
+              </div>
+                <div
+                  class="zcam-field-row"
+                  data-path="zcam.camera.pages.main.exposure.shutter"
+                >
+                  <label>快门</label>
+                  <button class="zcam-grid-trigger">1/60</button>
+                  <span class="zcam-field-range">1/30 - 1/500</span>
+                </div>
+                <!-- 快门选项 Grid 示例（实际应用中可通过 JS 控制显示/隐藏） -->
+                <div class="zcam-option-grid">
+                  <button>1/30</button>
+                  <button>1/40</button>
+                  <button>1/50</button>
+                  <button>1/60</button>
+                  <button>1/80</button>
+                  <button>1/100</button>
+                  <button>1/120</button>
+                  <button>1/160</button>
+                  <button>1/200</button>
+                  <button>1/250</button>
+                  <button>1/320</button>
+                  <button>1/500</button>
+                </div>
+                <div
+                  class="zcam-field-row"
+                  data-path="zcam.camera.pages.main.exposure.iso"
+                >
+                  <label>ISO</label>
+                  <button class="zcam-grid-trigger">800</button>
+                  <span class="zcam-field-range">100 - 3200</span>
+                </div>
+                <div class="zcam-option-grid">
+                  <button>100</button>
+                  <button>200</button>
+                  <button>400</button>
+                  <button>800</button>
+                  <button>1600</button>
+                  <button>3200</button>
+                  <button>6400</button>
+                  <button>12800</button>
+                </div>
+              </div>
+
+              <!-- 白平衡子区 -->
+              <div
+                class="zcam-subsection"
+                data-path="zcam.camera.pages.main.whiteBalance"
+              >
+                <div class="zcam-subsection-header">
+                  <div class="zcam-subsection-title">白平衡</div>
+                  <span
+                    class="zcam-control-select"
+                    data-path="zcam.camera.pages.main.whiteBalance.shortcutSelect"
+                  ></span>
+                </div>
+                <div
+                  class="zcam-field-row"
+                  data-path="zcam.camera.pages.main.whiteBalance.awbMode"
+                >
+                  <label>AWB</label>
+                  <div class="zcam-toggle-group">
+                    <div
+                      class="zcam-toggle zcam-toggle-on"
+                      data-path="zcam.camera.pages.main.whiteBalance.awbToggle"
+                    >
+                      <div class="zcam-toggle-knob"></div>
+                    </div>
+                    <span class="zcam-toggle-label-on">ON</span>
+                  </div>
+                </div>
+                <div
+                  class="zcam-slider-row"
+                  data-path="zcam.camera.pages.main.whiteBalance.temperature"
+                >
+                  <label>色温</label>
+                  <input type="range" min="3200" max="6500" value="5600" />
+                  <div class="zcam-slider-meta">
+                    <span class="zcam-slider-value">5600K</span>
+                    <span class="zcam-slider-range">3200K - 6500K</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 图像参数子区 -->
+              <div
+                class="zcam-subsection"
+                data-path="zcam.camera.pages.main.image"
+              >
+                <div class="zcam-subsection-header">
+                  <div class="zcam-subsection-title">图像</div>
+                  <span
+                    class="zcam-control-select"
+                    data-path="zcam.camera.pages.main.image.shortcutSelect"
+                  ></span>
+                </div>
+                <div
+                  class="zcam-slider-row"
+                  data-path="zcam.camera.pages.main.image.brightness"
+                >
+                  <label>亮度</label>
+                  <input type="range" min="0" max="100" value="50" />
+                  <div class="zcam-slider-meta">
+                    <span class="zcam-slider-value">50</span>
+                    <span class="zcam-slider-range">0 - 100</span>
+                  </div>
+                </div>
+                <div
+                  class="zcam-slider-row"
+                  data-path="zcam.camera.pages.main.image.contrast"
+                >
+                  <label>对比度</label>
+                  <input type="range" min="0" max="100" value="50" />
+                  <div class="zcam-slider-meta">
+                    <span class="zcam-slider-value">50</span>
+                    <span class="zcam-slider-range">0 - 100</span>
+                  </div>
+                </div>
+                <div
+                  class="zcam-slider-row"
+                  data-path="zcam.camera.pages.main.image.saturation"
+                >
+                  <label>饱和度</label>
+                  <input type="range" min="0" max="100" value="50" />
+                  <div class="zcam-slider-meta">
+                    <span class="zcam-slider-value">50</span>
+                    <span class="zcam-slider-range">0 - 100</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </section>
+
+        <!-- 快捷方式区：zcam.camera.pages.main.shortcuts -->
+        <section
+          class="zcam-section zcam-section-shortcuts"
+          data-path="zcam.camera.pages.main.shortcuts"
+        >
+          <div
+            class="zcam-card"
+            data-path="zcam.camera.pages.main.shortcuts.card"
+          >
+            <div class="zcam-card-header">
+              <span class="zcam-card-title">快捷方式</span>
+              <span class="zcam-card-header-right">
+                <span style="font-size:10px;color:#555;">编辑</span>
+                <span
+                  class="zcam-toggle zcam-toggle-off"
+                  data-path="zcam.camera.pages.main.shortcuts.editToggle"
+                >
+                  <div class="zcam-toggle-knob"></div>
+                </span>
+              </span>
+            </div>
+            <div class="zcam-card-body">
+              <div
+                class="zcam-shortcuts-layout"
+                data-path="zcam.camera.pages.main.shortcuts.layout"
+              >
+                <!-- 左：快捷控制区域（控制添加/删除等） -->
+                <div
+                  class="zcam-card"
+                  style="padding:4px 6px; gap:4px;"
+                  data-path="zcam.camera.pages.main.shortcuts.controlPanel"
+                >
+                  <div class="zcam-card-header" style="padding:0; border:none;">
+                    <span class="zcam-card-title" style="font-size:10px;">控制</span>
+                  </div>
+                  <div class="zcam-card-body" style="gap:4px;">
+                    <button
+                      class="zcam-shortcut-btn"
+                      data-path="zcam.camera.pages.main.shortcuts.addFromSelection"
+                    >
+                      从选择区域添加
+                    </button>
+                    <button
+                      class="zcam-shortcut-btn"
+                      data-path="zcam.camera.pages.main.shortcuts.deleteSelected"
+                    >
+                      删除选中
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 右：快捷按钮区域（已有按钮 + 新增按钮），方形紧凑两行排列 -->
+                <div
+                  class="zcam-card"
+                  style="padding:4px 6px; gap:4px;"
+                  data-path="zcam.camera.pages.main.shortcuts.buttonPanel"
+                >
+                  <div class="zcam-card-header" style="padding:0; border:none;">
+                    <span class="zcam-card-title" style="font-size:10px;">快捷</span>
+                  </div>
+                  <div
+                    class="zcam-shortcut-grid"
+                    data-path="zcam.camera.pages.main.shortcuts.buttons"
+                  >
+                    <button class="zcam-shortcut-btn">快捷1</button>
+                    <button class="zcam-shortcut-btn">快捷2</button>
+                    <button class="zcam-shortcut-btn">快捷3</button>
+                    <button
+                      class="zcam-shortcut-btn zcam-shortcut-add"
+                      data-path="zcam.camera.pages.main.shortcuts.addButton"
+                    >
+                      + 添加
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 悬浮球：zcam.camera.ball （默认隐藏，切换模式时显示） -->
+    <div
+      id="zcam-camera-ball"
+      data-path="zcam.camera.ball"
+      title="点击展开控制面板"
+    >
+      CAM
+    </div>
+  </body>
+  </html>

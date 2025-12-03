@@ -1,9 +1,17 @@
-const fetch = require('node-fetch');
-const { APIError, ConnectionError } = require('../utils/errors');
+// Node.js 18+ 内置fetch，如果不存在则回退到node-fetch
+let fetch = typeof global.fetch === 'function' ? global.fetch.bind(global) : null;
+if (!fetch) {
+  try {
+    const nodeFetch = require('node-fetch');
+    fetch = (nodeFetch && nodeFetch.default) ? nodeFetch.default : nodeFetch;
+  } catch (nodeFetchError) {
+    throw new Error('需要Node.js 18+或安装node-fetch: npm install node-fetch');
+  }
+}
+
+const { APIError, ConnectionError, ValidationError } = require('../utils/errors');
 const constants = require('../constants');
 const NetworkValidator = require('../validators/network');
-const FallbackManager = require('../config/fallback');
-const EnvConfig = require('../config/env');
 
 /**
  * Z CAM API客户端
@@ -11,29 +19,18 @@ const EnvConfig = require('../config/env');
  */
 class ZCamAPI {
   constructor(options = {}) {
-    // 使用配置解析器处理选项，避免硬编码
-    const config = FallbackManager.resolveConfig(
-      options,
-      {},
-      {},
-      {
-        host: constants.NETWORK.DEFAULT_HOST,
-        port: constants.NETWORK.DEFAULT_PORT,
-        timeout: constants.NETWORK.DEFAULT_TIMEOUT,
-        userAgent: constants.API.USER_AGENT,
-        requestInterval: constants.NETWORK.MIN_REQUEST_INTERVAL
-      },
-      {
-        host: NetworkValidator.isValidHost,
-        port: NetworkValidator.isValidPort,
-        timeout: NetworkValidator.isValidTimeout,
-        userAgent: (value) => typeof value === 'string' && value.length > 0,
-        requestInterval: (value) => {
-          const num = parseInt(value);
-          return !isNaN(num) && num >= 10 && num <= 5000;
-        }
-      }
-    );
+    // 提供默认配置
+    const config = {
+      host: constants.NETWORK.DEFAULT_HOST,
+      port: constants.NETWORK.DEFAULT_PORT,
+      timeout: constants.NETWORK.DEFAULT_TIMEOUT,
+      userAgent: constants.API.USER_AGENT,
+      requestInterval: constants.NETWORK.MIN_REQUEST_INTERVAL,
+      ...options
+    };
+
+    // 验证构造函数选项
+    this._validateConstructorOptions(config);
 
     this.host = config.host;
     this.port = NetworkValidator.normalizePort(config.port);
@@ -43,6 +40,33 @@ class ZCamAPI {
     this.sessionCookie = null;
     this.lastRequestTime = 0;
     this.minRequestInterval = parseInt(config.requestInterval);
+  }
+
+  /**
+   * 验证构造函数选项
+   * @param {Object} options 构造选项
+   * @private
+   */
+  _validateConstructorOptions(options) {
+    if (!NetworkValidator.isValidHost(options.host)) {
+      throw new ValidationError(`无效的主机地址: ${options.host}`);
+    }
+
+    if (!NetworkValidator.isValidPort(options.port)) {
+      throw new ValidationError(`无效的端口号: ${options.port}`);
+    }
+
+    if (!NetworkValidator.isValidTimeout(options.timeout)) {
+      throw new ValidationError(`无效的超时时间: ${options.timeout}`);
+    }
+
+    if (options.requestInterval && !NetworkValidator.isValidRequestInterval(options.requestInterval)) {
+      throw new ValidationError(`无效的请求间隔: ${options.requestInterval}`);
+    }
+
+    if (options.userAgent && typeof options.userAgent !== 'string') {
+      throw new ValidationError(`无效的User-Agent: ${options.userAgent}`);
+    }
   }
 
   /**
@@ -294,31 +318,34 @@ class ZCamAPI {
  * @returns {ZCamAPI} API实例
  */
 function createAPI(globalOptions = {}) {
-  // 使用配置解析器，避免硬编码fallback
-  const config = FallbackManager.resolveConfig(
-    globalOptions,
-    {},
-    EnvConfig.load(),
-    {
-      host: constants.NETWORK.DEFAULT_HOST,
-      port: constants.NETWORK.DEFAULT_PORT,
-      timeout: constants.NETWORK.DEFAULT_TIMEOUT,
-      userAgent: constants.API.USER_AGENT,
-      requestInterval: constants.NETWORK.MIN_REQUEST_INTERVAL
-    },
-    {
-      host: NetworkValidator.isValidHost,
-      port: NetworkValidator.isValidPort,
-      timeout: NetworkValidator.isValidTimeout,
-      userAgent: (value) => typeof value === 'string' && value.length > 0,
-      requestInterval: (value) => {
-        const num = parseInt(value);
-        return !isNaN(num) && num >= 10 && num <= 5000;
-      }
-    }
-  );
+  const normalizedOptions = normalizeOptions(globalOptions);
+  // 提供默认配置
+  const config = {
+    host: constants.NETWORK.DEFAULT_HOST,
+    port: constants.NETWORK.DEFAULT_PORT,
+    timeout: constants.NETWORK.DEFAULT_TIMEOUT,
+    userAgent: constants.API.USER_AGENT,
+    requestInterval: constants.NETWORK.MIN_REQUEST_INTERVAL,
+    ...normalizedOptions
+  };
 
+  // 创建API实例
   return new ZCamAPI(config);
+}
+
+/**
+ * 归一化Commander命令对象或简单配置对象
+ * @param {Object} globalOptions 原始配置
+ * @returns {Object} 归一化后的配置
+ */
+function normalizeOptions(globalOptions = {}) {
+  if (globalOptions && typeof globalOptions.opts === 'function') {
+    const extracted = globalOptions.opts();
+    if (extracted && typeof extracted === 'object') {
+      return extracted;
+    }
+  }
+  return globalOptions;
 }
 
 module.exports = {

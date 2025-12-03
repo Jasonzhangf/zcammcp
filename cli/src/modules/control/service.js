@@ -171,15 +171,29 @@ class ControlService {
   // ===== 变焦控制 =====
 
   /**
-   * 放大
-   * API: /ctrl/lens?action=zoomin&fspeed={speed}
+   * 统一变焦控制
+   * API: /ctrl/lens?action=zoom{in|out}&fspeed={speed}
    */
-  static async zoomIn(api, speed = '5') {
+  static async zoom(api, direction, speed) {
+    const validDirections = ['in', 'out'];
+    if (!validDirections.includes(direction?.toLowerCase())) {
+      throw new Error(`无效的变焦方向: ${direction}。支持的方向: ${validDirections.join(', ')}`);
+    }
+
     const speedNum = parseInt(speed);
     if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
       throw new Error('变焦速度必须是1-9之间的数字');
     }
-    return await api.get(`/ctrl/lens?action=zoomin&fspeed=${speedNum}`);
+
+    return await api.get(`/ctrl/lens?action=zoom${direction.toLowerCase()}&fspeed=${speedNum}`);
+  }
+
+  /**
+   * 放大
+   * API: /ctrl/lens?action=zoomin&fspeed={speed}
+   */
+  static async zoomIn(api, speed = '5') {
+    return await this.zoom(api, 'in', speed);
   }
 
   /**
@@ -187,11 +201,7 @@ class ControlService {
    * API: /ctrl/lens?action=zoomout&fspeed={speed}
    */
   static async zoomOut(api, speed = '5') {
-    const speedNum = parseInt(speed);
-    if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
-      throw new Error('变焦速度必须是1-9之间的数字');
-    }
-    return await api.get(`/ctrl/lens?action=zoomout&fspeed=${speedNum}`);
+    return await this.zoom(api, 'out', speed);
   }
 
   /**
@@ -200,6 +210,19 @@ class ControlService {
    */
   static async zoomStop(api) {
     return await api.get('/ctrl/lens?action=zoomstop');
+  }
+
+  /**
+   * 精确变焦值控制
+   * API: /ctrl/lens?action=zoom&value={value}
+   */
+  static async zoomValue(api, value) {
+    const valueNum = parseInt(value);
+    if (isNaN(valueNum) || valueNum < 0 || valueNum > 99999) {
+      throw new Error('变焦值必须是0-99999之间的数字');
+    }
+
+    return await api.get(`/ctrl/lens?action=zoom&value=${valueNum}`);
   }
 
   /**
@@ -241,15 +264,29 @@ class ControlService {
   // ===== 对焦控制 =====
 
   /**
-   * 近焦
-   * API: /ctrl/lens?action=focusnear&fspeed={speed}
+   * 统一对焦控制
+   * API: /ctrl/lens?action=focus{near|far}&fspeed={speed}
    */
-  static async focusNear(api, speed = '5') {
+  static async focus(api, direction, speed) {
+    const validDirections = ['near', 'far'];
+    if (!validDirections.includes(direction?.toLowerCase())) {
+      throw new Error(`无效的对焦方向: ${direction}。支持的方向: ${validDirections.join(', ')}`);
+    }
+
     const speedNum = parseInt(speed);
     if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
       throw new Error('对焦速度必须是1-9之间的数字');
     }
-    return await api.get(`/ctrl/lens?action=focusnear&fspeed=${speedNum}`);
+
+    return await api.get(`/ctrl/lens?action=focus${direction.toLowerCase()}&fspeed=${speedNum}`);
+  }
+
+  /**
+   * 近焦
+   * API: /ctrl/lens?action=focusnear&fspeed={speed}
+   */
+  static async focusNear(api, speed = '5') {
+    return await this.focus(api, 'near', speed);
   }
 
   /**
@@ -257,11 +294,7 @@ class ControlService {
    * API: /ctrl/lens?action=focusfar&fspeed={speed}
    */
   static async focusFar(api, speed = '5') {
-    const speedNum = parseInt(speed);
-    if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
-      throw new Error('对焦速度必须是1-9之间的数字');
-    }
-    return await api.get(`/ctrl/lens?action=focusfar&fspeed=${speedNum}`);
+    return await this.focus(api, 'far', speed);
   }
 
   /**
@@ -270,6 +303,27 @@ class ControlService {
    */
   static async focusStop(api) {
     return await api.get('/ctrl/lens?action=focusstop');
+  }
+
+  /**
+   * 精确对焦值控制
+   * API: /ctrl/lens?action=focus&value={value}
+   */
+  static async focusValue(api, value) {
+    const valueNum = parseInt(value);
+    if (isNaN(valueNum) || valueNum < 0 || valueNum > 99999) {
+      throw new Error('对焦值必须是0-99999之间的数字');
+    }
+
+    return await api.get(`/ctrl/lens?action=focus&value=${valueNum}`);
+  }
+
+  /**
+   * 单次自动对焦
+   * API: /ctrl/af
+   */
+  static async autoFocus(api) {
+    return await api.get('/ctrl/af');
   }
 
   /**
@@ -283,11 +337,12 @@ class ControlService {
   // ===== 自动对焦控制 =====
 
   /**
-   * 单次自动对焦
-   * API: /ctrl/af
+   * 切换自动对焦模式
+   * API: /ctrl/set?af_mode={mode}
    */
-  static async afOnePush(api) {
-    return await api.get('/ctrl/af');
+  static async setAutoFocus(api, enable) {
+    const value = enable === true || enable === '1' || enable === 'on' ? 'on' : 'off';
+    return await api.get(`/ctrl/set?af_mode=${value}`);
   }
 
   /**

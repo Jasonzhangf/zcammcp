@@ -1,0 +1,155 @@
+{
+  "sessionId": "unknown",
+  "pipelineId": "unknown",
+  "startTime": 1760335046667,
+  "status": "active",
+  "operations": [
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "manager",
+      "position": "middle",
+      "startTime": 1760335046667,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "manager",
+      "position": "middle",
+      "startTime": 1760335046667,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "manager",
+      "position": "middle",
+      "startTime": 1760335046668,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "manager",
+      "position": "middle",
+      "startTime": 1760335046668,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "openai_key1.glm-4.6",
+      "position": "middle",
+      "startTime": 1760335046668,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "openai_key1.glm-4.6",
+      "position": "middle",
+      "startTime": 1760335046668,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "llmswitch",
+      "position": "middle",
+      "startTime": 1760335046671,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "workflow",
+      "position": "middle",
+      "startTime": 1760335046671,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "workflow",
+      "position": "middle",
+      "startTime": 1760335046671,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "workflow",
+      "position": "middle",
+      "startTime": 1760335046672,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "compatibility",
+      "position": "middle",
+      "startTime": 1760335046673,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "compatibility",
+      "position": "middle",
+      "startTime": 1760335046673,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "compatibility",
+      "position": "middle",
+      "startTime": 1760335046673,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "provider",
+      "position": "middle",
+      "startTime": 1760335046688,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "provider",
+      "position": "middle",
+      "startTime": 1760335046688,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "provider",
+      "position": "middle",
+      "startTime": 1760335046689,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-module",
+      "moduleId": "provider",
+      "position": "middle",
+      "startTime": 1760335046689,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "openai_key1.glm-4.6",
+      "position": "middle",
+      "startTime": 1760335046690,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "manager",
+      "position": "middle",
+      "startTime": 1760335046690,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "manager",
+      "position": "middle",
+      "startTime": 1760335046690,
+      "status": "running"
+    },
+    {
+      "operationId": "pipeline-pipeline-lifecycle",
+      "moduleId": "manager",
+      "position": "middle",
+      "startTime": 1760335046690,
+      "status": "running"
+    }
+  ]
+}

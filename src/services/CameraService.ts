@@ -58,7 +58,7 @@ export class CameraService {
   /**
    * 获取收藏夹中的相机列表
    */
-  getFavoriteCameras(): string[] {
+  getFavoriteCameras(): Array<{ip: string; alias?: string; addedAt?: Date}> {
     console.log('Function: getFavoriteCameras - Getting favorite cameras');
     return this.cameraManager.getFavoriteCameras();
   }

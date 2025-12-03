@@ -1,10 +1,18 @@
-// PTZ服务模块
-console.log('Module: PTZService');
+/**
+ * 重构的PTZ服务模块
+ * 使用共享HTTP客户端，替代重复的HTTP plumbing
+ */
 
-import * as http from 'http';
-import * as url from 'url';
+import { ZCamHttpClient } from '../core/ZCamHttpClient.js';
 
 export class PTZService {
+  private httpClient: ZCamHttpClient;
+
+  constructor(httpClient?: ZCamHttpClient) {
+    console.log('PTZService initialized with shared HTTP client');
+    this.httpClient = httpClient || new ZCamHttpClient();
+  }
+
   /**
    * 控制相机云台移动
    */
@@ -13,7 +21,6 @@ export class PTZService {
     
     try {
       // 根据常见的PTZ控制格式，发送HTTP请求到相机
-      // 这里假设ZCAM相机使用类似格式的API
       const speed = Math.round(Math.abs(pan) * 63); // 转换为0-63的速度范围
       let action = '';
       
@@ -29,13 +36,13 @@ export class PTZService {
         action = 'stop';
       }
       
-      const requestUrl = `http://${ip}/ctrl/pt?action=${action}&speed=${speed}`;
+      const requestUrl = this.httpClient.buildPTZUrl(ip, action, { fspeed: speed });
       console.log(`Sending PTZ move request to: ${requestUrl}`);
       
-      // 使用Node.js内置的http模块发送请求
-      const result = await this.makeHttpRequest(requestUrl, 'GET');
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
       
-      if (result.success) {
+      if (response.success) {
         return {
           content: [{
             type: 'text',
@@ -43,7 +50,7 @@ export class PTZService {
           }]
         };
       } else {
-        throw new Error(result.error || 'Unknown error');
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
       }
     } catch (error) {
       console.error(`Error moving PTZ for camera ${ip}:`, error);
@@ -60,36 +67,27 @@ export class PTZService {
    * 控制相机变焦
    */
   async zoom(ip: string, zoomValue: number): Promise<any> {
-    console.log(`Function: zoom - Zooming camera ${ip} to value: ${zoomValue}`);
+    console.log(`Function: zoom - Zooming camera ${ip} with value: ${zoomValue}`);
     
     try {
-      // 根据常见的PTZ控制格式，发送HTTP请求到相机
-      let action = '';
+      let action = zoomValue > 0 ? 'zoomin' : 'zoomout';
+      const speed = Math.min(Math.abs(zoomValue), 9); // 限制速度在1-9范围内
       
-      if (zoomValue > 0) {
-        action = 'zoomin';
-      } else if (zoomValue < 0) {
-        action = 'zoomout';
-      } else {
-        action = 'stop';
-      }
+      const requestUrl = this.httpClient.buildPTZUrl(ip, action, { fspeed: speed });
+      console.log(`Sending PTZ zoom request to: ${requestUrl}`);
       
-      const speed = Math.round(Math.abs(zoomValue) * 63); // 转换为0-63的速度范围
-      const requestUrl = `http://${ip}/ctrl/pt?action=${action}&speed=${speed}`;
-      console.log(`Sending zoom request to: ${requestUrl}`);
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
       
-      // 使用Node.js内置的http模块发送请求
-      const result = await this.makeHttpRequest(requestUrl, 'GET');
-      
-      if (result.success) {
+      if (response.success) {
         return {
           content: [{
             type: 'text',
-            text: `🔍 成功控制相机 ${ip} 变焦: zoom=${zoomValue}`
+            text: `🔍 成功控制相机 ${ip} 变焦: ${zoomValue}`
           }]
         };
       } else {
-        throw new Error(result.error || 'Unknown error');
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
       }
     } catch (error) {
       console.error(`Error zooming camera ${ip}:`, error);
@@ -109,20 +107,20 @@ export class PTZService {
     console.log(`Function: getPTZStatus - Getting PTZ status for camera: ${ip}`);
     
     try {
-      const requestUrl = `http://${ip}/ctrl/pt/status`;
+      const requestUrl = this.httpClient.buildPTZUrl(ip, 'query');
       console.log(`Sending PTZ status request to: ${requestUrl}`);
       
-      // 使用Node.js内置的http模块发送请求
-      const result = await this.makeHttpRequestWithResponse(requestUrl, 'GET');
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
       
-      if (result.success) {
+      if (response.success) {
         // 解析响应数据
         let statusData;
         try {
-          statusData = JSON.parse(result.data || '{}');
+          statusData = this.httpClient.parseJsonResponse(response);
         } catch (parseError) {
           // 如果解析失败，使用原始数据
-          statusData = { raw: result.data };
+          statusData = { raw: response.data };
         }
         
         return {
@@ -132,7 +130,7 @@ export class PTZService {
           }]
         };
       } else {
-        throw new Error(result.error || 'Unknown error');
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
       }
     } catch (error) {
       console.error(`Error getting PTZ status for camera ${ip}:`, error);
@@ -144,78 +142,110 @@ export class PTZService {
       };
     }
   }
-  
+
   /**
-   * 发送HTTP请求
+   * PTZ停止
    */
-  private makeHttpRequest(requestUrl: string, method: string): Promise<{ success: boolean; error?: string }> {
-    return new Promise((resolve) => {
-      const urlObj = new URL(requestUrl);
+  async stopPTZ(ip: string): Promise<any> {
+    console.log(`Function: stopPTZ - Stopping PTZ for camera: ${ip}`);
+    
+    try {
+      const requestUrl = this.httpClient.buildPTZUrl(ip, 'stop');
+      console.log(`Sending PTZ stop request to: ${requestUrl}`);
       
-      const options = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 80,
-        path: urlObj.pathname + urlObj.search,
-        method: method,
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
+      
+      if (response.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⏹️ 成功停止相机 ${ip} PTZ移动`
+          }]
+        };
+      } else {
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
+      }
+    } catch (error) {
+      console.error(`Error stopping PTZ for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 停止相机 ${ip} PTZ失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
       };
-      
-      const req = http.request(options, (res) => {
-        res.on('data', () => {
-          // 消费响应数据
-        });
-        
-        res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ success: true });
-          } else {
-            resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage}` });
-          }
-        });
-      });
-      
-      req.on('error', (error) => {
-        resolve({ success: false, error: error.message });
-      });
-      
-      req.end();
-    });
+    }
   }
-  
+
   /**
-   * 发送HTTP请求并返回响应数据
+   * PTZ归位
    */
-  private makeHttpRequestWithResponse(requestUrl: string, method: string): Promise<{ success: boolean; data?: string; error?: string }> {
-    return new Promise((resolve) => {
-      const urlObj = new URL(requestUrl);
+  async homePTZ(ip: string): Promise<any> {
+    console.log(`Function: homePTZ - Setting PTZ to home for camera: ${ip}`);
+    
+    try {
+      const requestUrl = this.httpClient.buildPTZUrl(ip, 'home');
+      console.log(`Sending PTZ home request to: ${requestUrl}`);
       
-      const options = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 80,
-        path: urlObj.pathname + urlObj.search,
-        method: method,
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
+      
+      if (response.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `🏠 成功将相机 ${ip} PTZ归位`
+          }]
+        };
+      } else {
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
+      }
+    } catch (error) {
+      console.error(`Error setting PTZ home for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 设置相机 ${ip} PTZ归位失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
       };
+    }
+  }
+
+  /**
+   * 设置PTZ速度
+   */
+  async setPTZSpeed(ip: string, speed: number): Promise<any> {
+    console.log(`Function: setPTZSpeed - Setting PTZ speed for camera: ${ip} to: ${speed}`);
+    
+    try {
+      if (speed < 0 || speed > 63) {
+        throw new Error('PTZ速度必须在0-63之间');
+      }
       
-      const req = http.request(options, (res) => {
-        let data = '';
-        
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        
-        res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-            resolve({ success: true, data: data });
-          } else {
-            resolve({ success: false, error: `HTTP ${res.statusCode}: ${res.statusMessage}`, data: data });
-          }
-        });
-      });
+      const requestUrl = this.httpClient.buildPTZUrl(ip, 'speed', { speed });
+      console.log(`Sending PTZ speed request to: ${requestUrl}`);
       
-      req.on('error', (error) => {
-        resolve({ success: false, error: error.message });
-      });
+      // 使用共享HTTP客户端
+      const response = await this.httpClient.get(requestUrl);
       
-      req.end();
-    });
+      if (response.success) {
+        return {
+          content: [{
+            type: 'text',
+            text: `⚡ 成功设置相机 ${ip} PTZ速度为: ${speed}`
+          }]
+        };
+      } else {
+        throw new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
+      }
+    } catch (error) {
+      console.error(`Error setting PTZ speed for camera ${ip}:`, error);
+      return {
+        content: [{
+          type: 'text',
+          text: `❌ 设置相机 ${ip} PTZ速度失败: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
   }
 }

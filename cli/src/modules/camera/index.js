@@ -1,9 +1,9 @@
 const { Command } = require('commander');
-const cameraService = require('./service');
 const { formatOutput } = require('../../utils/formatter');
 const { createAPI } = require('../../core/api');
 const { handleErrors } = require('../../utils/error-handler');
 const { getGlobalOptions, resolveOutputFormat } = require('../../utils/cli-helpers');
+const { getServiceContainer } = require('../../core/service-container');
 
 /**
  * 相机模块 - 相机基础管理和用户管理
@@ -12,21 +12,30 @@ const { getGlobalOptions, resolveOutputFormat } = require('../../utils/cli-helpe
 const cameraCmd = new Command('camera')
   .description('相机基础管理');
 
+/**
+ * 统一执行相机相关命令
+ */
+async function executeCameraCommand(options, cmd, handler) {
+  const globalOptions = getGlobalOptions(cmd);
+  try {
+    const api = createAPI(globalOptions);
+    const serviceContainer = getServiceContainer(api);
+    const cameraService = serviceContainer.getService('camera');
+    const outputFormat = resolveOutputFormat(options, globalOptions);
+    const result = await handler(cameraService);
+    formatOutput(result, outputFormat);
+  } catch (error) {
+    handleErrors(error, globalOptions);
+  }
+}
+
 // 相机信息查询
 cameraCmd
   .command('info')
   .description('获取相机基本信息')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = getGlobalOptions(cmd);
-      const api = createAPI(globalOptions);
-      const outputFormat = resolveOutputFormat(options, globalOptions);
-      const result = await cameraService.getInfo(api);
-      formatOutput(result, outputFormat);
-    } catch (error) {
-      handleErrors(error, globalOptions);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.getInfo());
   });
 
 // 相机模式
@@ -35,14 +44,7 @@ cameraCmd
   .description('获取相机工作模式')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.getMode(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.getMode());
   });
 
 // 相机昵称管理
@@ -51,16 +53,9 @@ cameraCmd
   .description('设置或获取相机昵称')
   .option('-j, --json', 'JSON格式输出')
   .action(async (name, options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = name
-        ? await cameraService.setNickname(api, name)
-        : await cameraService.getNickname(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => {
+      return name ? cameraService.setNickname(name) : cameraService.getNickname();
+    });
   });
 
 // 相机状态
@@ -69,14 +64,7 @@ cameraCmd
   .description('获取相机运行状态')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.getStatus(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.getStatus());
   });
 
 // 提交设置
@@ -85,14 +73,7 @@ cameraCmd
   .description('提交相机设置')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.commit(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.commit());
   });
 
 // 切换到录制模式
@@ -101,14 +82,7 @@ cameraCmd
   .description('切换到录制模式')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.gotoRecordingMode(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.gotoRecordingMode());
   });
 
 // 时间管理子命令
@@ -120,29 +94,15 @@ timeCmd
   .description('获取相机时间')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.getTime(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.getTime());
   });
 
 timeCmd
   .command('set <date> <time>')
   .description('设置相机时间')
   .option('-j, --json', 'JSON格式输出')
-  .action(async (date, time, options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.setTime(api, date, time);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+  .action(async (date, timeValue, options, cmd) => {
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.setTime(date, timeValue));
   });
 
 timeCmd
@@ -150,14 +110,7 @@ timeCmd
   .description('设置时区')
   .option('-j, --json', 'JSON格式输出')
   .action(async (timezone, options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.setTimezone(api, timezone);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.setTimezone(timezone));
   });
 
 cameraCmd.addCommand(timeCmd);
@@ -171,14 +124,7 @@ userCmd
   .description('获取当前用户信息')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.getCurrentUser(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.getCurrentUser());
   });
 
 userCmd
@@ -186,14 +132,7 @@ userCmd
   .description('获取用户列表')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.getUserList(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.getUserList());
   });
 
 userCmd
@@ -201,14 +140,7 @@ userCmd
   .description('添加用户')
   .option('-j, --json', 'JSON格式输出')
   .action(async (username, password, permission, options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.addUser(api, username, password, permission);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.addUser(username, password, permission));
   });
 
 userCmd
@@ -216,14 +148,7 @@ userCmd
   .description('删除用户')
   .option('-j, --json', 'JSON格式输出')
   .action(async (username, options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.deleteUser(api, username);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.deleteUser(username));
   });
 
 userCmd
@@ -231,14 +156,7 @@ userCmd
   .description('修改用户密码')
   .option('-j, --json', 'JSON格式输出')
   .action(async (username, oldPassword, newPassword, options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.changePassword(api, username, oldPassword, newPassword);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.changePassword(username, oldPassword, newPassword));
   });
 
 userCmd
@@ -246,14 +164,7 @@ userCmd
   .description('登出当前用户')
   .option('-j, --json', 'JSON格式输出')
   .action(async (options, cmd) => {
-    try {
-      const globalOptions = cmd.parent.parent.parent;
-      const api = createAPI(globalOptions);
-      const result = await cameraService.logout(api);
-      formatOutput(result, options.json || globalOptions.json);
-    } catch (error) {
-      handleErrors(error, cmd.parent.parent.parent);
-    }
+    await executeCameraCommand(options, cmd, (cameraService) => cameraService.logout());
   });
 
 cameraCmd.addCommand(userCmd);

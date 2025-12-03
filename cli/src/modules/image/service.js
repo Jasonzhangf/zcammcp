@@ -20,8 +20,8 @@ class ImageService {
    */
   static async setEv(api, value) {
     const evValue = parseFloat(value);
-    if (isNaN(evValue) || evValue < -3.0 || evValue > 3.0) {
-      throw new Error('EV补偿必须是-3.0到+3.0之间的数值');
+    if (isNaN(evValue) || evValue < -96 || evValue > 96) {
+      throw new Error('EV补偿必须是-96到+96之间的数值');
     }
     return await api.get(`/ctrl/set?ev=${evValue}`);
   }
@@ -32,6 +32,13 @@ class ImageService {
    */
   static async getIris(api) {
     return await api.get('/ctrl/get?k=iris');
+  }
+
+  /**
+   * 兼容别名：获取光圈值
+   */
+  static async getAperture(api) {
+    return await this.getIris(api);
   }
 
   /**

@@ -1,4 +1,4 @@
-const { formatError, isValidationError, isAPIError, isConnectionError } = require('./errors');
+const { isValidationError, isAPIError, isConnectionError } = require('./errors');
 const { error: logError, warn, info } = require('./formatter');
 const { formatErrorMessage } = require('./cli-helpers');
 
@@ -49,7 +49,7 @@ function handleErrors(error, globalOptions = {}) {
  * @param {Error} error 验证错误
  */
 function handleValidationError(error) {
-  error(`参数验证失败: ${error.message}`);
+  logError(`参数验证失败: ${error.message}`);
 
   if (error.field) {
     info(`问题字段: ${error.field}`);
@@ -68,31 +68,31 @@ function handleValidationError(error) {
 function handleAPIError(error, verbose) {
   switch (error.status) {
     case 400:
-      error(`请求参数错误: ${error.message}`);
+      logError(`请求参数错误: ${error.message}`);
       break;
     case 401:
-      error(`认证失败: ${error.message}`);
+      logError(`认证失败: ${error.message}`);
       break;
     case 403:
-      error(`权限不足: ${error.message}`);
+      logError(`权限不足: ${error.message}`);
       break;
     case 404:
-      error(`API端点不存在: ${error.message}`);
+      logError(`API端点不存在: ${error.message}`);
       break;
     case 429:
-      error(`请求过于频繁: ${error.message}`);
+      logError(`请求过于频繁: ${error.message}`);
       break;
     case 500:
-      error(`相机内部错误: ${error.message}`);
+      logError(`相机内部错误: ${error.message}`);
       break;
     case 502:
-      error(`相机网关错误: ${error.message}`);
+      logError(`相机网关错误: ${error.message}`);
       break;
     case 503:
-      error(`相机服务不可用: ${error.message}`);
+      logError(`相机服务不可用: ${error.message}`);
       break;
     default:
-      error(`相机API错误 (${error.status}): ${error.message}`);
+      logError(`相机API错误 (${error.status}): ${error.message}`);
   }
 
   if (error.url && verbose) {
@@ -124,7 +124,7 @@ function handleConnectionError(error, verbose) {
  * @param {boolean} verbose 详细模式
  */
 function handleModuleError(error, verbose) {
-  error(`模块错误: ${error.message}`);
+  logError(`模块错误: ${error.message}`);
 
   if (error.moduleName) {
     info(`问题模块: ${error.moduleName}`);
@@ -144,7 +144,7 @@ function handleModuleError(error, verbose) {
  * @param {boolean} verbose 详细模式
  */
 function handleConfigError(error, verbose) {
-  error(`配置错误: ${error.message}`);
+  logError(`配置错误: ${error.message}`);
 
   if (error.configPath) {
     info(`配置文件: ${error.configPath}`);
@@ -160,7 +160,7 @@ function handleConfigError(error, verbose) {
  * @param {Error} error 相机状态错误
  */
 function handleCameraStateError(error) {
-  error(`相机状态错误: ${error.message}`);
+  logError(`相机状态错误: ${error.message}`);
 
   if (error.currentState) {
     info(`当前状态: ${error.currentState}`);
@@ -176,7 +176,7 @@ function handleCameraStateError(error) {
  * @param {Error} error 权限错误
  */
 function handlePermissionError(error) {
-  error(`权限不足: ${error.message}`);
+  logError(`权限不足: ${error.message}`);
 
   if (error.requiredPermission) {
     info(`需要权限: ${error.requiredPermission}`);
@@ -192,7 +192,7 @@ function handlePermissionError(error) {
  * @param {Error} error 硬件错误
  */
 function handleHardwareError(error) {
-  error(`硬件错误: ${error.message}`);
+  logError(`硬件错误: ${error.message}`);
 
   if (error.component) {
     info(`问题组件: ${error.component}`);
@@ -208,7 +208,7 @@ function handleHardwareError(error) {
  * @param {Error} error 超时错误
  */
 function handleTimeoutError(error) {
-  error(`操作超时: ${error.message}`);
+  logError(`操作超时: ${error.message}`);
 
   if (error.operation) {
     info(`超时操作: ${error.operation}`);
@@ -403,71 +403,6 @@ function asyncErrorHandler(fn, globalOptions = {}) {
   };
 }
 
-/**
- * 处理配置错误
- * @param {Error} error 配置错误
- * @param {boolean} verbose 详细模式
- */
-function handleConfigError(error, verbose) {
-  logError(`配置错误: ${error.message}`);
-
-  if (error.details) {
-    info(`配置详情: ${error.details}`);
-  }
-
-  if (verbose && error.stack) {
-    info(`堆栈跟踪:\n${error.stack}`);
-  }
-}
-
-/**
- * 处理模块错误
- * @param {Error} error 模块错误
- * @param {boolean} verbose 详细模式
- */
-function handleModuleError(error, verbose) {
-  logError(`模块加载错误: ${error.message}`);
-
-  if (error.module) {
-    info(`失败模块: ${error.module}`);
-  }
-
-  if (error.suggestion) {
-    info(`建议: ${error.suggestion}`);
-  }
-
-  if (verbose && error.stack) {
-    info(`堆栈跟踪:\n${error.stack}`);
-  }
-}
-
-/**
- * 处理权限错误
- * @param {Error} error 权限错误
- */
-function handlePermissionError(error) {
-  logError(`权限错误: ${error.message}`);
-  info('请检查用户权限或联系管理员');
-}
-
-/**
- * 处理硬件错误
- * @param {Error} error 硬件错误
- */
-function handleHardwareError(error) {
-  logError(`硬件错误: ${error.message}`);
-  info('请检查设备连接状态');
-}
-
-/**
- * 处理超时错误
- * @param {Error} error 超时错误
- */
-function handleTimeoutError(error) {
-  logError(`操作超时: ${error.message}`);
-  info('请增加超时时间或检查网络连接');
-}
-
 module.exports = {
   handleErrors,
   handleNonFatalError,
@@ -476,5 +411,5 @@ module.exports = {
   handleModuleError,
   handlePermissionError,
   handleHardwareError,
-  handleTimeoutError
+  handleTimeoutError,
 };

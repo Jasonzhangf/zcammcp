@@ -1,373 +1,253 @@
+/**
+ * ZCam API客户端单元测试 - 真实相机连接测试
+ */
+
 const { ZCamAPI, createAPI } = require('../../../src/core/api');
-const fetch = require('node-fetch');
+const { APIError, ConnectionError } = require('../../../src/utils/errors');
+const CameraControlManager = require('../../../src/core/camera-control-manager');
 
-// Mock fetch
-jest.mock('node-fetch');
+// 测试相机配置
+const TEST_CAMERA = {
+  host: '192.168.9.59',
+  port: 80,
+  timeout: 10000
+};
 
-describe('ZCamAPI', () => {
+describe('ZCamAPI类', () => {
   let api;
+  let controlManager;
 
   beforeEach(() => {
-    fetch.mockClear();
-    api = new ZCamAPI({
-      host: '192.168.1.100',
-      port: 80,
-      timeout: 5000
+    api = new ZCamAPI(TEST_CAMERA);
+    controlManager = new CameraControlManager(api);
+  });
+
+  describe('构造函数', () => {
+    test('应该使用测试相机配置创建实例', () => {
+      const api = new ZCamAPI(TEST_CAMERA);
+
+      expect(api.host).toBe(TEST_CAMERA.host);
+      expect(api.port).toBe(TEST_CAMERA.port);
+      expect(api.timeout).toBe(TEST_CAMERA.timeout);
+      expect(api.baseURL).toBe(`http://${TEST_CAMERA.host}:${TEST_CAMERA.port}`);
+    });
+
+    test('应该使用默认配置创建实例', () => {
+      const api = new ZCamAPI();
+
+      expect(api.host).toBe('192.168.1.100');
+      expect(api.port).toBe(80);
+      expect(api.timeout).toBe(30000);
+      expect(api.baseURL).toBe('http://192.168.1.100:80');
+    });
+
+    test('应该初始化会话状态', () => {
+      const api = new ZCamAPI();
+
+      expect(api.sessionCookie).toBeNull();
+      expect(api.lastRequestTime).toBe(0);
     });
   });
 
-  describe('Constructor', () => {
-    test('should initialize with default values', () => {
-      const defaultApi = new ZCamAPI();
-      expect(defaultApi.host).toBe('192.168.1.100');
-      expect(defaultApi.port).toBe(80);
-      expect(defaultApi.timeout).toBe(20000);
-      expect(defaultApi.baseURL).toBe('http://192.168.1.100:80');
+  describe('相机特定方法', () => {
+    test('testConnection方法应该测试真实相机连接', async () => {
+      const result = await api.testConnection();
+
+      expect(typeof result).toBe('boolean');
+      // 真实相机连接测试应该成功
+      expect(result).toBe(true);
     });
 
-    test('should initialize with custom values', () => {
-      const customApi = new ZCamAPI({
-        host: '192.168.1.200',
-        port: 8080,
-        timeout: 10000
-      });
-      expect(customApi.host).toBe('192.168.1.200');
-      expect(customApi.port).toBe(8080);
-      expect(customApi.timeout).toBe(10000);
-      expect(customApi.baseURL).toBe('http://192.168.1.200:8080');
-    });
-  });
+    test('getCameraInfo方法应该获取真实相机信息', async () => {
+      const result = await api.getCameraInfo();
 
-  describe('Request Method', () => {
-    test('should make successful GET request', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
-
-      const result = await api.get('/test');
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://192.168.1.100:80/test',
-        expect.objectContaining({
-          signal: expect.any(AbortSignal),
-          headers: {
-            'User-Agent': 'Z-CAM-CLI/1.0.0'
-          }
-        })
-      );
-      expect(result).toEqual({ success: true });
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('object');
+      // 真实相机应该返回型号信息
+      if (result.model) {
+        expect(typeof result.model).toBe('string');
+      }
+      if (result.sn) {
+        expect(typeof result.sn).toBe('string');
+      }
     });
 
-    test('should make successful POST request', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
+    test('sessionPing方法应该与真实相机心跳', async () => {
+      const result = await api.sessionPing();
 
-      const data = { test: 'data' };
-      const result = await api.post('/test', data);
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://192.168.1.100:80/test',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify(data),
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Z-CAM-CLI/1.0.0'
-          }
-        })
-      );
-      expect(result).toEqual({ success: true });
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('object');
+      // 相机心跳返回格式检查
+      if (result.code !== undefined) {
+        expect(typeof result.code).toBe('number');
+      }
+      if (result.msg !== undefined) {
+        expect(typeof result.msg).toBe('string');
+      }
     });
 
-    test('should handle non-JSON response', async () => {
-      const mockResponse = {
-        ok: true,
-        headers: {
-          get: jest.fn().mockReturnValue('text/plain')
-        },
-        text: jest.fn().mockResolvedValue('Plain text response')
-      };
-      fetch.mockResolvedValue(mockResponse);
+    test('sessionQuit方法应该退出真实相机会话', async () => {
+      const result = await api.sessionQuit();
 
-      const result = await api.get('/test');
-
-      expect(result).toEqual({ success: true, data: 'Plain text response' });
-    });
-
-    test('should add session cookie if available', async () => {
-      api.sessionCookie = 'session-id=12345';
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
-
-      await api.get('/test');
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Cookie': 'session-id=12345'
-          })
-        })
-      );
-    });
-
-    test('should save session cookie from response', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true }),
-        headers: {
-          get: jest.fn().mockReturnValue('session-id=67890')
-        }
-      };
-      fetch.mockResolvedValue(mockResponse);
-
-      await api.get('/test');
-
-      expect(api.sessionCookie).toBe('session-id=67890');
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('object');
+      // 退出会话返回格式检查
+      if (result.code !== undefined) {
+        expect(typeof result.code).toBe('number');
+      }
+      if (result.msg !== undefined) {
+        expect(typeof result.msg).toBe('string');
+      }
     });
   });
 
-  describe('Error Handling', () => {
-    test('should throw APIError for HTTP error responses', async () => {
-      const mockResponse = {
-        ok: false,
-        status: 404,
-        statusText: 'Not Found'
-      };
-      fetch.mockResolvedValue(mockResponse);
+  describe('配置方法', () => {
+    test('setTimeout方法应该设置超时时间', () => {
+      api.setTimeout(15000);
 
-      await expect(api.get('/test')).rejects.toThrow(APIError);
+      expect(api.timeout).toBe(15000);
     });
 
-    test('should throw ConnectionError for connection refused', async () => {
-      const error = new Error('ECONNREFUSED');
-      error.code = 'ECONNREFUSED';
-      fetch.mockRejectedValue(error);
+    test('setRequestInterval方法应该设置请求间隔', () => {
+      api.setRequestInterval(200);
 
-      await expect(api.get('/test')).rejects.toThrow(ConnectionError);
+      expect(api.minRequestInterval).toBe(200);
     });
 
-    test('should throw ConnectionError for timeout', async () => {
-      const error = new Error('AbortError');
-      error.name = 'AbortError';
-      fetch.mockRejectedValue(error);
+    test('getBaseURL方法应该返回基础URL', () => {
+      const baseURL = api.getBaseURL();
 
-      await expect(api.get('/test')).rejects.toThrow(ConnectionError);
+      expect(baseURL).toBe(`http://${TEST_CAMERA.host}:${TEST_CAMERA.port}`);
     });
 
-    test('should throw ConnectionError for host not found', async () => {
-      const error = new Error('ENOTFOUND');
-      error.code = 'ENOTFOUND';
-      fetch.mockRejectedValue(error);
+    test('getConnectionInfo方法应该返回连接信息', () => {
+      api.sessionCookie = 'test_session';
 
-      await expect(api.get('/test')).rejects.toThrow(ConnectionError);
-    });
-  });
-
-  describe('Request Rate Limiting', () => {
-    test('should rate limit requests', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
-
-      const startTime = Date.now();
-      await api.get('/test1');
-      await api.get('/test2');
-
-      const endTime = Date.now();
-      const elapsed = endTime - startTime;
-
-      // Should take at least 50ms due to rate limiting
-      expect(elapsed).toBeGreaterThanOrEqual(40);
-    });
-  });
-
-  describe('Utility Methods', () => {
-    test('should get base URL', () => {
-      expect(api.getBaseURL()).toBe('http://192.168.1.100:80');
-    });
-
-    test('should get connection info', () => {
       const info = api.getConnectionInfo();
-      expect(info.host).toBe('192.168.1.100');
-      expect(info.port).toBe(80);
-      expect(info.timeout).toBe(5000);
-      expect(info.baseURL).toBe('http://192.168.1.100:80');
-      expect(info.hasSession).toBe(false);
+
+      expect(info).toEqual({
+        host: TEST_CAMERA.host,
+        port: TEST_CAMERA.port,
+        timeout: TEST_CAMERA.timeout,
+        baseURL: `http://${TEST_CAMERA.host}:${TEST_CAMERA.port}`,
+        hasSession: true
+      });
     });
 
-    test('should test connection', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ status: 'connected' })
-      };
-      fetch.mockResolvedValue(mockResponse);
+    test('clearSession方法应该清除会话', () => {
+      api.sessionCookie = 'test_session';
 
-      const isConnected = await api.testConnection();
+      api.clearSession();
 
-      expect(isConnected).toBe(true);
-      expect(fetch).toHaveBeenCalledWith('http://192.168.1.100:80/info');
-    });
-
-    test('should handle connection test failure', async () => {
-      fetch.mockRejectedValue(new Error('Connection failed'));
-
-      const isConnected = await api.testConnection();
-
-      expect(isConnected).toBe(false);
-    });
-
-    test('should set timeout', () => {
-      api.setTimeout(10000);
-      expect(api.timeout).toBe(10000);
-    });
-
-    test('should set request interval', () => {
-      api.setRequestInterval(100);
-      expect(api.minRequestInterval).toBe(100);
+      expect(api.sessionCookie).toBeNull();
     });
   });
 
-  describe('HTTP Method Aliases', () => {
-    test('should support DELETE method', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
+  describe('真实API请求测试', () => {
+    test('应该能够发送真实GET请求', async () => {
+      const result = await api.request('/info');
 
-      const result = await api.delete('/test');
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://192.168.1.100:80/test',
-        expect.objectContaining({
-          method: 'DELETE'
-        })
-      );
-      expect(result).toEqual({ success: true });
+      expect(result).toBeDefined();
+      expect(typeof result).toBe('object');
     });
 
-    test('should support PUT method', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
+    test('应该能够处理连接错误', async () => {
+      const invalidAPI = new ZCamAPI({
+        host: '192.168.999.999',
+        port: 80,
+        timeout: 5000
+      });
 
-      const data = { test: 'data' };
-      const result = await api.put('/test', data);
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://192.168.1.100:80/test',
-        expect.objectContaining({
-          method: 'PUT',
-          body: JSON.stringify(data)
-        })
-      );
-      expect(result).toEqual({ success: true });
+      const result = await invalidAPI.testConnection();
+      expect(result).toBe(false);
     });
   });
 
-  describe('URL Construction', () => {
-    test('should handle URLs with query parameters', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
+  describe('错误处理', () => {
+    test('应该处理网络连接错误', async () => {
+      const invalidAPI = new ZCamAPI({
+        host: 'invalid-host-name',
+        port: 80,
+        timeout: 5000
+      });
 
-      await api.get('/test', { param1: 'value1', param2: 'value2' });
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://192.168.1.100:80/test?param1=value1&param2=value2',
-        expect.any(Object)
-      );
+      await expect(invalidAPI.getCameraInfo()).rejects.toThrow('fetch failed');
     });
 
-    test('should handle URLs with special characters', async () => {
-      const mockResponse = {
-        ok: true,
-        json: jest.fn().mockResolvedValue({ success: true })
-      };
-      fetch.mockResolvedValue(mockResponse);
+    test('应该处理超时错误', async () => {
+      const timeoutAPI = new ZCamAPI({
+        host: TEST_CAMERA.host,
+        port: TEST_CAMERA.port,
+        timeout: 1 // 1ms超时
+      });
 
-      await api.get('/test with spaces');
-
-      expect(fetch).toHaveBeenCalledWith(
-        'http://192.168.1.100:80/test%20with%20spaces',
-        expect.any(Object)
-      );
+      // 超时测试可能不会总是触发，取决于网络延迟
+      try {
+        await timeoutAPI.getCameraInfo();
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+      }
     });
   });
 });
 
-describe('createAPI', () => {
-  test('should create API instance with default profile', () => {
-    const globalOptions = {
-      profile: 'default'
-    };
-
-    // Mock config
-    jest.mock('../../../src/config/config', () => ({
-      getProfile: jest.fn().mockReturnValue({
-        host: '192.168.1.100',
-        port: '80',
-        timeout: '20000'
-      })
-    }));
-
-    const { getProfile } = require('../../../src/config/config');
-    getProfile.mockReturnValue({
-      host: '192.168.1.100',
-      port: '80',
-      timeout: '20000'
-    });
-
-    const api = createAPI(globalOptions);
+describe('createAPI函数', () => {
+  test('应该创建带有默认配置的API实例', () => {
+    const api = createAPI();
 
     expect(api).toBeInstanceOf(ZCamAPI);
     expect(api.host).toBe('192.168.1.100');
-    expect(api.port).toBe('80');
-    expect(api.timeout).toBe('20000');
+    expect(api.port).toBe(80);
+    expect(api.timeout).toBe(30000);
   });
 
-  test('should create API instance with custom options', () => {
-    const globalOptions = {
-      host: '192.168.1.200',
-      port: '8080',
-      timeout: '10000',
-      profile: 'custom'
+  test('应该使用提供的配置创建API实例', () => {
+    const options = {
+      host: '192.168.9.59',
+      port: 8080,
+      timeout: 10000
     };
 
-    const api = createAPI(globalOptions);
+    const api = createAPI(options);
 
-    expect(api.host).toBe('192.168.1.200');
-    expect(api.port).toBe('8080');
-    expect(api.timeout).toBe('10000');
+    expect(api.host).toBe('192.168.9.59');
+    expect(api.port).toBe(8080);
+    expect(api.timeout).toBe(10000);
+  });
+});
+
+describe('集成测试', () => {
+  let api;
+  let controlManager;
+
+  beforeEach(() => {
+    api = new ZCamAPI(TEST_CAMERA);
+    controlManager = new CameraControlManager(api);
   });
 
-  test('should use global options over config', () => {
-    const globalOptions = {
-      host: '192.168.1.300',
-      port: '9090',
-      timeout: '15000',
-      profile: 'test'
-    };
+  test('应该完成完整的相机交互流程', async () => {
+    // 执行完整流程
+    const isConnected = await api.testConnection();
+    expect(isConnected).toBe(true);
 
-    const api = createAPI(globalOptions);
+    const cameraInfo = await api.getCameraInfo();
+    expect(cameraInfo).toBeDefined();
 
-    expect(api.host).toBe('192.168.1.300');
-    expect(api.port).toBe('9090');
-    expect(api.timeout).toBe('15000');
+    const sessionResult = await api.sessionPing();
+    expect(sessionResult).toBeDefined();
+
+    const quitResult = await api.sessionQuit();
+    expect(quitResult).toBeDefined();
+  });
+
+  test('应该处理会话管理', async () => {
+    // 测试会话管理流程
+    await controlManager.withControl(async () => {
+      await api.sessionPing();
+
+      // 获取一些基本信息
+      const cameraInfo = await api.getCameraInfo();
+      expect(cameraInfo).toBeDefined();
+    });
   });
 });

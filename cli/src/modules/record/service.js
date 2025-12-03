@@ -416,7 +416,7 @@ class RecordService {
    * API: /ctrl/get?k=preroll_duration
    */
   static async getPrerollDuration(api) {
-    return await api.get('/ctrl/get?k=preroll_duration`);
+    return await api.get('/ctrl/get?k=preroll_duration');
   }
 
   /**
