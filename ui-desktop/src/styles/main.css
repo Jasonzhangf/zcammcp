@@ -373,15 +373,15 @@
 /* 调试用: 展示当前 hover 命中的容器基准点 */
 .zcam-debug-hover-marker {
   position: absolute;
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: #52c41a;
   top: 0;
   left: 50%;
   transform: translate(-50%, -50%);
+  display: none;
 }
-
 /* 调试用: 展示容器边界 (不影响布局, 只画 outline) */
 .zcam-debug-container-primary {
   outline: 1px solid rgba(82, 196, 26, 0.7); /* 绿色, Zoom 等主控件 */
