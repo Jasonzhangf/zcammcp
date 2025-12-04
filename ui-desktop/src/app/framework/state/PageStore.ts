@@ -133,6 +133,20 @@ export class PageStore {
     };
   }
 
+  /** 清除当前 active node 与高亮状态 */
+  clearActiveNode(): void {
+    const nextHighlight = { ...this.uiState.highlightMap };
+    if (this.uiState.activeNodePath && nextHighlight[this.uiState.activeNodePath] === 'active') {
+      delete nextHighlight[this.uiState.activeNodePath];
+    }
+    this.uiState = {
+      ...this.uiState,
+      activeNodePath: undefined,
+      highlightMap: nextHighlight,
+    };
+    this.notify();
+  }
+
   /** 将某个容器设为当前焦点 / 选中节点 */
   setActiveNode(path: string): void {
     this.uiState = {

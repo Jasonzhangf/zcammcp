@@ -3,6 +3,7 @@
 
 import React from 'react';
 import type { PageShellConfig } from '../framework/ui/PageShellConfig.js';
+import { usePageStore } from '../hooks/usePageStore.js';
 
 interface PageShellProps {
   config: PageShellConfig;
@@ -11,6 +12,7 @@ interface PageShellProps {
 
 export const PageShell: React.FC<PageShellProps> = ({ config, children }) => {
   const { dock } = config;
+  const store = usePageStore();
   const [isDocked, setIsDocked] = React.useState<boolean>(!!dock?.enabled);
 
   const side = dock?.side ?? 'right';
@@ -22,6 +24,12 @@ export const PageShell: React.FC<PageShellProps> = ({ config, children }) => {
     setIsDocked((prev) => !prev);
   };
 
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // 仅在点击根容器空白区域时清除 active
+    if (e.target === e.currentTarget) {
+      store.clearActiveNode();
+    }
+  };
 
   const dockedStyle: React.CSSProperties = {};
   if (dock?.enabled && isDocked) {
@@ -45,6 +53,7 @@ export const PageShell: React.FC<PageShellProps> = ({ config, children }) => {
       data-path={config.pagePath}
       className="zcam-panel"
       style={finalStyle}
+      onMouseDown={handleBackdropClick}
     >
       {children}
 
