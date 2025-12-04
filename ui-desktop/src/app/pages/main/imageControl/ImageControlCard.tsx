@@ -6,6 +6,9 @@ import type { ContainerNode } from '../../../framework/container/ContainerNode.j
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { ShutterSelect } from '../../../controls/image/ShutterSelect/ShutterSelect.js';
 import { IsoSelect } from '../../../controls/image/IsoSelect/IsoSelect.js';
+import { SliderControl } from '../../../components/SliderControl.js';
+import { ToggleControl } from '../../../components/ToggleControl.js';
+import type { SliderControlConfig, ToggleControlConfig } from '../../../framework/ui/ControlConfig.js';
 
 export const imageControlCardNode: ContainerNode = {
   path: 'zcam.camera.pages.main.imageControl',
@@ -21,62 +24,81 @@ export function ImageControlCard() {
 
   const exposure = view.camera.exposure ?? {};
   const wb = view.camera.whiteBalance ?? {};
-  const img = view.camera.image ?? {};
-
-  const aeOn = !!exposure.aeEnabled;
-  const awbOn = !!wb.awbEnabled;
 
   const tempVal = wb.temperature?.value ?? 5600;
   const tempView = wb.temperature?.view ?? `${tempVal}K`;
 
-  const brightness = img.brightness ?? 50;
-  const contrast = img.contrast ?? 50;
-  const saturation = img.saturation ?? 50;
-
-  const handleAeToggle = async () => {
-    const next = !aeOn;
-    await store.runOperation(
-      'zcam.camera.pages.main.exposure.aeMode',
-      'exposure.ae',
-      'exposure.setAeEnabled',
-      { value: next },
-    );
+  // AE / AWB toggle 配置
+  const aeToggleConfig: ToggleControlConfig = {
+    type: 'toggle',
+    nodePath: 'zcam.camera.pages.main.exposure.aeMode',
+    kind: 'exposure.ae',
+    label: 'AE',
+    operationId: 'exposure.setAeEnabled',
+    readValue: (v) => !!v.camera.exposure?.aeEnabled,
   };
 
-  const handleAwbToggle = async () => {
-    const next = !awbOn;
-    await store.runOperation(
-      'zcam.camera.pages.main.whiteBalance.awbMode',
-      'whiteBalance.awb',
-      'whiteBalance.setAwbEnabled',
-      { value: next },
-    );
+  const awbToggleConfig: ToggleControlConfig = {
+    type: 'toggle',
+    nodePath: 'zcam.camera.pages.main.whiteBalance.awbMode',
+    kind: 'whiteBalance.awb',
+    label: 'AWB',
+    operationId: 'whiteBalance.setAwbEnabled',
+    readValue: (v) => !!v.camera.whiteBalance?.awbEnabled,
   };
 
-  const handleTempChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = Number(e.target.value);
-    await store.runOperation(
-      'zcam.camera.pages.main.whiteBalance.temperature',
-      'whiteBalance.temperature',
-      'whiteBalance.setTemperature',
-      { value: v },
-    );
+  // 色温 slider 配置
+  const temperatureConfig: SliderControlConfig = {
+    type: 'slider',
+    nodePath: 'zcam.camera.pages.main.whiteBalance.temperature',
+    kind: 'whiteBalance.temperature',
+    label: '色温',
+    operationId: 'whiteBalance.setTemperature',
+    orientation: 'horizontal',
+    size: 'medium',
+    valueRange: { min: 3200, max: 6500, step: 50 },
+    readValue: (v) => v.camera.whiteBalance?.temperature?.value ?? 5600,
+    formatValue: () => tempView,
   };
 
-  const handleImgSlider = async (kind: 'brightness' | 'contrast' | 'saturation', v: number) => {
-    const opId =
-      kind === 'brightness'
-        ? 'image.setBrightness'
-        : kind === 'contrast'
-        ? 'image.setContrast'
-        : 'image.setSaturation';
+  // 图像 slider 配置
+  const brightnessConfig: SliderControlConfig = {
+    type: 'slider',
+    nodePath: 'zcam.camera.pages.main.image.brightness',
+    kind: 'image.brightness',
+    label: '亮度',
+    operationId: 'image.setBrightness',
+    orientation: 'horizontal',
+    size: 'medium',
+    valueRange: { min: 0, max: 100, step: 1 },
+    readValue: (v) => v.camera.image?.brightness ?? 50,
+    formatValue: (x) => String(x),
+  };
 
-    await store.runOperation(
-      `zcam.camera.pages.main.image.${kind}`,
-      `image.${kind}`,
-      opId,
-      { value: v },
-    );
+  const contrastConfig: SliderControlConfig = {
+    type: 'slider',
+    nodePath: 'zcam.camera.pages.main.image.contrast',
+    kind: 'image.contrast',
+    label: '对比度',
+    operationId: 'image.setContrast',
+    orientation: 'horizontal',
+    size: 'medium',
+    valueRange: { min: 0, max: 100, step: 1 },
+    readValue: (v) => v.camera.image?.contrast ?? 50,
+    formatValue: (x) => String(x),
+  };
+
+  const saturationConfig: SliderControlConfig = {
+    type: 'slider',
+    nodePath: 'zcam.camera.pages.main.image.saturation',
+    kind: 'image.saturation',
+    label: '饱和度',
+    operationId: 'image.setSaturation',
+    orientation: 'horizontal',
+    size: 'medium',
+    valueRange: { min: 0, max: 100, step: 1 },
+    readValue: (v) => v.camera.image?.saturation ?? 50,
+    formatValue: (x) => String(x),
   };
 
   return (
@@ -106,26 +128,10 @@ export function ImageControlCard() {
               data-path="zcam.camera.pages.main.exposure.shortcutSelect"
             />
           </div>
-          <div
-            className="zcam-field-row"
-            data-path="zcam.camera.pages.main.exposure.aeMode"
-          >
-            <label>AE</label>
-            <div className="zcam-toggle-group">
-              <button
-                type="button"
-                className={`zcam-toggle ${aeOn ? 'zcam-toggle-on' : 'zcam-toggle-off'}`}
-                data-path="zcam.camera.pages.main.exposure.aeToggle"
-                onClick={handleAeToggle}
-              >
-                <span className="zcam-toggle-knob" />
-              </button>
-              <span className={aeOn ? 'zcam-toggle-label-on' : 'zcam-toggle-label-off'}>
-                {aeOn ? 'ON' : 'OFF'}
-              </span>
-            </div>
-          </div>
-          {/* 快门 + ISO 同行控件，使用独立 ShutterSelect / IsoSelect */}
+          {/* AE Toggle 控件 */}
+          <ToggleControl config={aeToggleConfig} />
+
+          {/* 快门 + ISO 同行控件 */}
           <div
             className="zcam-field-row zcam-field-row-dual"
             data-path="zcam.camera.pages.main.exposure.shutterIso"
@@ -150,41 +156,14 @@ export function ImageControlCard() {
               data-path="zcam.camera.pages.main.whiteBalance.shortcutSelect"
             />
           </div>
-          <div
-            className="zcam-field-row"
-            data-path="zcam.camera.pages.main.whiteBalance.awbMode"
-          >
-            <label>AWB</label>
-            <div className="zcam-toggle-group">
-              <button
-                type="button"
-                className={`zcam-toggle ${awbOn ? 'zcam-toggle-on' : 'zcam-toggle-off'}`}
-                data-path="zcam.camera.pages.main.whiteBalance.awbToggle"
-                onClick={handleAwbToggle}
-              >
-                <span className="zcam-toggle-knob" />
-              </button>
-              <span className={awbOn ? 'zcam-toggle-label-on' : 'zcam-toggle-label-off'}>
-                {awbOn ? 'ON' : 'OFF'}
-              </span>
-            </div>
-          </div>
+          {/* AWB toggle 控件 */}
+          <ToggleControl config={awbToggleConfig} />
+          {/* 色温 slider 使用 SliderControl */}
           <div
             className="zcam-slider-row"
             data-path="zcam.camera.pages.main.whiteBalance.temperature"
           >
-            <label>色温</label>
-            <input
-              type="range"
-              min={3200}
-              max={6500}
-              value={tempVal}
-              onChange={handleTempChange}
-            />
-            <div className="zcam-slider-meta">
-              <span className="zcam-slider-value">{tempView}</span>
-              <span className="zcam-slider-range">3200K - 6500K</span>
-            </div>
+            <SliderControl config={temperatureConfig} />
           </div>
         </div>
 
@@ -204,52 +183,19 @@ export function ImageControlCard() {
             className="zcam-slider-row"
             data-path="zcam.camera.pages.main.image.brightness"
           >
-            <label>亮度</label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={brightness}
-              onChange={(e) => handleImgSlider('brightness', Number(e.target.value))}
-            />
-            <div className="zcam-slider-meta">
-              <span className="zcam-slider-value">{brightness}</span>
-              <span className="zcam-slider-range">0 - 100</span>
-            </div>
+            <SliderControl config={brightnessConfig} />
           </div>
           <div
             className="zcam-slider-row"
             data-path="zcam.camera.pages.main.image.contrast"
           >
-            <label>对比度</label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={contrast}
-              onChange={(e) => handleImgSlider('contrast', Number(e.target.value))}
-            />
-            <div className="zcam-slider-meta">
-              <span className="zcam-slider-value">{contrast}</span>
-              <span className="zcam-slider-range">0 - 100</span>
-            </div>
+            <SliderControl config={contrastConfig} />
           </div>
           <div
             className="zcam-slider-row"
             data-path="zcam.camera.pages.main.image.saturation"
           >
-            <label>饱和度</label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={saturation}
-              onChange={(e) => handleImgSlider('saturation', Number(e.target.value))}
-            />
-            <div className="zcam-slider-meta">
-              <span className="zcam-slider-value">{saturation}</span>
-              <span className="zcam-slider-range">0 - 100</span>
-            </div>
+            <SliderControl config={saturationConfig} />
           </div>
         </div>
       </div>

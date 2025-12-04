@@ -5,7 +5,7 @@ import type { ViewState } from '../state/PageStore.js';
 
 export type SliderSize = 'small' | 'medium' | 'large';
 
-export type ControlType = 'slider'; // 后续扩展: 'toggle' | 'button' | 'grid' 等
+export type ControlType = 'slider' | 'toggle';
 
 // 所有控件配置的基类: 公共的路径/种类/标签/操作描述
 export interface BaseControlConfig {
@@ -29,4 +29,10 @@ export interface SliderControlConfig extends BaseControlConfig {
   formatValue?(v: number): string;
 }
 
-export type ControlConfig = SliderControlConfig; // union 的起点
+export interface ToggleControlConfig extends BaseControlConfig {
+  type: 'toggle';
+  /** 从 ViewState 中读出当前开关状态 */
+  readValue(view: ViewState): boolean;
+}
+
+export type ControlConfig = SliderControlConfig | ToggleControlConfig;
