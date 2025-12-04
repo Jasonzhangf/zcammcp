@@ -142,10 +142,10 @@ export function PtzCard() {
             data-path="zcam.camera.pages.main.ptz.dpad"
           >
             <button className="zcam-ptz-btn" data-path="zcam.camera.pages.main.ptz.moveUp">
-              ↑
+              ↖
             </button>
             <button className="zcam-ptz-btn" data-path="zcam.camera.pages.main.ptz.moveUpCenter">
-              ↟
+              ↑
             </button>
             <button className="zcam-ptz-btn" data-path="zcam.camera.pages.main.ptz.moveUpRight">
               ↗
