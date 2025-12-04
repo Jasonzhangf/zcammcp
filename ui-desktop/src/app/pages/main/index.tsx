@@ -7,6 +7,8 @@ import { ImageControlCard } from './imageControl/ImageControlCard.js';
 import { ShortcutsCard } from './shortcuts/ShortcutsCard.js';
 import { PageShell } from '../../components/PageShell.js';
 import type { PageShellConfig } from '../../framework/ui/PageShellConfig.js';
+import { CardHost } from '../../components/CardHost.js';
+import type { CardConfig } from '../../framework/ui/CardConfig.js';
 
 import '../../../styles/main.css';
 
@@ -18,6 +20,18 @@ const mainPageShellConfig: PageShellConfig = {
     peek: 32,
     transitionMs: 160,
   },
+};
+
+const ptzCardConfig: CardConfig = {
+  id: 'ptz.main',
+  aspectRatio: 4 / 3,
+  baseWidth: 320,
+};
+
+const imageCardConfig: CardConfig = {
+  id: 'image.control.main',
+  aspectRatio: 4 / 3,
+  baseWidth: 320,
 };
 
 export function MainPage() {
@@ -83,8 +97,12 @@ export function MainPage() {
           data-path="zcam.camera.pages.main.controls"
         >
           <div className="zcam-controls-grid">
-            <PtzCard />
-            <ImageControlCard />
+            <CardHost config={ptzCardConfig} size="L">
+              <PtzCard />
+            </CardHost>
+            <CardHost config={imageCardConfig} size="L">
+              <ImageControlCard />
+            </CardHost>
           </div>
         </section>
 

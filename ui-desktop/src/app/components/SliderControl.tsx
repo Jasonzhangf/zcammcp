@@ -36,7 +36,7 @@ export const SliderControl: React.FC<SliderControlProps> = ({ config, disabled =
     onValueChange?.(v);
   };
 
-  const handleMouseDown = () => {
+  const handleActivate = () => {
     if (disabled) return;
     store.setActiveNode(nodePath);
     store.setHighlight(nodePath, 'active');
@@ -76,10 +76,16 @@ export const SliderControl: React.FC<SliderControlProps> = ({ config, disabled =
     <div
       className={
         `zcam-ptz-slider-wrap ${sizeClass} ${orientationClass} ${disabledClass}` +
-        (highlight === 'hover' ? 'zcam-control-hover ' : '') +
-        (isActive ? 'zcam-control-active' : '')
+        (highlight === 'hover' ? ' zcam-control-hover' : '') +
+        (isActive ? ' zcam-control-active' : '')
       }
       data-path={nodePath}
+      onMouseDown={(e) => {
+        // 点击 slider 控件区域任意位置, 视为获得焦点
+        handleActivate();
+        // 阻止冒泡到 PageShell, 避免被当作点击空白而清除 active
+        e.stopPropagation();
+      }}
       onMouseEnter={() => {
         if (disabled) return;
         store.setHighlight(nodePath, 'hover');
@@ -101,7 +107,11 @@ export const SliderControl: React.FC<SliderControlProps> = ({ config, disabled =
         step={valueRange.step ?? 1}
         value={value}
         onChange={handleChange}
-        onMouseDown={handleMouseDown}
+        onMouseDown={(e) => {
+          // 保持现有行为: 在轨道上点击也会设为 active
+          handleActivate();
+          e.stopPropagation();
+        }}
         disabled={disabled}
       />
       <span className="zcam-ptz-slider-value">{display}</span>
