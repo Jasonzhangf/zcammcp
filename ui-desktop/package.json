@@ -3,9 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist/electron.main.js",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p .",
+    "build:web": "vite build",
+    "build:electron": "tsc electron.main.ts electron.preload.ts --outDir dist --module commonjs --target es2020",
+    "electron": "electron dist/electron.main.js",
+    "package": "npm run build && npm run build:web && npm run build:electron && electron-builder",
     "test": "node --test dist/app/**/*.test.js",
     "test:ts": "ts-node --test src/app/**/*.test.ts",
     "ci": "npm run build && npm test",
@@ -16,9 +21,27 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "typescript": "^5.5.3",
     "vite": "^7.2.6"
+  },
+  "build": {
+    "appId": "com.zcam.ui-desktop",
+    "productName": "ZCAM 相机控制",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "dist-web/**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities"
+    }
   }
 }

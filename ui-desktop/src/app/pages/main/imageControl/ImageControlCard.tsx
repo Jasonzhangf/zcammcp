@@ -1,9 +1,11 @@
 // ImageControlCard.tsx
 // 路径: zcam.camera.pages.main.imageControl
 
-import React, { useState } from 'react';
+import React from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
+import { ShutterSelect } from '../../../controls/image/ShutterSelect/ShutterSelect.js';
+import { IsoSelect } from '../../../controls/image/IsoSelect/IsoSelect.js';
 
 export const imageControlCardNode: ContainerNode = {
   path: 'zcam.camera.pages.main.imageControl',
@@ -21,11 +23,18 @@ export function ImageControlCard() {
   const wb = view.camera.whiteBalance ?? {};
   const img = view.camera.image ?? {};
 
-  const [showShutterGrid, setShowShutterGrid] = useState(true); // 预览阶段默认展开
-  const [showIsoGrid, setShowIsoGrid] = useState(true);
+  const aeOn = !!exposure.aeEnabled;
+  const awbOn = !!wb.awbEnabled;
+
+  const tempVal = wb.temperature?.value ?? 5600;
+  const tempView = wb.temperature?.view ?? `${tempVal}K`;
+
+  const brightness = img.brightness ?? 50;
+  const contrast = img.contrast ?? 50;
+  const saturation = img.saturation ?? 50;
 
   const handleAeToggle = async () => {
-    const next = !exposure.aeEnabled;
+    const next = !aeOn;
     await store.runOperation(
       'zcam.camera.pages.main.exposure.aeMode',
       'exposure.ae',
@@ -34,28 +43,8 @@ export function ImageControlCard() {
     );
   };
 
-  const handleShutterSelect = async (value: number) => {
-    await store.runOperation(
-      'zcam.camera.pages.main.exposure.shutter',
-      'exposure.shutter',
-      'exposure.setShutter',
-      { value },
-    );
-    setShowShutterGrid(false);
-  };
-
-  const handleIsoSelect = async (value: number) => {
-    await store.runOperation(
-      'zcam.camera.pages.main.exposure.iso',
-      'exposure.iso',
-      'exposure.setIso',
-      { value },
-    );
-    setShowIsoGrid(false);
-  };
-
   const handleAwbToggle = async () => {
-    const next = !wb.awbEnabled;
+    const next = !awbOn;
     await store.runOperation(
       'zcam.camera.pages.main.whiteBalance.awbMode',
       'whiteBalance.awb',
@@ -89,18 +78,6 @@ export function ImageControlCard() {
       { value: v },
     );
   };
-
-  const aeOn = !!exposure.aeEnabled;
-  const awbOn = !!wb.awbEnabled;
-
-  const shutterView = exposure.shutter?.view ?? '1/60';
-  const isoView = exposure.iso?.view ?? '800';
-  const tempVal = wb.temperature?.value ?? 5600;
-  const tempView = wb.temperature?.view ?? `${tempVal}K`;
-
-  const brightness = img.brightness ?? 50;
-  const contrast = img.contrast ?? 50;
-  const saturation = img.saturation ?? 50;
 
   return (
     <div
@@ -148,61 +125,17 @@ export function ImageControlCard() {
               </span>
             </div>
           </div>
+          {/* 快门 + ISO 同行控件，使用独立 ShutterSelect / IsoSelect */}
           <div
-            className="zcam-field-row"
-            data-path="zcam.camera.pages.main.exposure.shutter"
+            className="zcam-field-row zcam-field-row-dual"
+            data-path="zcam.camera.pages.main.exposure.shutterIso"
           >
-            <label>快门</label>
-            <button
-              type="button"
-              className="zcam-grid-trigger"
-              onClick={() => setShowShutterGrid(true)}
-            >
-              {shutterView}
-            </button>
-            <span className="zcam-field-range">1/30 - 1/500</span>
-          </div>
-          {showShutterGrid && (
-            <div className="zcam-option-grid">
-              {[30, 40, 50, 60, 80, 100, 120, 160, 200, 250, 320, 500].map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => handleShutterSelect(v)}
-                >
-                  1/{v}
-                </button>
-              ))}
+            <label>快门 / ISO</label>
+            <div className="zcam-field-dual-buttons">
+              <ShutterSelect />
+              <IsoSelect />
             </div>
-          )}
-
-          <div
-            className="zcam-field-row"
-            data-path="zcam.camera.pages.main.exposure.iso"
-          >
-            <label>ISO</label>
-            <button
-              type="button"
-              className="zcam-grid-trigger"
-              onClick={() => setShowIsoGrid(true)}
-            >
-              {isoView}
-            </button>
-            <span className="zcam-field-range">100 - 3200</span>
           </div>
-          {showIsoGrid && (
-            <div className="zcam-option-grid">
-              {[100, 200, 400, 800, 1600, 3200, 6400, 12800].map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => handleIsoSelect(v)}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* 白平衡子区 */}
@@ -323,4 +256,3 @@ export function ImageControlCard() {
     </div>
   );
 }
-
