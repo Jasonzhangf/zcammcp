@@ -3,12 +3,16 @@
 
 export type CardSizePreset = 'S' | 'M' | 'L' | 'ball';
 
+export type PageLayoutMode = 'full' | 'medium' | 'compact' | 'ball';
+
 export interface CardConfig {
   id: string;              // 例如 'ptz.main', 'image.main'
   aspectRatio: number;     // 宽 / 高, 例如 3/2, 16/9
   baseWidth: number;       // 设计基准宽度, 例如 320
   minScale?: number;       // 可选: 最小缩放倍数
   maxScale?: number;       // 可选: 最大缩放倍数
+  // 各布局模式下使用的尺寸预设, 未指定时由页面决定
+  sizeByMode?: Partial<Record<PageLayoutMode, CardSizePreset>>;
 }
 
 export interface CardInstanceConfig {
@@ -16,8 +20,6 @@ export interface CardInstanceConfig {
   size: CardSizePreset;
   order: number;
 }
-
-export type PageLayoutMode = 'full' | 'medium' | 'compact' | 'ball';
 
 export interface PageLayoutConfig {
   mode: PageLayoutMode;

@@ -31,6 +31,7 @@ export const PageShell: React.FC<PageShellProps> = ({ config, children }) => {
     }
   };
 
+
   const dockedStyle: React.CSSProperties = {};
   if (dock?.enabled && isDocked) {
     // 贴边隐藏: 通过 transform 将面板移出屏幕, 留出 peek 宽度

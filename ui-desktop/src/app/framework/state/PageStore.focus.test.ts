@@ -13,6 +13,7 @@ test('PageStore setActiveNode / setHighlight update uiState correctly', () => {
     selectedNodes: [],
     debugMode: 'normal',
     highlightMap: {},
+    layoutMode: 'full',
   };
 
   const store = new PageStore({
@@ -37,4 +38,3 @@ test('PageStore setActiveNode / setHighlight update uiState correctly', () => {
   const v3 = store.getViewState();
   assert.ok(!('zcam.camera.pages.main.ptz.zoom' in v3.ui.highlightMap));
 });
-

@@ -28,6 +28,7 @@ test('PagePersistence.save/load roundtrip', async () => {
     highlightMap: {
       'zcam.camera.pages.main.ptz': 'active',
     },
+    layoutMode: 'full',
   };
 
   const pagePath = 'zcam.camera.pages.main';
@@ -40,4 +41,3 @@ test('PagePersistence.save/load roundtrip', async () => {
   assert.deepEqual(loaded?.cameraState, cameraState);
   assert.deepEqual(loaded?.uiState, uiState);
 });
-

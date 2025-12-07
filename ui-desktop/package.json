@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/electron.main.cjs",
+  "main": "dist/electron.main.mjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p .",
     "build:web": "vite build",
-    "build:electron": "tsc electron.main.ts electron.preload.ts --outDir dist --module commonjs --target es2020 && node ./scripts/rename-electron-to-cjs.cjs",
-    "electron": "electron dist/electron.main.cjs",
+    "build:electron": "tsc electron.main.mts electron.preload.cts electron.dev-socket.mts --outDir dist --module nodenext --target es2020",
+    "electron": "electron dist/electron.main.mjs",
     "package": "npm run build && npm run build:web && npm run build:electron && electron-builder",
     "test": "node --test dist/app/**/*.test.js",
     "test:ts": "ts-node --test src/app/**/*.test.ts",
@@ -43,5 +43,8 @@
       "target": "dmg",
       "category": "public.app-category.utilities"
     }
+  },
+  "dependencies": {
+    "electron-window-state": "^5.0.3"
   }
 }

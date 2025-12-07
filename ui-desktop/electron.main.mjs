@@ -1,0 +1,168 @@
+// electron.main.ts - 单实例 + 主窗口 + 独立悬浮球（最小图标）
+import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { startUiDevSocket, emitDevReport } from './electron.dev-socket.mjs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+import windowStateKeeper from 'electron-window-state';
+let mainWindow = null;
+let ballWindow = null;
+// 记录主窗口在缩小为球之前的 bounds, 方便恢复
+let lastNormalBounds = null;
+// 统一的主窗口尺寸
+const INITIAL_WIDTH = 1200;
+const INITIAL_HEIGHT = 720;
+// 单实例锁: 第二次启动时聚焦已有窗口
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+    app.quit();
+}
+function createMainWindow() {
+    const mainWindowState = windowStateKeeper({
+        defaultWidth: INITIAL_WIDTH,
+        defaultHeight: INITIAL_HEIGHT,
+    });
+    mainWindow = new BrowserWindow({
+        x: mainWindowState.x,
+        y: mainWindowState.y,
+        width: mainWindowState.width,
+        height: mainWindowState.height,
+        show: false,
+        frame: false, // 自定义标题栏
+        skipTaskbar: false,
+        transparent: false,
+        resizable: true,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: join(__dirname, 'electron.preload.cjs'),
+        },
+    });
+    mainWindowState.manage(mainWindow);
+    if (process.env.NODE_ENV === 'development') {
+        mainWindow.loadURL('http://localhost:5173');
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+    else {
+        mainWindow.loadFile(join(__dirname, '../dist-web', 'index.html'));
+    }
+    mainWindow.once('ready-to-show', () => {
+        if (!mainWindow)
+            return;
+        mainWindow.show();
+        mainWindow.focus();
+    });
+    mainWindow.on('closed', () => {
+        mainWindow = null;
+    });
+}
+function createBallWindow(atBounds) {
+    const ballSize = 72;
+    const centerX = atBounds.x + atBounds.width / 2;
+    const centerY = atBounds.y + atBounds.height / 2;
+    const display = screen.getDisplayMatching(atBounds);
+    const { workArea } = display;
+    let ballX = Math.round(centerX - ballSize / 2);
+    let ballY = Math.round(centerY - ballSize / 2);
+    // 防止球完全跑出屏幕
+    ballX = Math.max(workArea.x, Math.min(workArea.x + workArea.width - ballSize, ballX));
+    ballY = Math.max(workArea.y, Math.min(workArea.y + workArea.height - ballSize, ballY));
+    ballWindow = new BrowserWindow({
+        x: ballX,
+        y: ballY,
+        width: ballSize,
+        height: ballSize,
+        frame: false,
+        transparent: true,
+        alwaysOnTop: true,
+        resizable: false,
+        skipTaskbar: false,
+        show: false,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: join(__dirname, 'electron.preload.cjs'),
+        },
+    });
+    console.log('[BallWindow] create at', ballX, ballY, 'size', ballSize);
+    // 加载独立的极简 HTML，不再依赖 hash
+    const ballHtmlPath = join(__dirname, '.../assets/ball/ball.html');
+    console.log('[BallWindow] load file', ballHtmlPath);
+    ballWindow.loadFile(ballHtmlPath);
+    ballWindow.once('ready-to-show', () => {
+        if (!ballWindow)
+            return;
+        ballWindow.show();
+    });
+    ballWindow.on('closed', () => {
+        ballWindow = null;
+    });
+}
+// IPC handlers
+ipcMain.handle('window:minimize', () => {
+    if (mainWindow) {
+        mainWindow.minimize();
+    }
+});
+ipcMain.handle('window:close', () => {
+    app.quit();
+});
+// 缩小为悬浮球
+ipcMain.handle('window:shrinkToBall', () => {
+    if (!mainWindow || ballWindow)
+        return;
+    lastNormalBounds = mainWindow.getBounds();
+    console.log('[Window] shrinkToBall -> storing bounds', lastNormalBounds);
+    createBallWindow(lastNormalBounds);
+    mainWindow.hide();
+});
+// 从悬浮球恢复
+ipcMain.handle('window:restoreFromBall', () => {
+    if (!mainWindow)
+        return;
+    if (ballWindow) {
+        ballWindow.close();
+        ballWindow = null;
+    }
+    if (lastNormalBounds) {
+        mainWindow.setBounds(lastNormalBounds);
+    }
+    mainWindow.setAlwaysOnTop(false);
+    mainWindow.setResizable(true);
+    mainWindow.show();
+    mainWindow.focus();
+});
+app.whenReady().then(() => {
+    // 启动 UI Dev Socket（仅在开发模式）
+    if (process.env.NODE_ENV === 'development') {
+        try {
+            startUiDevSocket();
+        }
+        catch (e) {
+            console.error('[UI-DEV] 启动失败', e);
+        }
+    }
+    createMainWindow();
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized())
+                mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+});
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
+});
+app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+        createMainWindow();
+    }
+});
+// Dev channel: 控件观测上报
+ipcMain.on('control:dev-report', (_event, report) => {
+    console.log('[DevReport]', report);
+    emitDevReport(report);
+});

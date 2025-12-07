@@ -14,3 +14,4 @@ function safeRename(from, to) {
 
 safeRename(path.join(distDir, 'electron.main.js'), path.join(distDir, 'electron.main.cjs'));
 safeRename(path.join(distDir, 'electron.preload.js'), path.join(distDir, 'electron.preload.cjs'));
+safeRename(path.join(distDir, 'electron.dev-socket.js'), path.join(distDir, 'electron.dev-socket.cjs'));

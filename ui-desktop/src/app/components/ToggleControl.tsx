@@ -1,9 +1,8 @@
-// ToggleControl.tsx
-// 通用 toggle 控件, 由 ToggleControlConfig 配置驱动
-
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { ToggleControlConfig } from '../framework/ui/ControlConfig.js';
 import { usePageStore, useViewState } from '../hooks/usePageStore.js';
+import { ToggleControlBase } from '../framework/ui/controls/ToggleControl.js';
+import { DevChannelImpl } from '../framework/ui/DevChannelImpl.js';
 
 interface ToggleControlProps {
   config: ToggleControlConfig;
@@ -12,30 +11,24 @@ interface ToggleControlProps {
 export const ToggleControl: React.FC<ToggleControlProps> = ({ config }) => {
   const store = usePageStore();
   const view = useViewState();
-  const { nodePath, kind, label, operationId, readValue } = config;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const controlRef = useRef<ToggleControlBase | null>(null);
 
-  const value = readValue(view);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const dev = new DevChannelImpl();
+    const control = new ToggleControlBase(config, store, view, dev);
+    controlRef.current = control;
+    control.mountTo(containerRef.current);
+    return () => {
+      control.destroy();
+      controlRef.current = null;
+    };
+  }, [config, store, view]);
 
-  const handleToggle = async () => {
-    const next = !value;
-    await store.runOperation(nodePath, kind, operationId, { value: next });
-  };
+  useEffect(() => {
+    controlRef.current?.callUpdate();
+  }, [view]);
 
-  return (
-    <div className="zcam-field-row" data-path={nodePath}>
-      <label>{label}</label>
-      <div className="zcam-toggle-group">
-        <button
-          type="button"
-          className={`zcam-toggle ${value ? 'zcam-toggle-on' : 'zcam-toggle-off'}`}
-          onClick={handleToggle}
-        >
-          <span className="zcam-toggle-knob" />
-        </button>
-        <span className={value ? 'zcam-toggle-label-on' : 'zcam-toggle-label-off'}>
-          {value ? 'ON' : 'OFF'}
-        </span>
-      </div>
-    </div>
-  );
+  return <div ref={containerRef} />;
 };

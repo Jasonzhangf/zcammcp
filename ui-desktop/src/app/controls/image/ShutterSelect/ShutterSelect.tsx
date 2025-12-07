@@ -1,10 +1,11 @@
 // ShutterSelect.tsx
-// 独立快门选择控件模块: 使用 CoreModal + PageStore, 不依赖其他控件
+// 独立快门选择控件模块: 使用 CoreModal + PageStore + BaseControl
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
-import { CoreModal } from '../../../framework/ui/CoreModal.js';
 import { defaultShutterSelectConfig, type ShutterSelectConfig } from './config.js';
+import { DevChannelImpl } from '../../../framework/ui/DevChannelImpl.js';
+import { ModalSelectControlBase } from '../../../framework/ui/controls/ModalSelectControl.js';
 
 export interface ShutterSelectProps {
   config?: ShutterSelectConfig;
@@ -14,49 +15,34 @@ export const ShutterSelect: React.FC<ShutterSelectProps> = ({ config }) => {
   const cfg = config ?? defaultShutterSelectConfig;
   const store = usePageStore();
   const view = useViewState();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const controlRef = useRef<ModalSelectControlBase | null>(null);
 
-  const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const dev = new DevChannelImpl();
+    const modalProps = {
+      type: 'modal' as const,
+      nodePath: cfg.nodePath,
+      kind: cfg.kind,
+      operationId: cfg.operationId,
+      title: cfg.title,
+      options: cfg.options,
+      readValue: cfg.readValue,
+      formatValue: cfg.formatValue,
+    };
+    const control = new ModalSelectControlBase(modalProps, store, view, dev);
+    controlRef.current = control;
+    control.mountTo(containerRef.current);
+    return () => {
+      control.destroy();
+      controlRef.current = null;
+    };
+  }, [cfg, store, view]);
 
-  const currentValue = cfg.readValue(view);
-  const display = cfg.formatValue?.(view, currentValue) ?? '';
+  useEffect(() => {
+    controlRef.current?.callUpdate();
+  }, [view]);
 
-  const handleSelect = async (value: number) => {
-    await store.runOperation(cfg.nodePath, cfg.kind, cfg.operationId, { value });
-    setOpen(false);
-  };
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        className="zcam-grid-trigger"
-        data-path={cfg.nodePath}
-        onClick={() => setOpen(true)}
-      >
-        {display}
-      </button>
-
-      <CoreModal
-        open={open}
-        title={cfg.title}
-        anchorRef={btnRef as React.RefObject<HTMLElement>}
-        onClose={() => setOpen(false)}
-      >
-        <div className="zcam-option-grid">
-          {cfg.options.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              className={opt.value === currentValue ? 'zcam-chip-active' : ''}
-              onClick={() => handleSelect(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      </CoreModal>
-    </>
-  );
+  return <div ref={containerRef} />;
 };

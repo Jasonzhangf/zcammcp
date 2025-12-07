@@ -24,6 +24,7 @@ test('SnapshotPersistence save/list/load', async () => {
     selectedNodes: [],
     debugMode: 'normal',
     highlightMap: {},
+    layoutMode: 'full',
   };
 
   const pagePath = 'zcam.camera.pages.main';
@@ -37,4 +38,3 @@ test('SnapshotPersistence save/list/load', async () => {
   assert.deepEqual(loaded?.cameraState, cameraState);
   assert.deepEqual(loaded?.uiState, uiState);
 });
-

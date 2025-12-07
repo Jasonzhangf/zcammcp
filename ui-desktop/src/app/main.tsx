@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import { MainPage } from './pages/main/index.js';
+import { BallPage } from './pages/ball/index.js';
 import { OperationRegistry } from './framework/operations/OperationRegistry.js';
 import { MockCliChannel } from './framework/transport/CliChannel.js';
 import { PageStore, type CameraState } from './framework/state/PageStore.js';
@@ -57,12 +58,15 @@ const store = createPageStore();
 const rootEl = document.getElementById('root');
 if (rootEl) {
   const root = ReactDOM.createRoot(rootEl);
+
+  const hash = window.location.hash || '';
+  const isBall = hash.includes('ball');
+
   root.render(
     <React.StrictMode>
       <PageStoreContext.Provider value={store}>
-        <MainPage />
+        {isBall ? <BallPage /> : <MainPage />}
       </PageStoreContext.Provider>
     </React.StrictMode>,
   );
 }
-

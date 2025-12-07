@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+    <title>ZCAM Ball</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #151515;
+      }
+      #ball-root {
+        width: 100%;
+        height: 100%;
+      }
+      .ball-container {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+      }
+      .ball-box {
+        width: 80px;
+        height: 80px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #202020, #262626);
+        border: 1px solid #555;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+      }
+      .ball-box img {
+        width: 64px;
+        height: 64px;
+      }
+    </style>
+    <script>
+      window.addEventListener('DOMContentLoaded', () => {
+        const img = document.querySelector('.ball-box img');
+        img?.addEventListener('click', () => {
+          window.electronAPI?.restoreFromBall?.();
+        });
+
+        // 订阅 Dev 命令中的 ball.doubleClick，用于自动测试
+        window.electronAPI?.onDevCommand?.((cmd) => {
+          if (cmd && (cmd.cmd === 'ui.ball.doubleClick' || cmd.cmd === 'ui.window.restoreFromBall')) {
+            window.electronAPI?.restoreFromBall?.();
+          }
+        });
+      });
+    </script>
+  </head>
+  <body>
+    <div id="ball-root" class="ball-container">
+      <div class="ball-box" style="cursor: pointer;">
+        <img src="../logo.png" alt="Logo" draggable="false" />
+      </div>
+    </div>
+  </body>
+</html>

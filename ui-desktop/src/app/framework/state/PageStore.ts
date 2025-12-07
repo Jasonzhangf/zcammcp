@@ -30,11 +30,14 @@ export interface CameraState {
   };
 }
 
+export type LayoutMode = 'full' | 'medium' | 'compact' | 'ball';
+
 export interface UiState {
   selectedNodes: string[];
   debugMode: 'normal' | 'debug';
   highlightMap: Record<string, 'none' | 'hover' | 'active' | 'error' | 'replay'>;
   activeNodePath?: string;
+  layoutMode: LayoutMode; // 窗口 / 页面布局模式: 模式1~4
 }
 
 export interface ViewState {
@@ -120,6 +123,7 @@ export class PageStore {
         selectedNodes: [],
         debugMode: 'normal',
         highlightMap: {},
+        layoutMode: 'full',
       } as UiState);
     this.operations = opts.operations;
     this.cli = opts.cli;
@@ -168,6 +172,16 @@ export class PageStore {
     this.uiState = {
       ...this.uiState,
       highlightMap: next,
+    };
+    this.notify();
+  }
+
+  /** 切换布局模式: full / medium / compact / ball */
+  setLayoutMode(mode: LayoutMode): void {
+    if (this.uiState.layoutMode === mode) return;
+    this.uiState = {
+      ...this.uiState,
+      layoutMode: mode,
     };
     this.notify();
   }
