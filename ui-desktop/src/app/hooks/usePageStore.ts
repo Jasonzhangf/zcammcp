@@ -1,27 +1,27 @@
-import { useContext, useEffect, useState } from 'react';
-import type { ViewState } from '../framework/state/PageStore.js';
-import { PageStoreContext } from '../main.js';
+import { useContext, useSyncExternalStore } from 'react';
 
-// 访问 PageStore 实例
-export function usePageStore() {
+import { PageStoreContext } from '../app/contexts.js';
+import type { PageStore, ViewState } from '../framework/state/PageStore.js';
+
+export function usePageStore(): PageStore {
   const store = useContext(PageStoreContext);
+
   if (!store) {
     throw new Error('PageStoreContext not provided');
   }
+
   return store;
 }
 
-// 简单的只读视图 hook
+// useViewState exposes the read-only view state from PageStore
+// and subscribes to store updates via PageStore.subscribe.
+// This keeps existing components working while we refactor
+// layout and scene logic around the store.
 export function useViewState(): ViewState {
   const store = usePageStore();
-  const [view, setView] = useState<ViewState>(() => store.getViewState());
 
-  useEffect(() => {
-    const unsubscribe = store.subscribe(() => {
-      setView(store.getViewState());
-    });
-    return unsubscribe;
-  }, [store]);
+  const subscribe = (onStoreChange: () => void) => store.subscribe(onStoreChange);
+  const getSnapshot = () => store.getViewState();
 
-  return view;
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/electron.main.mjs",
+  "main": "electron.main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p .",
     "build:web": "vite build",
-    "build:electron": "tsc electron.main.mts electron.preload.cts electron.dev-socket.mts --outDir dist --module nodenext --target es2020",
-    "electron": "electron dist/electron.main.mjs",
+    "build:electron": "echo 'skip electron build (using plain CJS files)'",
+    "electron": "npx electron electron.main.cjs",
     "package": "npm run build && npm run build:web && npm run build:electron && electron-builder",
     "test": "node --test dist/app/**/*.test.js",
-    "test:ts": "ts-node --test src/app/**/*.test.ts",
+    "test:ts": "ts-node src/app/**/*.test.ts",
     "ci": "npm run build && npm test",
     "lint": "echo 'TODO: lint'"
   },
@@ -25,6 +25,7 @@
     "electron-builder": "^25.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.5.3",
     "vite": "^7.2.6"
   },

@@ -19,119 +19,17 @@
     </div>
   </div>
   <script>
-    (() => {
-      // 验证 preload 注入
+    // 仅负责双击恢复，不做 Dev 上报，保持实现简单
+    (function () {
       if (!window.electronAPI) {
-        console.error('[BallClient] electronAPI not found');
-        window.electronAPI = { devReport: () => {}, onDevCommand: () => (() => {}) };
-      } else {
-        console.log('[BallClient] electronAPI OK');
+        console.error('[Ball] electronAPI not injected');
+        return;
       }
-
-      // 实现 DevChannelImpl 就地
-      class DevChannelImpl {
-        constructor() {
-          this.listeners = new Set();
-          const unsub = window.electronAPI.onDevCommand((cmd) => {
-            this.listeners.forEach(cb => cb(cmd));
-          });
-          this.unsub = unsub;
-        }
-        report(report) {
-          window.electronAPI.devReport(report);
-        }
-        onCommand(cb) {
-          this.listeners.add(cb);
-          return () => {
-            this.listeners.delete(cb);
-            if (this.listeners.size === 0) {
-              this.unsub?.();
-              this.unsub = undefined;
-            }
-          };
-        }
-      }
-
-      // 实现 BallClient 就地
-      class BallClient {
-        constructor() {
-          this.dev = new DevChannelImpl();
-          this.root = null;
-          this.unsub = null;
-        }
-        mount(root) {
-          this.root = root;
-          this.report('mounted');
-          root.addEventListener('click', () => this.report('interaction', { event: 'click' }));
-          this.unsub = this.dev.onCommand((cmd) => {
-            if (cmd.cmd === 'ping') this.report('interaction', { event: 'pong' });
-            if (cmd.cmd === 'measure') this.reportMeasure();
-            if (cmd.cmd === 'highlight') this.highlight();
-          });
-        }
-        unmount() {
-          this.report('unmounted');
-          this.unsub?.();
-          this.root = null;
-        }
-        reportMeasure() {
-          if (!this.root) return;
-          const rect = this.root.getBoundingClientRect();
-          const scrollInfo = {
-            hasHorizontalScrollbar: this.root.scrollWidth > this.root.clientWidth,
-            hasVerticalScrollbar: this.root.scrollHeight > this.root.clientHeight,
-            scrollWidth: this.root.scrollWidth,
-            scrollHeight: this.root.scrollHeight,
-            clientWidth: this.root.clientWidth,
-            clientHeight: this.root.clientHeight,
-          };
-          this.dev.report({
-            type: 'updated',
-            controlId: 'ball',
-            ts: Date.now(),
-            rect,
-            scrollInfo,
-          });
-        }
-        highlight() {
-          if (!this.root) return;
-          this.root.style.outline = '2px dashed red';
-          setTimeout(() => {
-            if (this.root) this.root.style.outline = '';
-          }, 2000);
-        }
-        report(type, extra) {
-          if (!this.root) return;
-          const payload = {
-            type,
-            controlId: 'ball',
-            ts: Date.now(),
-            ...extra,
-          };
-          if (type === 'mounted' || type === 'updated') {
-            payload.rect = this.root.getBoundingClientRect();
-            payload.scrollInfo = {
-              hasHorizontalScrollbar: this.root.scrollWidth > this.root.clientWidth,
-              hasVerticalScrollbar: this.root.scrollHeight > this.root.clientHeight,
-              scrollWidth: this.root.scrollWidth,
-              scrollHeight: this.root.scrollHeight,
-              clientWidth: this.root.clientWidth,
-              clientHeight: this.root.clientHeight,
-            };
-          }
-          this.dev.report(payload);
-        }
-      }
-
-      // 挂载 BallClient
-      const rootEl = document.getElementById('ball-root');
-      if (rootEl) {
-        const client = new BallClient();
-        client.mount(rootEl);
-        console.log('[BallClient] mounted and reported');
-      } else {
-        console.error('[BallClient] ball-root not found');
-      }
+      var box = document.querySelector('.ball-box');
+      if (!box) return;
+      box.addEventListener('dblclick', function () {
+        window.electronAPI.restoreFromBall && window.electronAPI.restoreFromBall();
+      });
     })();
   </script>
 </body>

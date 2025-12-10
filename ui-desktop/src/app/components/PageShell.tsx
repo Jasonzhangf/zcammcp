@@ -1,74 +1,33 @@
-// PageShell.tsx
-// 页面级外壳: 处理浮窗 / 贴边隐藏 / hover 展开等行为
-
 import React from 'react';
-import type { PageShellConfig } from '../framework/ui/PageShellConfig.js';
-import { usePageStore } from '../hooks/usePageStore.js';
 
-interface PageShellProps {
-  config: PageShellConfig;
-  children: React.ReactNode;
-}
+import { WindowControls } from './WindowControls.js';
+import type { SceneConfig } from '../framework/ui/LayoutConfig.js';
 
-export const PageShell: React.FC<PageShellProps> = ({ config, children }) => {
-  const { dock } = config;
-  const store = usePageStore();
-  const [isDocked, setIsDocked] = React.useState<boolean>(!!dock?.enabled);
-
-  const side = dock?.side ?? 'right';
-  const peek = dock?.peek ?? 32;
-  const transitionMs = dock?.transitionMs ?? 160;
-
-  const handleDockToggle = () => {
-    if (!dock?.enabled) return;
-    setIsDocked((prev) => !prev);
-  };
-
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // 仅在点击根容器空白区域时清除 active
-    if (e.target === e.currentTarget) {
-      store.clearActiveNode();
-    }
-  };
-
-
-  const dockedStyle: React.CSSProperties = {};
-  if (dock?.enabled && isDocked) {
-    // 贴边隐藏: 通过 transform 将面板移出屏幕, 留出 peek 宽度
-    const baseWidth = 640; // 与 main.css 中 #zcam-camera-root 默认宽度一致
-    const offset = peek - baseWidth;
-    dockedStyle.transform = side === 'right'
-      ? `translateX(${offset}px)`
-      : `translateX(${baseWidth - peek}px)`;
-  }
-
-  // hover 展开: 悬停时取消 transform
-  const finalStyle: React.CSSProperties = {
-    transition: `transform ${transitionMs}ms ease-out`,
-    ...(dock?.enabled && isDocked ? dockedStyle : {}),
-  };
-
+export function PageShell({ scene }: { scene: SceneConfig }) {
   return (
-    <div
-      id="zcam-camera-root"
-      data-path={config.pagePath}
-      className="zcam-panel"
-      style={finalStyle}
-      onMouseDown={handleBackdropClick}
-    >
-      {children}
+    <div className="zcam-root-scale page-shell" data-path="ui.window.shell">
+      {/* Header with WindowControls */}
+      <div className="zcam-header" data-path="ui.window.header">
+        <div className="zcam-header-left">
+          <div className="zcam-badge">Z</div>
+          <div className="zcam-title">ZCAM 相机控制</div>
+        </div>
+        <div className="zcam-header-right">
+          <WindowControls />
+        </div>
+      </div>
 
-      {dock?.enabled && (
-        <button
-          type="button"
-          className="zcam-header-btn"
-          style={{ position: 'absolute', top: 4, [side === 'right' ? 'left' : 'right']: 4 } as React.CSSProperties}
-          title={isDocked ? '取消贴边' : '贴边隐藏'}
-          onClick={handleDockToggle}
-        >
-          ⇔
-        </button>
-      )}
+      {/* Controls rendered in order defined by scene configuration */}
+      <div className="zcam-main" data-path="ui.window.body">
+        {scene.slots.map((slot) => {
+          const { id, component: Component, props = {} } = slot;
+          return (
+            <div key={id} className="control-slot" data-path={`ui.controls.${id}`}>
+              <Component {...props} />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
-};
+}

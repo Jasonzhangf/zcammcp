@@ -1,110 +1,114 @@
-# UI Desktop 自动测试规则（消息驱动）
+# UI Desktop TEST-RULES — CLI / 消息 / UI 测试规则
 
-## 一、测试目标
+> 最近更新：2025-12-08
 
-验证“主窗口 → 缩小成球 → 双击球 → 恢复主窗口”这一完整链路：
-- 所有动作由**消息驱动**（无人工点击）。
-- 全程通过**DevReport 消息流**感知状态变化。
-- 每一步都有**超时与规则检查**，失败即中断并给出原因。
+本文件定义 UI Desktop 在新架构下的测试策略与规则：
 
-## 二、测试命令
+- **单元测试（unit）**：优先通过 CLI 与纯逻辑模块验证，避免依赖 UI。
+- **系统测试（system）**：通过“消息 → CLI → IPC → Electron → UI”的链路驱动回环测试。
+- **UI 自测（monkey）**：在 Electron 下通过消息/CLI 随机/策略触发 UI 操作，验证稳定性。
 
-```bash
-zcam ui dev cycle [--timeout <ms>] [--loop <n>]
-```
+## 1. 单元测试层（Unit）
 
-- `--timeout`：单阶段最大等待时间（默认 5000 ms）。
-- `--loop`：连续跑 N 轮（默认 1），用于压测。
+### 1.1 状态与消息
 
-## 三、测试阶段与规则
+- `UiSceneStore`：
+  - 应在 Node 环境中测试其构造与状态保持：
+    - 初始 `windowMode` / `layoutSize` 与构造入参一致；
+    - 后续扩展的状态机方法（如有）应在此层测试。
 
-### 阶段 1：缩小为球（Shrink）
+- `WindowCommand` / `applyWindowCommand`：
+  - 针对三种命令进行测试：
+    - `shrinkToBall`：`windowMode` 由 `'main'` 变为 `'ball'`；
+    - `restoreFromBall`：`windowMode` 由 `'ball'` 变为 `'main'`；
+    - `toggleSize`：按 `normal → compact → large → normal` 循环；
+  - 测试中不依赖 React/Electron，只验证 state 变更逻辑。
 
-1. 发消息：`{ target: 'broadcast', cmd: 'ui.window.shrinkToBall' }`
-2. 等待 DevReport：
-   - `controlId === 'ball'` 且 `type === 'mounted'`。
-3. **规则 A（滚动条）**：
-   - 必须 `scrollInfo.hasHorizontalScrollbar === false` 且 `hasVerticalScrollbar === false`。
-   - 若任一为 true → **FAIL**（提示“球窗口出现滚动条”）。
-4. **规则 B（超时）**：
-   - 若 5 秒内未收到 `ball.mounted` → **FAIL**（提示“等待 ball 挂载超时”）。
+### 1.2 Electron IPC
 
-### 阶段 2：模拟双击球恢复（Double-Click）
+- 主进程 `electron.main.cjs`：
+  - 使用 Node/Electron 测试或脚本，验证以下 IPC 行为：
+    - `window:shrinkToBall`：调用后主窗口隐藏、ball 窗口出现，且记录的 `lastNormalBounds` 与调用前一致；
+    - `window:restoreFromBall`：关闭 ball 窗口并恢复主窗口 bounds；
+    - `window:toggleSize`：在三种预定义尺寸之间循环；
+    - `window:setBounds`：根据传入 x/y/width/height 设置主窗口位置和大小；
+    - `window:sendCommand(cmd)`：正确路由到上述 handler。
 
-1. 发消息：`{ target: 'broadcast', cmd: 'ui.ball.doubleClick' }`
-2. 等待 DevReport：
-   - `controlId === 'ball'` 且 `type === 'unmounted'`。
-3. **规则 C（超时）**：
-   - 若 5 秒内未收到 `ball.unmounted` → **FAIL**（提示“等待 ball 卸载超时”）。
+- preload `electron.preload.cjs`：
+  - 验证 `window.electronAPI` 暴露的方法参数签名与 IPC handler 一致；
+  - 验证在无 Electron 环境下（如 JSDOM）不会因 `window.electronAPI` 未定义导致崩溃（UI 侧需 guard）。
 
-### 阶段 3：恢复后主 UI 可用性（可选扩展）
+### 1.3 CLI 层（后续补充）
 
-1. 发消息：`{ target: 'broadcast', cmd: 'highlight', controlId: 'zcam.camera.pages.main.status' }`
-2. 等待 DevReport：
-   - `controlId === 'zcam.camera.pages.main.status'` 且 `type === 'updated'`（或 `interaction`）。
-3. **规则 D（可用性）**：
-   - 若 3 秒内无响应 → **WARN**（提示“主窗口恢复后关键控件无响应”）。
-   - 本轮仍算 **PASS**，但记录警告。
+> TODO: 当 CLI `ui window` 子命令完成后，补充以下测试规则：
 
-## 四、结果判定与输出
+- `zcam ui window shrink`：应发送 `window:shrinkToBall` 命令，退出码 0，错误时退出码非 0；
+- `zcam ui window restore`：应发送 `window:restoreFromBall` 命令；
+- `zcam ui window toggle-size`：应发送 `window:toggleSize` 命令；
+- `zcam ui window set-bounds --x X --y Y --width W --height H`：应发送对应 `window:setBounds` payload；
+- `zcam ui window cycle --loop N --timeout T`：循环 shrink/restore 行为，任何阶段失败/超时时退出码非 0。
 
-- **PASS**：阶段 1、2 均在超时内完成，且未触发规则 A/B/C；阶段 3 可选通过。
-- **FAIL**：任一阶段超时或规则 A/B/C 触发；CLI 退出码 ≠ 0。
+## 2. 系统测试层（System）
 
-**输出示例（单轮成功）**：
+系统测试通过“消息→CLI→IPC→Electron→UI”的方式执行完整回环，目标是不依赖人工点击 UI，即可验证窗口行为。
 
-```text
-步骤 1: 请求窗口缩小为悬浮球
-步骤 2: 等待 ball 挂载 (DevReport mounted: controlId=ball)...
-[2025-12-07T08:50:12.123Z] ✓ [ball] mounted 用时 34ms rect={x:1120,y:560,w:72,h:72} scroll(h=false,v=false)
-步骤 3: 发送 ball.doubleClick (restoreFromBall) 命令
-步骤 4: 等待 ball 卸载 (DevReport unmounted: controlId=ball)...
-[2025-12-07T08:50:13.456Z] ✓ [ball] unmounted 用时 12ms
-✓ 回环测试完成: shrink -> ball mounted -> restore -> ball unmounted
-```
+### 2.1 基本回环（shrink→ball→restore）
 
-**输出示例（失败）**：
+1. 前置条件：
+   - 启动 Electron 主程序（开发或生产模式均可）。
+   - CLI 可用（`zcam` 可执行）。
 
-```text
-步骤 1: 请求窗口缩小为悬浮球
-步骤 2: 等待 ball 挂载 (DevReport mounted: controlId=ball)...
-[2025-12-07T08:51:00.000Z] ✗ [ball] mounted 滚动条检测失败: hasHorizontalScrollbar=true
-✗ 回环测试失败: 球窗口出现滚动条
-```
+2. 流程：
+   - Step 1：调用 `zcam ui window shrink`：
+     - 预期主窗口隐藏，ball 窗口出现；
+   - Step 2：等待 ball 挂载（可通过 Electron 日志或未来的状态查询接口检查）；
+   - Step 3：调用 `zcam ui window restore`：
+     - 预期 ball 窗口关闭，主窗口恢复到原始 bounds；
+   - Step 4：等待 ball 卸载（同上）。
 
-## 五、压测与统计
+3. 失败条件：
+   - 任意 CLI 调用返回非 0 退出码；
+   - 在指定 timeout 内未观察到 ball 出现/消失。
 
-```bash
-zcam ui dev cycle --loop 100 --timeout 5000
-```
+### 2.2 尺寸循环测试
 
-- 连续跑 100 轮，每轮独立计时。
-- 最终输出：
-  - 总轮次、成功数、失败数、成功率（%）。
-  - 平均耗时（shrink→mounted、doubleClick→unmounted）。
-  - 失败原因分布（滚动条、超时、其他）。
+1. 前置条件同上；
+2. 流程：
+   - 连续调用 `zcam ui window toggle-size` 三次；
+   - 每次调用后通过 Electron 状态（日志或查询 IPC）确认窗口尺寸依次为 `normal` → `compact` → `large` → `normal`；
+3. 失败条件：
+   - 尺寸未按预期切换；
+   - 调用出现错误或 timeout。
 
-## 六、CI 集成建议
+### 2.3 边界设置测试
 
-- 在 GitHub Actions / Jenkins 中增加一步：
-  ```yaml
-  - name: UI Desktop 回环测试
-    run: |
-      cd ui-desktop && npm run build && npm run build:electron
-      NODE_ENV=development npm run electron &
-      sleep 10
-      cd ../cli && npm start -- ui dev cycle --loop 50 --timeout 5000
-  ```
-- 若 exit code ≠ 0 → 标记构建失败。
-- 可将 `--json` 输出保存为 artifact，用于趋势分析。
+1. 调用 `zcam ui window set-bounds --x 100 --y 100 --width 800 --height 600`；
+2. 通过 Electron 状态接口（或调试日志）确认窗口位置和尺寸与参数一致；
+3. 在不同平台/多显示器环境下重复测试，确保逻辑健壮性。
 
-## 七、规则更新流程
+## 3. UI 自测（Monkey）
 
-1. 新增规则 → 在本文档“阶段”与“规则”小节补充说明。
-2. 实现规则 → 在 `cli/src/modules/ui.js` 的 `cycle` 命令里增加对应判断逻辑。
-3. 文档同步 → 更新本文档，并在 PR 描述中引用规则编号（如“规则 A”）。
-4. 回归验证 → 本地跑 `zcam ui dev cycle --loop 10` 确认无 regression。
+UI 自测不通过 CLI 直接控制窗口，而是从 UI 交互路径出发，仍然遵循“消息优先”的思想：
 
----
+1. 启动 Electron + UI；
+2. 编写 monkey 脚本（可以是一个独立 Node 程序或浏览器脚本）执行如下操作：
+   - 随机/按策略点击右上角球按钮（`WindowControls`）；
+   - 随机/按策略点击尺寸按钮；
+   - 在合理的时间间隔内重复上述操作若干轮；
+3. 同时监控：
+   - Electron 进程不崩溃；
+   - 窗口始终可见（或按照预期在主窗/ball 窗口之间切换）；
+   - 不出现异常日志（如未处理异常、IPC 错误）。
 
-> 本文档与 `DEV-PLAN.md`、`FUNCTIONS.md` 一起构成 UI Desktop 的完整测试与功能说明。任何消息协议或规则变更请在此记录。
+> UI monkey 自测的核心目标是发现 UI 层与消息/IPC 层在高频操作下的边界情况，而不是验证具体业务逻辑。
+
+## 4. 进度标记（截至当前）
+
+- [x] 清理 DevChannel / DevSocket 旧实现，移除 BaseControl Dev 报告连接；
+- [x] 引入 UiSceneStore 与 WindowCommand，并完成基础单元测试；
+- [x] 完成场景化布局（MainScene/BallScene + PageShell + LayoutConfig），可运行的最小 UI；
+- [x] Electron 主进程支持 shrink/restore/toggle-size/setBounds 和 sendWindowCommand；
+- [ ] CLI `ui window` 子命令：shrink/restore/toggle-size/set-bounds/cycle；
+- [ ] 消息驱动系统测试脚本：通过 CLI 自动执行窗口回环；
+- [ ] UI monkey 自测脚本：通过消息/CLI 驱动 UI 控件。
+

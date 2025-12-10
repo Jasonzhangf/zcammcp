@@ -1,72 +1,26 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-import { MainPage } from './pages/main/index.js';
-import { BallPage } from './pages/ball/index.js';
-import { OperationRegistry } from './framework/operations/OperationRegistry.js';
-import { MockCliChannel } from './framework/transport/CliChannel.js';
-import { PageStore, type CameraState } from './framework/state/PageStore.js';
-import { ptzOperations } from './app/operations/ptzOperations.js';
-import { exposureOperations } from './app/operations/exposureOperations.js';
-import { whiteBalanceOperations } from './app/operations/whiteBalanceOperations.js';
-import { imageOperations } from './app/operations/imageOperations.js';
+import { PageStoreContext, UiSceneStoreContext } from './app/contexts.js';
+import { createPageStore, createUiSceneStore } from './app/createStores.js';
+import { RootScene } from './app/RootScene.js';
 
-// 简单的 PageStore 上下文, 方便组件访问
-export const PageStoreContext = React.createContext<PageStore | null>(null);
-
-function createPageStore(): PageStore {
-  const ops = new OperationRegistry();
-
-  for (const def of [...ptzOperations, ...exposureOperations, ...whiteBalanceOperations, ...imageOperations]) {
-    ops.register(def);
-  }
-
-  const initialCameraState: CameraState = {
-    ptz: {
-      zoom: { value: 50, view: '50' },
-      speed: { value: 50, view: '50' },
-      focus: { value: 40, view: '40' },
-    },
-    exposure: {
-      aeEnabled: true,
-      shutter: { value: 60, view: '1/60' },
-      iso: { value: 800, view: '800' },
-    },
-    whiteBalance: {
-      awbEnabled: true,
-      temperature: { value: 5600, view: '5600K' },
-    },
-    image: {
-      brightness: 50,
-      contrast: 50,
-      saturation: 50,
-    },
-  };
-
-  const cli = new MockCliChannel();
-
-  return new PageStore({
-    path: 'zcam.camera.pages.main',
-    operations: ops,
-    cli,
-    initialCameraState,
-  });
-}
-
-const store = createPageStore();
+import '../styles/main.css';
 
 const rootEl = document.getElementById('root');
+
 if (rootEl) {
   const root = ReactDOM.createRoot(rootEl);
-
-  const hash = window.location.hash || '';
-  const isBall = hash.includes('ball');
+  const pageStore = createPageStore();
+  const uiSceneStore = createUiSceneStore();
 
   root.render(
     <React.StrictMode>
-      <PageStoreContext.Provider value={store}>
-        {isBall ? <BallPage /> : <MainPage />}
-      </PageStoreContext.Provider>
+      <UiSceneStoreContext.Provider value={uiSceneStore}>
+        <PageStoreContext.Provider value={pageStore}>
+          <RootScene />
+        </PageStoreContext.Provider>
+      </UiSceneStoreContext.Provider>
     </React.StrictMode>,
   );
 }

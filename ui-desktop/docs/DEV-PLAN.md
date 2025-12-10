@@ -1,218 +1,172 @@
-# UI Desktop 可观测与自驱动测试计划
+# UI Desktop DEV-PLAN — 场景化窗口 + CLI 优先
 
-## 一、概览
+> 最近更新：2025-12-08
 
-本 UI Desktop 子项目现在支持：
-- 所有业务控件继承 `BaseControl`，自动通过 `DevChannel` 上报 DOM 尺寸、滚动条、交互耗时、错误等。
-- 主进程通过 `control:dev-report` IPC + `Dev Socket` 与 CLI 打通，形成可观测流。
-- 支持通过 **消息驱动** 的方式远程触发 UI 动作（如 `shrinkToBall`、`doubleClick`）与自驱动的回环测试（`cycle`）。
+本计划描述当前 UI Desktop 的技术架构重构状态，以及后续围绕“CLI 优先 / 消息驱动 / UI 纯交互”的开发原则。
 
-下面列出核心文件与职责，以及现有的 CLI 命令和用法。
+## 1. 架构概览
 
-## 二、核心文件与职责
+当前 UI Desktop 分为四层：
 
-### 2.1 消息系统框架层
+1. **状态层（Stores）**
+   - `PageStore`：负责 `CameraState` + `UiState`（选中节点、高亮、旧的 layoutMode 等），与相机操作、持久化、日志相关。
+   - `UiSceneStore`：负责窗口模式和布局尺寸：
+     - `windowMode`: `'main' | 'ball'`；
+     - `layoutSize`: `'normal' | 'compact' | 'large'`；
+     - 当前为最小实现，只保存 `state`，后续可扩展状态机方法（例如 `setWindowMode`、`setLayoutSize`）。
 
-| 文件 | 职责 | 备注 |
-|------|------|------|
-| `src/app/framework/ui/BaseControl.ts` | 控件基类，生命周期、滚动/交互/错误上报、处理 `DevCommand`（如 `ping/measure/highlight/ui.window.*`） | 所有 UI 控件 |
-| `src/app/framework/ui/DevChannelImpl.ts` | 渲染进程侧实现 `DevChannel`，把事件转发给主进程 IPC | React 组件 |
-| `src/app/framework/ui/controls/` | 具体控件类（Slider/Toggle/ModalSelect）继承 `BaseControl` | `SliderControl` / `ToggleControl` / `ModalSelectControl` |
-| `electron.main.ts` | 主进程：`control:dev-report` 接收 + 通过 `electron.dev-socket.ts` 发给 CLI | UI 窗口事件广播 |
-| `electron.dev-socket.ts` | TCP 服务，将 CLI 发来的 `command` 转发到所有渲染进程；把 DevReport 写给所有 CLI 客户 | CLI ↔ Electron 之间的消息网关 |
-| `cli/src/modules/ui.js` | CLI 命令：`zcam ui dev watch/ping/highlight/cycle` | CLI 可观测与测试驱动 |
+2. **消息/命令层（Messages）**
+   - `WindowCommand`：窗口相关命令枚举：`'shrinkToBall' | 'restoreFromBall' | 'toggleSize'`。
+   - `applyWindowCommand(store, cmd)`：纯函数，只修改 `UiSceneStore.state`，不直接依赖 Electron 或 React：
+     - `shrinkToBall` → `windowMode = 'ball'`；
+     - `restoreFromBall` → `windowMode = 'main'`；
+     - `toggleSize` → `layoutSize = normal → compact → large → normal`。
+   - 这一层可以在 Node/JS 环境下独立跑单元测试（已在 `UiSceneStore.test.ts` / `WindowCommands.test.ts` 中覆盖）。
 
-### 2.2 UI 控件层（已有部分）
+3. **布局/场景层（Scenes & Layout）**
+   - `LayoutConfig.tsx`：统一定义窗口场景与 slot：
+     - `SceneConfig`：`{ id: WindowMode; layoutSize: LayoutSize; slots: ControlSlotConfig[] }`；
+     - 当前实现：
+       - `MainSceneConfig`：`id = 'main'`，`layoutSize = 'normal'`，slots 包含 `StatusCard` + `ShortcutsCard`；
+       - `BallSceneConfig`：`id = 'ball'`，`layoutSize = 'compact'`，slots 只包含 `StatusCard`。
+   - `MainScene` / `BallScene`：
+     - 位于 `pages/main-scene` / `pages/ball-scene`；
+     - 只做 `PageShell(sceneConfig)` 的调用，不包含业务逻辑。
 
-| 类型 | 文件 | 说明 |
-|------|------|------|
-| 滑块 | `src/app/components/SliderControl.tsx` / `src/app/framework/ui/controls/SliderControl.ts` | 包装 + DOM 实现 |
-| 开关 | `src/app/components/ToggleControl.tsx` / `src/app/framework/ui/controls/ToggleControl.ts` | 包装 + DOM 实现 |
-| 模态选择 | `src/app/controls/image/ShutterSelect/ShutterSelect.tsx` / `src/app/controls/image/ShutterSelect/ShutterSelectControl.ts` | 基于 `ModalSelectControlBase` |
-| 模态选择 | `src/app/controls/image/IsoSelect/IsoSelect.tsx` / `src/app/controls/image/IsoSelect/IsoSelectControl.ts` | 基于 `ModalSelectControlBase` |
-| 球窗控件 | `src/app/pages/ball/BallClient.ts` | 极轻量 Ball 窗口层，自动上报 mounted/updated/unmounted/interaction、滚动条信息 | `ui.desktop.pages.ball` |
-
-### 2.3 页面层（使用控件）
-
-| 文件 | 说明 |
-|------|------|
-| `src/app/pages/main/index.tsx` | 主窗口，订阅 `ui.window.shrinkToBall` / `ui.window.restoreFromBall` 实现消息驱动的收缩/恢复 |
-| `src/app/pages/ball/index.tsx` | 悬浮球页面，引用 `BallClient` |
-| `src/app/pages/main/.../*Card.tsx` | 把上述控件组合使用，保持页面结构纯粹、不直接调业务 API |
-
-## 三、Dev 通道与消息协议
-
-### 3.1 DevReportPayload（UI → 主进程 → CLI）
-
-```ts
-export type DevReportPayload =
-  | { type: 'mounted'; controlId: string; ts: number; rect: DOMRect; scrollInfo?: ScrollInfo }
-  | { type: 'updated'; controlId: string; ts: number; rect: DOMRect; scrollInfo?: ScrollInfo }
-  | { type: 'unmounted'; controlId: string; ts: number }
-  | { type: 'interaction'; controlId: string; ts: number; event: string; responseMs?: number }
-  | { type: 'error'; controlId: string; ts: number; error: string };
-```
-
-- `ScrollInfo`：`{ hasHorizontalScrollbar, hasVerticalScrollbar, scrollWidth, scrollHeight, clientWidth, clientHeight }`
-- 所有的 UI 控件（包括 Ball）在生命周期中都会通过 `DevChannelImpl` 自动发出 `devReport`。
-
-### 3.2 DevCommand（CLI / 主进程 → UI）
-
-```ts
-export interface DevCommand {
-  controlId?: string; // undefined 表示广播
-  cmd:
-    | 'ping'
-    | 'dumpState'
-    | 'measure'
-    | 'highlight'
-    // UI 窗口级测试命令
-    | 'ui.window.shrinkToBall'
-    | 'ui.window.restoreFromBall'
-    | 'ui.ball.doubleClick';
-  payload?: any;
-}
-```
-
-- `ping`：控件应回 `interaction { event: 'pong' }`。
-- `measure` / `dumpState`：控件应立即重测尺寸并发出 `updated`。
-- `highlight`：控件应在容器上加红色虚线边框 2 秒，便于定位。
-- `ui.window.*`：窗口级命令，由主窗口订阅并执行 `window.electronAPI.*`。
-- `ui.ball.doubleClick`：由球窗口订阅并执行 `restoreFromBall`，用于自驱动测试。
+4. **UI 交互层（PageShell / WindowControls）**
+   - `PageShell`：统一页面框架：
+     - 顶部 header（左侧 `Z + 标题`，右侧 `WindowControls`）；
+     - 主体区域根据 `scene.slots` 渲染卡片容器，每个 slot 有稳定的 `data-path`（例如 `ui.controls.status`）。
+   - `WindowControls`：右上角窗口控制区域：
+     - 使用 `useUiSceneStore()` 读取当前 `windowMode` / `layoutSize`；
+     - 本地调用 `applyWindowCommand(store, cmd)` 更新前端状态；
+     - 如果存在 `window.electronAPI.sendWindowCommand(cmd)`，则发送命令给 Electron 主进程。
+   - UI 只做交互和展示，不直接依赖 CLI 或相机业务逻辑。
 
 ---
 
-## 四、CLI 命令与使用
+## 2. Electron 窗口行为与 IPC
 
-### 4.1 实时监控（观测模式）
+当前 Electron 主进程实现（`electron.main.cjs`）：
 
-```bash
-cd ui-desktop
-npm run build && npm run build:electron   # 开发模式自动启动 Dev Socket
-./scripts/start-dev.sh
+1. **主窗口创建**
+   - 使用 `electron-window-state` 记住位置与大小；
+   - 开发模式加载 `http://localhost:<VITE_PORT>`，生产模式加载 `dist-web/index.html`；
+   - 无边框（`frame: false`），支持拖拽和缩放（由 CSS + Electron 配置共同控制）。
 
-# 另一个终端
-cd cli
-npm start -- ui dev watch
-```
+2. **球窗口逻辑**
+   - `createBallWindow(bounds)`：
+     - 在主窗口 bounds 中心附近创建一个 72x72 的透明圆形窗口；
+     - 加载 `assets/ball/ball.html`，双击球窗口会通过 preload 调用 `restoreFromBall`。
 
-- 所有 `DevReport` 将在 CLI 终端打印，包含：
-  - `mounted / updated`：控件 ID + rect + 滚动条信息（`h`/`v` 布尔）。
-  - `interaction`：事件名 + 响应耗时（ms）。
-  - `error`：错误消息与控件 ID。
-- 可用于：
-  - 确认某控件是否存在滚动条。
-  - 调试交互性能、定位卡顿或无响应控件。
+3. **IPC 处理**
 
-### 4.2 Ping / 高亮 / 手动指令
+   - 基础窗口命令：
+     - `window:minimize`：主窗口最小化；
+     - `window:close`：退出应用；
 
-```bash
-zcam ui dev ping
-zcam ui dev highlight "zcam.camera.pages.main.exposure.shutter"
-```
+   - 球窗口切换：
+     - `window:shrinkToBall`：
+       - 记录当前主窗口 bounds 到 `lastNormalBounds`；
+       - 创建 ball 窗口；
+       - 隐藏主窗口；
+     - `window:restoreFromBall`：
+       - 关闭 ball 窗口（如存在）；
+       - 恢复主窗口 bounds（如存在 `lastNormalBounds`）；
+       - 取消置顶 / 恢复可缩放 / 显示和聚焦主窗口；
 
-- `ping`：广播 `ping`，各控件回 `pong`。
-- `highlight`：给指定控件加红框，便于在 UI 里定位。
+   - 窗口尺寸循环：
+     - `window:toggleSize`：
+       - 读取当前窗口尺寸；
+       - 在 `SIZE_MAP` 中的 `normal → compact → large → normal` 三种配置之间循环；
+       - 调整主窗口大小并居中。
 
-### 4.3 自驱动的回环测试（消息驱动 + 规则验证）
+   - 窗口边界设置：
+     - `window:setBounds`：
+       - 接收 `{ x, y, width, height }`；
+       - 调用 `mainWindow.setBounds(...)` 设置位置和尺寸。
 
-```bash
-# 单轮完整验证
-zcam ui dev cycle --timeout 5000
+   - 通用命令入口：
+     - `window:sendCommand`：接收 `cmd` 字符串（`shrinkToBall` / `restoreFromBall` / `toggleSize` 等），统一路由到对应 handler。
 
-# 连续多轮（示例：跑 10 轮）
-zcam ui dev cycle --loop 10 --timeout 5000
-```
-
-**执行逻辑（已在 CLI 中实现）**：
-
-1. **步骤 1**  
-   - 发 `ui.window.shrinkToBall` 命令。  
-   - 等待 `ball.mounted`（超时则报错）。  
-   - 可选：检查 `scrollInfo` 是否出现滚动条。
-
-2. **步骤 2**  
-   - 发 `ui.ball.doubleClick` 命令。  
-   - 等待 `ball.unmounted`。  
-
-3. **结果判定**  
-   - 若全部步骤在超时内完成且无 `error` / 不合规滚动条 → 输出 **✓ 成功** 并用时统计。  
-   - 否则输出 **✗ 失败** 并给出具体阶段和原因。
-
-4. **输出示例**  
-
-```text
-步骤 1: 请求窗口缩小为悬浮球
-步骤 2: 等待 ball 挂载 (DevReport mounted: controlId=ball)...
-[2025-12-07T08:50:12.123Z] ✓ [ball] mounted 用时 34ms rect={x:1120,y:560,w:72,h:72} scroll(h=false,v=false)
-步骤 3: 发送 ball.doubleClick (restoreFromBall) 命令
-步骤 4: 等待 ball 卸载 (DevReport unmounted: controlId=ball)...
-[2025-12-07T08:50:13.456Z] ✓ [ball] unmounted 用时 12ms
-✓ 回环测试完成: shrink -> ball mounted -> restore -> ball unmounted
-```
+4. **preload 暴露接口**（`electron.preload.cjs`）：
+   - `window.electronAPI` 包含：
+     - `minimize()` / `close()`；
+     - `shrinkToBall()` / `restoreFromBall()`；
+     - `toggleSize()`；
+     - `setBounds({ x, y, width, height })`；
+     - `sendWindowCommand(cmd: string)`：统一发送窗口命令到主进程。
 
 ---
 
-## 五、自驱动测试扩展方向（可选）
+## 3. 当前 UI 重构进度
 
-基于已实现的消息驱动机制，可进一步实现：
+已完成：
 
-1. **增加滚动条规则**  
-   - 在步骤 2（等待 ball mounted）中检查 `hasHorizontalScrollbar/hasVerticalScrollbar`，若出现则判定失败。
+1. **DevChannel / DevSocket / BaseControl 旧实现清理**
+   - 删除 `DevChannelImpl`、老的 `BaseControl` Dev 上报逻辑，以及所有 `.bak`/`.old` 历史文件；
+   - 删除旧的 ball Dev 实现（`BallClient.ts` 等），只保留 HTML ball 窗口。
 
-2. **关键控件状态检查**  
-   - 在恢复后可再发 `highlight` 或 `measure` 给某些控件，通过 DevReport 的 `updated`/`interaction` 确认主 UI 是否可交互。
+2. **引入 UiSceneStore + WindowCommands**
+   - `UiSceneStore` 定义窗口模式与布局尺寸，并有基础单元测试；
+   - `WindowCommand` + `applyWindowCommand`/`nextLayoutSize` 已实现且可在纯 Node 环境下测试。
 
-3. **压测与报告**  
-   - `zcam ui dev stress --loops 1000`：统计成功率、平均耗时、失败原因分布。
+3. **场景化布局层**
+   - 使用 `LayoutConfig.tsx` 定义 `MainSceneConfig` / `BallSceneConfig`；
+   - `MainScene` / `BallScene` 只负责引用 `PageShell(sceneConfig)`；
+   - `PageShell` 负责 header + WindowControls + 按 slot 渲染卡片。
 
-4. **多语言支持与规则模板**  
-   - 将测试规则描述保存为 JSON/YAML，CLI 加载并按规则执行，支持 CI 集成。
+4. **窗口控制 UI 层**
+   - `WindowControls.tsx` 已提供“缩球 / 恢复 / 切尺寸”按钮：
+     - 点击按钮 → 更新 `UiSceneStore` → 通过 `electronAPI` 调用 Electron。
 
----
+5. **Electron 窗口行为**
+   - `electron.main.cjs` 与 `electron.preload.cjs` 已完成最小可运行版本：
+     - 支持基本窗口生命周期（打开/最小化/关闭）；
+     - 支持 `shrinkToBall` / `restoreFromBall` / `toggleSize` / `setBounds`；
+     - 支持通用 `sendWindowCommand` 接口，便于 UI/CLI 统一使用。
 
-## 六、完整闭环的启动与验证流程
+待完成：
 
-### 6.1 启动 Electron UI（含 Dev Socket）
+1. **CLI 窗口命令模块（unit test 层）**
+   - 在 `cli` 项目中恢复并扩展 `ui` 模块：
+     - `zcam ui window shrink` / `restore` / `toggle-size` / `set-bounds` / `cycle`；
+     - CLI 命令通过 IPC（或本地 TCP server）把 `{cmd, payload}` 发送给 Electron 主进程，**不依赖 UI**。
+   - 为这些 CLI 命令编写单元测试：
+     - 使用 Node + mock IPC（或本地测试 server），确保命令参数校验和命令路由正确。
 
-```bash
-cd ui-desktop
-npm run build
-npm run build:electron
-NODE_ENV=development npm run electron
-# 这会同时启动 UI Dev Socket（默认 6223），并把 DevReport 流透给 CLI
-```
+2. **消息驱动的系统测试（system test 层）**
+   - 编写一个消息 orchestrator 脚本（例如 `ui-desktop/headless-cycle.js` 或 `cli/scripts/ui-window-cycle.js`）：
+     - 接收消息序列（JSON 配置或命令行参数）；
+     - 内部调用 CLI：`zcam ui window shrink`、`restore`、`toggle-size`、`set-bounds` 等；
+     - 完成 shrink→ball→restore 的回环测试，并在必要时断言窗口位置/大小（需要在 Electron 端返回状态）。
 
-### 6.2 运行自驱回环测试
-
-```bash
-cd cli
-zcam ui dev cycle --timeout 5000
-```
-
-预期输出应包含：
-- `ball mounted` 与 `ball unmounted` 两条 DevReport 消息。
-- 各阶段的耗时。
-- 成功/失败的判定结论。
-
----
-
-## 七、后续文档与维护建议
-
-- 本文档 (`DEV-PLAN.md`) 与 `AGENTS.md` 一起构成 UI Desktop 的完整技术指引。
-- 每当新增窗口级命令或关键业务命令时，在本文档附录扩展 `DevCommand`。
-- 每当新增或修改核心 UI 行为（比如新增模态或滚动规则），在本文档同步写一条“测试验证规则”，以保证自测覆盖。
-- CLI 的 `zcam ui dev` 模块可继续增加子命令（`stress`、`rules`、`report`），以支撑更复杂的自动化用例。
+3. **UI monkey 自测（UI 层自感知）**
+   - 使用上面的消息/CLI 流程，针对 UI 做 monkey 测试：
+     - 随机或按策略触发 `sendWindowCommand`（通过 CLI 或直接调用 preload）；
+     - 验证 UI 在长时间运行下不会崩溃，窗口模式和尺寸切换正确；
+     - 未来可扩展控件自感知（替代旧的 BaseControl DevReport）。
 
 ---
 
-## 八、补充：命令行参数与配置
+## 4. 开发与提交流程建议
 
-- `ZCAM_UI_DEV_PORT`：默认 `6223`，可调整端口或冲突场景。
-- `--timeout`（ms）：`cycle` 各阶段的最大等待时间，默认 `5000`。
-- `--loop`：指定循环次数，用于压测或批量 CI 测试。
-- `--json`：计划支持将测试结果以 JSON 输出，便于 CI 聚合与比较。
+1. **功能开发优先级**：
+   - **先实现 CLI 层**：确保所有窗口行为（缩球/恢复/切尺寸/设边界）都有对应 CLI 命令和单元测试；
+   - 再实现 **系统测试脚本**：用消息驱动 CLI，形成端到端回环；
+   - 最后完善 UI 交互和样式，通过 monkey 测试脚本自测 UI。
 
----
+2. **提交流程**：
+   - 每次改动需保证：
+     - `ui-desktop` 内 `npm run build && npm test && npm run build:web` 通过；
+     - `cli` 内单元测试（含新加的 ui-window 测试）通过；
+   - 提交信息中建议标注：
+     - 本次改动是否影响 `UiSceneStore`、`WindowCommand`、Electron IPC 或 CLI；
+     - 是否更新了相应文档（AGENTS / DEV-PLAN / TEST-RULES）。
 
-> 本文档随代码演进同步更新。在每次改动 `DevCommand` / `DevReportPayload` / `DevChannel` 逻辑后，请同步在此说明影响。
+3. **文档同步规则**：
+   - 更新窗口行为或命令时：
+     - 同步更新 `AGENTS.md` 的“功能与消息系统现状”；
+     - 更新 `docs/DEV-PLAN.md` 中的架构和进度说明；
+     - 更新 `docs/TEST-RULES.md` 中的测试规则（单元/系统/monkey）。
+
