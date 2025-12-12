@@ -86,6 +86,10 @@
 2. 通过 Electron 状态接口（或调试日志）确认窗口位置和尺寸与参数一致；
 3. 在不同平台/多显示器环境下重复测试，确保逻辑健壮性。
 
+> Windows 平台可以运行 `windows/tests/Invoke-UiCycleTest.ps1`，它会自动构建 `ui-desktop`、启动 `npm run electron` 并执行 `zcam ui window cycle`。示例：`cd D:\github\zcammcp\windows\tests; pwsh .\Invoke-UiCycleTest.ps1 -Loop 3 -Timeout 7000`
+
+状态反馈说明：所有窗口/CLI 状态都通过 `StateHost` (`http://127.0.0.1:${ZCAM_STATE_PORT||6224}`) 维护，`zcam ui window ...` 命令会读取 `/state` 并在构建结果中断言 `state.window` 是否符合预期。
+
 ## 3. UI 自测（Monkey）
 
 UI 自测不通过 CLI 直接控制窗口，而是从 UI 交互路径出发，仍然遵循“消息优先”的思想：
@@ -111,4 +115,3 @@ UI 自测不通过 CLI 直接控制窗口，而是从 UI 交互路径出发，�
 - [ ] CLI `ui window` 子命令：shrink/restore/toggle-size/set-bounds/cycle；
 - [ ] 消息驱动系统测试脚本：通过 CLI 自动执行窗口回环；
 - [ ] UI monkey 自测脚本：通过消息/CLI 驱动 UI 控件。
-

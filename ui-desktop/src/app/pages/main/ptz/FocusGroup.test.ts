@@ -44,7 +44,8 @@ test('FocusGroup.setFocus operation updates state correctly', async () => {
 
   // 验证 CLI 请求格式
   const requests = cli.getRequests();
-  assert.equal(requests[0].command, 'ptz.focus');
-  assert.equal(requests[0].command, 'ptz.focus');
-  assert.equal(requests[0].params.value, 80);
+  const firstRequest = requests[0];
+  assert.ok(firstRequest);
+  assert.equal(firstRequest.command, 'ptz.focus');
+  assert.equal(firstRequest.params?.value, 80);
 });

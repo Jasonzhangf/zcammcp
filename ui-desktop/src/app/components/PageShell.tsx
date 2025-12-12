@@ -5,7 +5,11 @@ import type { SceneConfig } from '../framework/ui/LayoutConfig.js';
 
 export function PageShell({ scene }: { scene: SceneConfig }) {
   return (
-    <div className="zcam-root-scale page-shell" data-path="ui.window.shell">
+    <div
+      className="zcam-root-scale page-shell"
+      data-path="ui.window.shell"
+      data-layout={scene.layoutSize}
+    >
       {/* Header with WindowControls */}
       <div className="zcam-header" data-path="ui.window.header">
         <div className="zcam-header-left">

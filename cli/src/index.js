@@ -43,6 +43,8 @@ const modules = [
   'image',
   'system',
   'network',
+  'uvc',
+  'ui',
   'config'
 ];
 

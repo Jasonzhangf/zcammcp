@@ -13,6 +13,6 @@ test('RootScene: selects MainScene when windowMode is main', () => {
 });
 
 test('RootScene: selects BallScene when windowMode is ball', () => {
-  const store = new UiSceneStore({ windowMode: 'ball', layoutSize: 'compact' });
+  const store = new UiSceneStore({ windowMode: 'ball', layoutSize: 'studio' });
   assert.equal(store.state.windowMode, 'ball');
 });

@@ -7,6 +7,7 @@ import type {
   OperationPayload,
   OperationResult,
   OperationDefinition,
+  CliRequest,
 } from '../../framework/state/PageStore.js';
 
 function clamp01(value: number): number {
@@ -26,11 +27,7 @@ export const imageOperations: OperationDefinition[] = [
       };
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `image-brightness-${Date.now()}`,
-          command: 'image.brightness',
-          params: { value: v },
-        },
+        cliRequest: buildUvcSetRequest('brightness', v),
       };
     },
   },
@@ -45,11 +42,7 @@ export const imageOperations: OperationDefinition[] = [
       };
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `image-contrast-${Date.now()}`,
-          command: 'image.contrast',
-          params: { value: v },
-        },
+        cliRequest: buildUvcSetRequest('contrast', v),
       };
     },
   },
@@ -64,13 +57,20 @@ export const imageOperations: OperationDefinition[] = [
       };
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `image-saturation-${Date.now()}`,
-          command: 'image.saturation',
-          params: { value: v },
-        },
+        cliRequest: buildUvcSetRequest('saturation', v),
       };
     },
   },
 ];
 
+function buildUvcSetRequest(kind: string, value: number): CliRequest {
+  return {
+    id: `uvc-${kind}-${Date.now()}`,
+    command: `uvc.set.${kind}`,
+    args: ['uvc', 'set', kind, '--value', String(value)],
+    params: {
+      key: kind,
+      value,
+    },
+  };
+}

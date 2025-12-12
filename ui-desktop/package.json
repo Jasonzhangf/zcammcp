@@ -9,20 +9,23 @@
     "build": "tsc -p .",
     "build:web": "vite build",
     "build:electron": "echo 'skip electron build (using plain CJS files)'",
-    "electron": "npx electron electron.main.cjs",
+    "electron": "node ../service/cli-daemon/cli-service.js & npx electron electron.main.cjs",
     "package": "npm run build && npm run build:web && npm run build:electron && electron-builder",
-    "test": "node --test dist/app/**/*.test.js",
+    "test": "node --test dist/src/app/**/*.test.js",
     "test:ts": "ts-node src/app/**/*.test.ts",
     "ci": "npm run build && npm test",
     "lint": "echo 'TODO: lint'"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.0.1",
+    "@types/jsdom": "^21.1.7",
     "@types/node": "^22.7.5",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0",
+    "jsdom": "^25.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "ts-node": "^10.9.2",
@@ -38,7 +41,8 @@
     "files": [
       "dist/**/*",
       "assets/**/*",
-      "dist-web/**/*"
+      "dist-web/**/*",
+      "state-host/**/*"
     ],
     "mac": {
       "target": "dmg",

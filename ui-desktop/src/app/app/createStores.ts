@@ -1,5 +1,6 @@
 import { OperationRegistry } from '../framework/operations/OperationRegistry.js';
 import { MockCliChannel } from '../framework/transport/CliChannel.js';
+import { RealCliChannel } from '../framework/transport/RealCliChannel.js';
 import { PageStore, type CameraState } from '../framework/state/PageStore.js';
 import { UiSceneStore, type UiSceneState } from '../framework/state/UiSceneStore.js';
 import { ptzOperations } from '../app/operations/ptzOperations.js';
@@ -36,7 +37,7 @@ export function createPageStore(): PageStore {
     },
   };
 
-  const cli = new MockCliChannel();
+  const cli = createCliChannel();
 
   return new PageStore({
     path: 'zcam.camera.pages.main',
@@ -53,4 +54,11 @@ export function createUiSceneStore(): UiSceneStore {
   };
 
   return new UiSceneStore(initial);
+}
+
+function createCliChannel() {
+  if (typeof window !== 'undefined' && window.electronAPI?.runCliCommand) {
+    return new RealCliChannel();
+  }
+  return new MockCliChannel();
 }

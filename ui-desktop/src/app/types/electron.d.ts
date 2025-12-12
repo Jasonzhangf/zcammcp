@@ -1,36 +1,37 @@
-export interface ElectronAPI {
-  shrinkToBall: () => Promise<void>;
-  restoreFromBall: () => Promise<void>;
-  restoreSize: () => Promise<void>;
-  dockToEdge: () => Promise<void>;
-  devReport: (report: any) => void;
+export interface CliBridgeRequest {
+  args: string[];
+  params?: Record<string, unknown>;
+  timeoutMs?: number;
+  expectJson?: boolean;
+  env?: Record<string, string>;
 }
 
-// Dev channel: 可观测/调试接口
-export interface ElectronAPI {
-  shrinkToBall: () => Promise<void>;
-  restoreFromBall: () => Promise<void>;
-  restoreSize: () => Promise<void>;
-  dockToEdge: () => Promise<void>;
-  devReport: (report: any) => void;
+export interface CliBridgeResult {
+  ok: boolean;
+  stdout?: string;
+  stderr?: string;
+  code?: number;
+  error?: string;
 }
 
-// ---------------------------------------------------------
-// Dev channel: 可观测/调试接口
-// ---------------------------------------------------------
 export interface ElectronAPI {
-  shrinkToBall: () => Promise<void>;
-  restoreFromBall: () => Promise<void>;
-  restoreSize: () => Promise<void>;
-  dockToEdge: () => Promise<void>;
-  // Dev channel - 渲染进程上报到主进程
-  devReport: (report: any) => void;
-  // 订阅主进程下发的 dev 命令
+  minimize?: () => Promise<void>;
+  close?: () => Promise<void>;
+  shrinkToBall?: () => Promise<void>;
+  restoreFromBall?: () => Promise<void>;
+  restoreSize?: () => Promise<void>;
+  dockToEdge?: () => Promise<void>;
+  toggleSize?: () => Promise<void>;
+  setBounds?: (bounds: { x: number; y: number; width: number; height: number }) => Promise<void>;
+  sendWindowCommand?: (cmd: string) => Promise<void>;
+  pushState?: (channel: string, payload: unknown) => Promise<void>;
+  runCliCommand?: (payload: CliBridgeRequest) => Promise<CliBridgeResult>;
+  devReport?: (report: unknown) => void;
 }
 
 declare global {
   interface Window {
-    electronAPI: ElectronAPI;
+    electronAPI?: ElectronAPI;
   }
 }
 

@@ -1,8 +1,11 @@
 import React from 'react';
 
 import { PageShell } from '../../components/PageShell.js';
-import { BallSceneConfig } from '../../framework/ui/LayoutConfig.js';
+import { getSceneConfig } from '../../framework/ui/LayoutConfig.js';
+import { useUiSceneState } from '../../hooks/useUiSceneStore.js';
 
 export function BallScene() {
-  return <PageShell scene={BallSceneConfig} />;
+  const sceneState = useUiSceneState();
+  const sceneConfig = getSceneConfig('ball', sceneState.layoutSize);
+  return <PageShell scene={sceneConfig} />;
 }

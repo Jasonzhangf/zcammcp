@@ -62,7 +62,10 @@ export interface OperationPayload {
 export interface CliRequest {
   id: string;
   command: string;
-  params: Record<string, unknown>;
+  params?: Record<string, unknown>;
+  args?: string[];
+  timeoutMs?: number;
+  expectJson?: boolean;
 }
 
 export interface CliResponse {
@@ -105,6 +108,7 @@ export class PageStore {
   readonly path: string;
   cameraState: CameraState;
   uiState: UiState;
+  private viewSnapshot: ViewState;
   private readonly operations: OperationRegistry;
   private readonly cli: CliChannel;
   private readonly listeners: Set<() => void> = new Set();
@@ -125,16 +129,17 @@ export class PageStore {
         highlightMap: {},
         layoutMode: 'full',
       } as UiState);
+    this.viewSnapshot = {
+      camera: this.cameraState,
+      ui: this.uiState,
+    };
     this.operations = opts.operations;
     this.cli = opts.cli;
   }
 
   /** 返回只读视图状态 */
   getViewState(): ViewState {
-    return {
-      camera: this.cameraState,
-      ui: this.uiState,
-    };
+    return this.viewSnapshot;
   }
 
   /** 清除当前 active node 与高亮状态 */
@@ -148,6 +153,7 @@ export class PageStore {
       activeNodePath: undefined,
       highlightMap: nextHighlight,
     };
+    this.updateViewSnapshot();
     this.notify();
   }
 
@@ -158,6 +164,7 @@ export class PageStore {
       activeNodePath: path,
       selectedNodes: [path],
     };
+    this.updateViewSnapshot();
     this.notify();
   }
 
@@ -173,6 +180,7 @@ export class PageStore {
       ...this.uiState,
       highlightMap: next,
     };
+    this.updateViewSnapshot();
     this.notify();
   }
 
@@ -183,6 +191,7 @@ export class PageStore {
       ...this.uiState,
       layoutMode: mode,
     };
+    this.updateViewSnapshot();
     this.notify();
   }
 
@@ -227,6 +236,7 @@ export class PageStore {
         ...this.cameraState,
         ...result.newStatePartial,
       };
+      this.updateViewSnapshot();
     }
 
     // 调用 CLI（如果有）
@@ -236,5 +246,12 @@ export class PageStore {
 
     // 通知订阅者有新状态
     this.notify();
+  }
+
+  private updateViewSnapshot(): void {
+    this.viewSnapshot = {
+      camera: this.cameraState,
+      ui: this.uiState,
+    };
   }
 }

@@ -5,9 +5,7 @@ export type WindowCommand = 'shrinkToBall' | 'restoreFromBall' | 'toggleSize';
 // Simple pure helper for mapping layout size transitions. This will
 // be expanded later if we need more sophisticated rules.
 export function nextLayoutSize(current: LayoutSize): LayoutSize {
-  if (current === 'normal') return 'compact';
-  if (current === 'compact') return 'large';
-  return 'normal';
+  return current === 'normal' ? 'studio' : 'normal';
 }
 
 // Core command handler. For now this only mutates UiSceneStore.state
@@ -15,16 +13,16 @@ export function nextLayoutSize(current: LayoutSize): LayoutSize {
 // trivial to test in isolation.
 export function applyWindowCommand(store: UiSceneStore, command: WindowCommand): void {
   if (command === 'shrinkToBall') {
-    store.state = { ...store.state, windowMode: 'ball' satisfies WindowMode };
+    store.setState({ ...store.state, windowMode: 'ball' satisfies WindowMode });
     return;
   }
 
   if (command === 'restoreFromBall') {
-    store.state = { ...store.state, windowMode: 'main' satisfies WindowMode };
+    store.setState({ ...store.state, windowMode: 'main' satisfies WindowMode });
     return;
   }
 
   if (command === 'toggleSize') {
-    store.state = { ...store.state, layoutSize: nextLayoutSize(store.state.layoutSize) };
+    store.setState({ ...store.state, layoutSize: nextLayoutSize(store.state.layoutSize) });
   }
 }

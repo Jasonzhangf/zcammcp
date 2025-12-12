@@ -1,119 +1,181 @@
 const { Command } = require('commander');
 const chalk = require('chalk');
-const net = require('net');
+const http = require('http');
 
-/**
- * UI/窗口子命令
- * 所有窗口操作通过 IPC 调用 Electron 主进程
- * 通过本地 TCP 端口 6223 与 Electron 通信
- */
+const STATE_HOST_PORT = parseInt(process.env.ZCAM_STATE_PORT || '6224', 10);
+const STATE_HOST_HOST = process.env.ZCAM_STATE_HOST || '127.0.0.1';
 
-// 通过 TCP 与 Electron 主进程通信（端口 6223）
-function sendCommandToElectron(cmd, payload = {}) {
+function requestJson(path, method = 'GET', payload) {
   return new Promise((resolve, reject) => {
-    const client = net.createConnection({ port: 6223 }, () => {
-      client.write(JSON.stringify({ type: 'command', cmd, payload }) + '\n');
-      client.end();
+    const body = payload ? JSON.stringify(payload) : null;
+    const options = {
+      hostname: STATE_HOST_HOST,
+      port: STATE_HOST_PORT,
+      path,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': body ? Buffer.byteLength(body) : 0,
+      },
+    };
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        try {
+          const json = data ? JSON.parse(data) : {};
+          resolve(json);
+        } catch (err) {
+          reject(new Error(`invalid JSON response: ${err.message}`));
+        }
+      });
     });
-    client.on('data', (data) => {
-      try {
-        const res = JSON.parse(data.toString());
-        resolve(res);
-      } catch (e) {
-        resolve({ ok: false, error: 'invalid response' });
-      }
-    });
-    client.on('error', (err) => {
-      reject(new Error(`IPC 连接失败: ${err.message}`));
-    });
-    client.setTimeout(3000, () => {
-      reject(new Error('IPC 超时'));
-    });
+    req.on('error', (err) => reject(err));
+    if (body) {
+      req.write(body);
+    }
+    req.end();
   });
+}
+
+async function sendWindowCommand(action, payload = {}) {
+  const res = await requestJson('/command', 'POST', { channel: 'window', action, payload });
+  if (!res.ok) {
+    throw new Error(res.error || 'window command failed');
+  }
+  await requestJson('/state', 'POST', {
+    channel: 'cli',
+    payload: { lastCommand: action, ts: Date.now(), state: res.state || null },
+  }).catch(() => {});
+  return res;
+}
+
+async function fetchWindowState() {
+  const res = await requestJson('/state?channel=window', 'GET');
+  if (!res.ok) {
+    throw new Error(res.error || 'state unavailable');
+  }
+  return res.state || null;
+}
+
+function formatState(state) {
+  if (!state) return chalk.gray('No state');
+  const parts = [
+    `mode=${state.mode || 'unknown'}`,
+    `layout=${state.layoutSize || 'unknown'}`,
+    `ball=${state.ballVisible ? 'visible' : 'hidden'}`,
+  ];
+  if (state.lastBounds) {
+    parts.push(
+      `bounds=[${state.lastBounds.x ?? '?'},${state.lastBounds.y ?? '?'} ${state.lastBounds.width ?? '?'}x${
+        state.lastBounds.height ?? '?'
+      }]`,
+    );
+  }
+  return chalk.gray(parts.join(' '));
+}
+
+function assertWindowState(state, expectation, stage) {
+  if (!state) {
+    throw new Error(`missing window state for ${stage}`);
+  }
+  if (expectation.mode && state.mode !== expectation.mode) {
+    throw new Error(`expected mode=${expectation.mode} during ${stage}, got ${state.mode}`);
+  }
+  if (typeof expectation.ballVisible === 'boolean' && Boolean(state.ballVisible) !== expectation.ballVisible) {
+    throw new Error(`expected ballVisible=${expectation.ballVisible} during ${stage}, got ${state.ballVisible}`);
+  }
+  if (expectation.requireBounds && !state.lastBounds) {
+    throw new Error(`expected lastBounds to be recorded during ${stage}`);
+  }
 }
 
 function buildCommand() {
   const cmd = new Command('window');
-  cmd.description('Desktop UI window control');
+  cmd.description('Desktop UI window control via state host');
 
-  // window shrink
+  cmd
+    .command('status')
+    .description('Show current window state')
+    .action(async () => {
+      try {
+        const state = await fetchWindowState();
+        console.log(formatState(state));
+      } catch (err) {
+        console.error(chalk.red('[window] status failed'), err.message);
+        process.exit(1);
+      }
+    });
+
   cmd
     .command('shrink')
     .description('Shrink main window to floating ball')
     .action(async () => {
       try {
-        console.log(chalk.cyan('➜ shrinkToBall'));
-        await sendCommandToElectron('window:shrinkToBall');
-        console.log(chalk.green('✓ Shrunk to ball'));
+        const res = await sendWindowCommand('shrinkToBall');
+        console.log(chalk.green('✓ Shrunk to ball'), formatState(res.state));
       } catch (err) {
         console.error(chalk.red('✗ shrinkToBall failed'), err.message);
         process.exit(1);
       }
     });
 
-  // window restore
   cmd
     .command('restore')
     .description('Restore main window from floating ball')
     .action(async () => {
       try {
-        console.log(chalk.cyan('➜ restoreFromBall'));
-        await sendCommandToElectron('window:restoreFromBall');
-        console.log(chalk.green('✓ Restored main window'));
+        const res = await sendWindowCommand('restoreFromBall');
+        console.log(chalk.green('✓ Restored main window'), formatState(res.state));
       } catch (err) {
         console.error(chalk.red('✗ restoreFromBall failed'), err.message);
         process.exit(1);
       }
     });
 
-  // window toggle-size
   cmd
     .command('toggle-size')
-    .description('Cycle window size (normal→compact→large→normal)')
+    .description('Toggle layout variant (Layout A ↔ Layout B)')
     .action(async () => {
       try {
-        console.log(chalk.cyan('➜ toggleSize'));
-        await sendCommandToElectron('window:toggleSize');
-        console.log(chalk.green('✓ Toggled size'));
+        const res = await sendWindowCommand('toggleSize');
+        console.log(chalk.green('✓ Toggled layout'), formatState(res.state));
       } catch (err) {
         console.error(chalk.red('✗ toggleSize failed'), err.message);
         process.exit(1);
       }
     });
 
-  // window set-bounds
   cmd
     .command('set-bounds')
     .description('Set window bounds (x/y/width/height)')
-    .option('-x, --x <number>', 'Window left x', '0')
-    .option('-y, --y <number>', 'Window top y', '0')
-    .option('-w, --width <number>', 'Window width', '1200')
-    .option('-h, --height <number>', 'Window height', '720')
+    .option('-x, --x <number>', 'Window left x', '')
+    .option('-y, --y <number>', 'Window top y', '')
+    .option('-w, --width <number>', 'Window width', '')
+    .option('-h, --height <number>', 'Window height', '')
     .action(async (options) => {
       try {
-        const { x, y, width, height } = options;
-        console.log(chalk.cyan(`➜ setBounds x=${x} y=${y} width=${width} height=${height}`));
-        await sendCommandToElectron('window:setBounds', { 
-          x: parseInt(x), 
-          y: parseInt(y), 
-          width: parseInt(width), 
-          height: parseInt(height) 
-        });
-        console.log(chalk.green('✓ Set bounds'));
+        const payload = {};
+        if (options.x !== '') payload.x = parseInt(options.x, 10);
+        if (options.y !== '') payload.y = parseInt(options.y, 10);
+        if (options.width !== '') payload.width = parseInt(options.width, 10);
+        if (options.height !== '') payload.height = parseInt(options.height, 10);
+        const res = await sendWindowCommand('setBounds', payload);
+        console.log(chalk.green('✓ Set bounds'), JSON.stringify(payload), formatState(res.state));
       } catch (err) {
         console.error(chalk.red('✗ setBounds failed'), err.message);
         process.exit(1);
       }
     });
 
-  // window cycle (系统级回环测试)
   cmd
     .command('cycle')
     .description('Run shrink→ball→restore cycle test')
     .option('-t, --timeout <ms>', 'Timeout per stage (ms)', '5000')
     .option('--loop <n>', 'Number of loops, default 1', '1')
     .action(async (options) => {
-      const timeoutMs = parseInt(options.timeout, 10) || 5000;
       const loop = Math.max(1, parseInt(options.loop, 10) || 1);
       console.log(chalk.cyan('[UI Cycle] Starting cycle test'));
       const startMs = Date.now();
@@ -121,29 +183,24 @@ function buildCommand() {
 
       for (let i = 1; i <= loop; i++) {
         try {
-          // 1. shrink
-          console.log(chalk.gray(` 1/4 shrink (loop ${i})`));
-          await sendCommandToElectron('window:shrinkToBall');
-          // 2. ball mounted (逻辑占位)
-          console.log(chalk.gray(' 2/4 ball mounted'));
-          // 3. restore
-          console.log(chalk.gray(' 3/4 restore')));
-          await sendCommandToElectron('window:restoreFromBall');
-          // 4. ball unmounted (逻辑占位)
-          console.log(chalk.gray(' 4/4 ball unmounted'));
-          results.push({ step: i, status: 'pass' });
-        } catch (e) {
-          results.push({ step: i, status: 'fail', error: e.message });
-          console.error(chalk.red(`✗ Cycle test failed (loop ${i})`), e.message);
+          console.log(chalk.gray(`Loop ${i}: shrink`));
+          const shrinkState = await sendWindowCommand('shrinkToBall');
+          assertWindowState(shrinkState.state, { mode: 'ball', ballVisible: true, requireBounds: true }, 'shrink');
+          console.log(chalk.gray(`Loop ${i}: restore`));
+          const restoreState = await sendWindowCommand('restoreFromBall');
+          assertWindowState(restoreState.state, { mode: 'main', ballVisible: false }, 'restore');
+          results.push({ loop: i, status: 'pass' });
+        } catch (err) {
+          results.push({ loop: i, status: 'fail', error: err.message });
+          console.error(chalk.red(`✗ Cycle test failed (loop ${i})`), err.message);
           process.exit(1);
         }
       }
 
-      console.log(chalk.green(`✓ Cycle test finished, ${results.length} steps, total ${Date.now() - startMs}ms`));
-      console.log(chalk.cyan('=== Cycle Test Summary ==='));
-      results.forEach((r, i) => {
-        const status = r.status === 'pass' ? chalk.green('✅') : chalk.red('✗');
-        console.log(`${status} loop ${i + 1} : ${r.status}`);
+      console.log(chalk.green(`✓ Cycle test finished, ${results.length} loops, total ${Date.now() - startMs}ms`));
+      results.forEach((r) => {
+        const status = r.status === 'pass' ? chalk.green('✓') : chalk.red('✗');
+        console.log(`${status} loop ${r.loop} : ${r.status}`);
       });
       process.exit(0);
     });

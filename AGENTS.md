@@ -41,6 +41,7 @@ ui-desktop/
 - 主窗口订阅 `ui.window.shrinkToBall / ui.window.restoreFromBall` 消息，自动收缩/恢复。
 - 球窗口（BallPage）订阅 `ui.ball.doubleClick`，模拟双击恢复。
 - BallClient 自动上报 `ball` 的 `mounted/unmounted/interaction` 与滚动条状态。
+- **StateHost 服务**：UI 启动时在 `127.0.0.1:${ZCAM_STATE_PORT||6224}` 暴露 HTTP 状态服务，维护 `window/ui/cli/services` 状态树；所有 `zcam ui window ...` 命令通过 `/command`、`/state` 与 Electron 主进程闭环。
 
 ### 2.3 CLI 调试与测试命令
 - `zcam ui dev watch`：实时打印 DevReport（含尺寸、滚动条、交互、错误）。

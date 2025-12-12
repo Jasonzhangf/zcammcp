@@ -42,6 +42,8 @@ const REQUIRED_MODULES = [
   'image',
   'system',
   'network',
+  'uvc',
+  'ui',
   'config'
 ];
 

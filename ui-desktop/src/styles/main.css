@@ -119,6 +119,62 @@ body {
   overflow: visible;
 }
 
+.control-slot {
+  width: 100%;
+}
+
+.page-shell[data-layout='studio'] .zcam-main {
+  padding: 10px 14px 14px;
+  gap: 12px;
+}
+
+.zcam-main-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.zcam-main-control-row {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.zcam-main-control {
+  display: flex;
+  flex-direction: column;
+}
+
+.zcam-main-control-row .zcam-card {
+  height: 100%;
+}
+
+.zcam-main-control-row .zcam-card .zcam-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.zcam-main-grid-status,
+.zcam-main-grid-shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.zcam-studio-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.zcam-studio-block {
+  display: flex;
+  flex-direction: column;
+}
+
 .zcam-section {
   flex: 0 0 auto;
   display: flex;
@@ -259,26 +315,29 @@ body {
 
 .zcam-ptz-layout {
   display: grid;
-  grid-template-columns: auto 96px;
-  column-gap: 10px;
-  align-items: center;
+  grid-template-columns: auto 140px;
+  column-gap: 20px;
+  align-items: stretch;
   justify-content: center;
   margin-bottom: 4px;
+  flex: 1;
 }
 
 .zcam-ptz-grid {
   display: grid;
-  grid-template-columns: repeat(3, 42px);
-  grid-template-rows: repeat(3, 42px);
-  column-gap: 6px;
-  row-gap: 6px;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
+  column-gap: 10px;
+  row-gap: 10px;
   justify-content: center;
   align-items: center;
+  height: 100%;
+  align-content: center;
 }
 
 .zcam-ptz-btn {
-  width: 42px;
-  height: 42px;
+  width: 56px;
+  height: 56px;
   border-radius: 8px;
   border: 1px solid #2f2f2f;
   background: #1d1d1d;
@@ -296,8 +355,8 @@ body {
 }
 
 .zcam-ptz-btn-main {
-  width: 46px;
-  height: 46px;
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
   border: 1px solid #ff7a45;
   background: #1d1d1d;
@@ -307,14 +366,24 @@ body {
 .zcam-ptz-sliders {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: center;
-  gap: 8px;
+  gap: 12px;
+  height: 100%;
+}
+
+.zcam-ptz-slider-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 0;
+  height: 100%;
 }
 
 .zcam-ptz-slider-wrap {
   position: relative;
-  width: 44px;
+  width: 70px;
   padding: 6px 4px;
   border-radius: 999px;
   border: 1px solid #333;
@@ -341,10 +410,18 @@ body {
 }
 
 /* Slider 方向: 垂直 / 水平, 由 SliderControl 的 orientation 决定 */
+.zcam-slider-orientation-vertical {
+  align-items: center;
+}
+
 .zcam-slider-orientation-vertical input[type='range'] {
   writing-mode: bt-lr;
   -webkit-appearance: slider-vertical;
-  height: 80px;
+  height: 120px;
+}
+
+.zcam-slider-size-large.zcam-slider-orientation-vertical input[type='range'] {
+  height: 160px;
 }
 
 .zcam-slider-orientation-horizontal {
@@ -596,6 +673,28 @@ body {
   color: #ff4d4f;
 }
 
+/* Select controls */
+.zcam-select {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #ccc;
+}
+
+.zcam-select select {
+  background: #111;
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.zcam-select-value {
+  font-size: 11px;
+  color: #888;
+}
+
 .zcam-grid-trigger {
   flex: 0 0 auto;
   min-width: 64px;
@@ -756,12 +855,19 @@ body {
   justify-content: center;
   cursor: pointer;
   color: #f5f5f5;
+  -webkit-app-region: no-drag;
 }
 
 .control-btn:hover {
   background: #333;
   border-color: #ff7a45;
   color: #ffffff;
+}
+
+.control-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  border-color: #333;
 }
 
 .zcam-window-controls {

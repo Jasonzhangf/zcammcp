@@ -1,0 +1,30 @@
+import type { ViewState } from '../state/PageStore.js';
+
+export type SliderOrientation = 'vertical' | 'horizontal';
+export type SliderSize = 'small' | 'medium' | 'large';
+
+export interface SliderControlConfig {
+  nodePath: string;
+  kind: string;
+  label: string;
+  operationId: string;
+  valueRange: {
+    min: number;
+    max: number;
+    step?: number;
+  };
+  orientation?: SliderOrientation;
+  size?: SliderSize;
+  readValue(view: ViewState): number;
+  formatValue?(value: number): string;
+}
+
+export interface ToggleControlConfig {
+  nodePath: string;
+  kind: string;
+  label?: string;
+  operationId: string;
+  readValue(view: ViewState): boolean;
+  trueLabel?: string;
+  falseLabel?: string;
+}

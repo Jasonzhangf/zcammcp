@@ -4,10 +4,9 @@ import test from 'node:test';
 import { UiSceneStore } from '../state/UiSceneStore.js';
 import { applyWindowCommand, nextLayoutSize } from './WindowCommands.js';
 
-test('nextLayoutSize cycles normal -> compact -> large -> normal', () => {
-  assert.equal(nextLayoutSize('normal'), 'compact');
-  assert.equal(nextLayoutSize('compact'), 'large');
-  assert.equal(nextLayoutSize('large'), 'normal');
+test('nextLayoutSize toggles between normal and studio', () => {
+  assert.equal(nextLayoutSize('normal'), 'studio');
+  assert.equal(nextLayoutSize('studio'), 'normal');
 });
 
 test('applyWindowCommand: shrinkToBall sets windowMode to ball', () => {
@@ -20,20 +19,20 @@ test('applyWindowCommand: shrinkToBall sets windowMode to ball', () => {
 });
 
 test('applyWindowCommand: restoreFromBall sets windowMode to main', () => {
-  const store = new UiSceneStore({ windowMode: 'ball', layoutSize: 'compact' });
+  const store = new UiSceneStore({ windowMode: 'ball', layoutSize: 'studio' });
 
   applyWindowCommand(store, 'restoreFromBall');
 
   assert.equal(store.state.windowMode, 'main');
-  assert.equal(store.state.layoutSize, 'compact');
+  assert.equal(store.state.layoutSize, 'studio');
 });
 
 test('applyWindowCommand: toggleSize uses nextLayoutSize', () => {
   const store = new UiSceneStore({ windowMode: 'main', layoutSize: 'normal' });
 
   applyWindowCommand(store, 'toggleSize');
-  assert.equal(store.state.layoutSize, 'compact');
+  assert.equal(store.state.layoutSize, 'studio');
 
   applyWindowCommand(store, 'toggleSize');
-  assert.equal(store.state.layoutSize, 'large');
+  assert.equal(store.state.layoutSize, 'normal');
 });

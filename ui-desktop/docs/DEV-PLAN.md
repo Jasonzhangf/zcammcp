@@ -10,9 +10,9 @@
 
 1. **状态层（Stores）**
    - `PageStore`：负责 `CameraState` + `UiState`（选中节点、高亮、旧的 layoutMode 等），与相机操作、持久化、日志相关。
-   - `UiSceneStore`：负责窗口模式和布局尺寸：
+   - `UiSceneStore`：负责窗口模式和布局方案：
      - `windowMode`: `'main' | 'ball'`；
-     - `layoutSize`: `'normal' | 'compact' | 'large'`；
+     - `layoutSize`: `'normal' | 'studio'`（布局方案 A/B）；
      - 当前为最小实现，只保存 `state`，后续可扩展状态机方法（例如 `setWindowMode`、`setLayoutSize`）。
 
 2. **消息/命令层（Messages）**
@@ -20,15 +20,16 @@
    - `applyWindowCommand(store, cmd)`：纯函数，只修改 `UiSceneStore.state`，不直接依赖 Electron 或 React：
      - `shrinkToBall` → `windowMode = 'ball'`；
      - `restoreFromBall` → `windowMode = 'main'`；
-     - `toggleSize` → `layoutSize = normal → compact → large → normal`。
+     - `toggleSize` → `layoutSize = normal ↔ studio`（只切换布局，不再调整窗口物理尺寸）。
    - 这一层可以在 Node/JS 环境下独立跑单元测试（已在 `UiSceneStore.test.ts` / `WindowCommands.test.ts` 中覆盖）。
 
 3. **布局/场景层（Scenes & Layout）**
    - `LayoutConfig.tsx`：统一定义窗口场景与 slot：
      - `SceneConfig`：`{ id: WindowMode; layoutSize: LayoutSize; slots: ControlSlotConfig[] }`；
      - 当前实现：
-       - `MainSceneConfig`：`id = 'main'`，`layoutSize = 'normal'`，slots 包含 `StatusCard` + `ShortcutsCard`；
-       - `BallSceneConfig`：`id = 'ball'`，`layoutSize = 'compact'`，slots 只包含 `StatusCard`。
+       - `MainSceneConfig`：`id = 'main'`，`layoutSize = 'normal'`，单 slot 直接渲染一套固定布局（状态卡 + 左侧 PTZ 分组 + 右侧图像分组 + 底部快捷控件）；
+       - `MainScene` 的 `studio` 方案则把图像分组置顶、PTZ 堆叠在下，形成另一种工位布局；
+       - `BallSceneConfig`：`id = 'ball'`，`layoutSize = 'normal' | 'studio'` 均渲染最简 `StatusCard`。
    - `MainScene` / `BallScene`：
      - 位于 `pages/main-scene` / `pages/ball-scene`；
      - 只做 `PageShell(sceneConfig)` 的调用，不包含业务逻辑。
@@ -75,11 +76,10 @@
        - 恢复主窗口 bounds（如存在 `lastNormalBounds`）；
        - 取消置顶 / 恢复可缩放 / 显示和聚焦主窗口；
 
-   - 窗口尺寸循环：
+   - 布局方案切换：
      - `window:toggleSize`：
-       - 读取当前窗口尺寸；
-       - 在 `SIZE_MAP` 中的 `normal → compact → large → normal` 三种配置之间循环；
-       - 调整主窗口大小并居中。
+       - 根据当前 `layoutSize`（A/B）在 `normal ↔ studio` 之间切换；
+       - 只推送布局状态，不再更改窗口物理尺寸。
 
    - 窗口边界设置：
      - `window:setBounds`：
@@ -120,11 +120,12 @@
    - `WindowControls.tsx` 已提供“缩球 / 恢复 / 切尺寸”按钮：
      - 点击按钮 → 更新 `UiSceneStore` → 通过 `electronAPI` 调用 Electron。
 
-5. **Electron 窗口行为**
+5. **Electron 窗口行为 & 状态服务**
    - `electron.main.cjs` 与 `electron.preload.cjs` 已完成最小可运行版本：
      - 支持基本窗口生命周期（打开/最小化/关闭）；
      - 支持 `shrinkToBall` / `restoreFromBall` / `toggleSize` / `setBounds`；
-     - 支持通用 `sendWindowCommand` 接口，便于 UI/CLI 统一使用。
+     - 支持通用 `sendWindowCommand` 接口，便于 UI/CLI 统一使用；
+     - **新增 `StateHost` HTTP 服务**（默认 `127.0.0.1:6224`），维护 `window/ui/cli/services` 状态树，并暴露 `/command`、`/state` 接口，供 CLI 与测试脚本闭环。
 
 待完成：
 
@@ -169,4 +170,3 @@
      - 同步更新 `AGENTS.md` 的“功能与消息系统现状”；
      - 更新 `docs/DEV-PLAN.md` 中的架构和进度说明；
      - 更新 `docs/TEST-RULES.md` 中的测试规则（单元/系统/monkey）。
-

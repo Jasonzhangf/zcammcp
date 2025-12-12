@@ -1,11 +1,14 @@
 import React from 'react';
 
-export type WindowMode = 'main' | 'ball';
-export type LayoutSize = 'normal' | 'compact' | 'large';
+import type { LayoutSize, WindowMode } from '../state/UiSceneStore.js';
+import { StatusCard } from '../../pages/main/status/StatusCard.js';
+import { PtzCard } from '../../pages/main/ptz/PtzCard.js';
+import { ImageControlCard } from '../../pages/main/imageControl/ImageControlCard.js';
+import { ShortcutsCard } from '../../pages/main/shortcuts/ShortcutsCard.js';
 
 export interface ControlSlotConfig {
   id: string;
-  component: React.ComponentType<Record<string, unknown>>;
+  component: React.ComponentType<any>;
   props?: Record<string, unknown>;
 }
 
@@ -15,43 +18,77 @@ export interface SceneConfig {
   slots: ControlSlotConfig[];
 }
 
-export function StatusCard() {
+function MainNormalLayout() {
   return (
-    <div className="zcam-card">
-      <div className="zcam-card-header">
-        <span className="zcam-card-title">状态</span>
+    <div className="zcam-main-grid" data-path="zcam.layout.normal">
+      <div className="zcam-main-grid-status" data-path="zcam.layout.normal.status">
+        <StatusCard />
       </div>
-      <div className="zcam-card-body">
-        <div style={{ fontSize: 11, color: '#ccc' }}>Camera Ready</div>
+      <div className="zcam-main-control-row" data-path="zcam.layout.normal.controls">
+        <div className="zcam-main-control zcam-main-control-ptz" data-path="zcam.layout.normal.ptz">
+          <PtzCard />
+        </div>
+        <div className="zcam-main-control zcam-main-control-image" data-path="zcam.layout.normal.image">
+          <ImageControlCard />
+        </div>
+      </div>
+      <div className="zcam-main-grid-shortcuts" data-path="zcam.layout.normal.shortcuts">
+        <ShortcutsCard />
       </div>
     </div>
   );
 }
 
-export function ShortcutsCard() {
+function MainStudioLayout() {
   return (
-    <div className="zcam-card">
-      <div className="zcam-card-header">
-        <span className="zcam-card-title">快捷操作</span>
+    <div className="zcam-main-grid" data-path="zcam.layout.studio">
+      <div className="zcam-main-grid-status" data-path="zcam.layout.studio.status">
+        <StatusCard />
       </div>
-      <div className="zcam-card-body">
-        <div style={{ fontSize: 11, color: '#ccc' }}>No shortcuts</div>
+      <div className="zcam-studio-stack" data-path="zcam.layout.studio.stack">
+        <div className="zcam-studio-block" data-path="zcam.layout.studio.image">
+          <ImageControlCard />
+        </div>
+        <div className="zcam-studio-block" data-path="zcam.layout.studio.ptz">
+          <PtzCard />
+        </div>
+      </div>
+      <div className="zcam-main-grid-shortcuts" data-path="zcam.layout.studio.shortcuts">
+        <ShortcutsCard />
       </div>
     </div>
   );
 }
 
-export const MainSceneConfig = {
-  id: 'main' as const,
-  layoutSize: 'normal' as const,
-  slots: [
-    { id: 'status', component: StatusCard },
-    { id: 'shortcuts', component: ShortcutsCard },
-  ],
+type SceneVariants = Record<LayoutSize, SceneConfig>;
+
+const mainVariants: SceneVariants = {
+  normal: {
+    id: 'main',
+    layoutSize: 'normal',
+    slots: [{ id: 'main-grid', component: MainNormalLayout }],
+  },
+  studio: {
+    id: 'main',
+    layoutSize: 'studio',
+    slots: [{ id: 'studio-grid', component: MainStudioLayout }],
+  },
 };
 
-export const BallSceneConfig = {
-  id: 'ball' as const,
-  layoutSize: 'compact' as const,
-  slots: [{ id: 'status', component: StatusCard }],
+const ballVariants: SceneVariants = {
+  normal: {
+    id: 'ball',
+    layoutSize: 'normal',
+    slots: [{ id: 'status', component: StatusCard }],
+  },
+  studio: {
+    id: 'ball',
+    layoutSize: 'studio',
+    slots: [{ id: 'status', component: StatusCard }],
+  },
 };
+
+export function getSceneConfig(windowMode: WindowMode, layoutSize: LayoutSize): SceneConfig {
+  const variants = windowMode === 'ball' ? ballVariants : mainVariants;
+  return variants[layoutSize] ?? variants.normal;
+}

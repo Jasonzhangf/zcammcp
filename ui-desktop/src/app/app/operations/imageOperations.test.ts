@@ -58,5 +58,11 @@ test('image.setBrightness / setContrast / setSaturation', async () => {
   assert.equal(store.cameraState.image?.brightness, 60);
   assert.equal(store.cameraState.image?.contrast, 70);
   assert.equal(store.cameraState.image?.saturation, 80);
-});
 
+  const requests = cli.getRequests();
+  assert.equal(requests.length, 3);
+  const [brightnessReq, contrastReq, saturationReq] = requests;
+  assert.deepEqual(brightnessReq.args, ['uvc', 'set', 'brightness', '--value', '60']);
+  assert.deepEqual(contrastReq.args, ['uvc', 'set', 'contrast', '--value', '70']);
+  assert.deepEqual(saturationReq.args, ['uvc', 'set', 'saturation', '--value', '80']);
+});

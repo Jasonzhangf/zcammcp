@@ -1,24 +1,46 @@
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { spawn } = require('child_process');
+const http = require('http');
 const windowStateKeeper = require('electron-window-state');
+const { StateHost } = require('./state-host/state-host.cjs');
+
+const INITIAL_WIDTH = 1200;
+const INITIAL_HEIGHT = 720;
+const LAYOUT_VARIANTS = ['normal', 'studio'];
+
+const CLI_ROOT = process.env.ZCAM_CLI_ROOT || path.resolve(__dirname, '..', 'cli');
+const CLI_NODE_BIN = process.env.ZCAM_NODE_BIN || process.execPath;
+const CLI_DEFAULT_TIMEOUT = parseInt(process.env.ZCAM_CLI_TIMEOUT || '10000', 10);
+const CLI_SERVICE_HOST = process.env.ZCAM_CLI_SERVICE_HOST || '127.0.0.1';
+const CLI_SERVICE_PORT = parseInt(process.env.ZCAM_CLI_SERVICE_PORT || '6291', 10);
+const CLI_SERVICE_SCRIPT =
+  process.env.ZCAM_CLI_SERVICE_SCRIPT || path.resolve(__dirname, '..', 'service', 'cli-daemon', 'cli-service.js');
 
 let mainWindow = null;
 let ballWindow = null;
 let lastNormalBounds = null;
+let cliServiceProcess = null;
 
-const INITIAL_WIDTH = 1200;
-const INITIAL_HEIGHT = 720;
-const COMPACT_WIDTH = 800;
-const COMPACT_HEIGHT = 500;
-const LARGE_WIDTH = 1600;
-const LARGE_HEIGHT = 900;
-
-// 尺寸映射表
-const SIZE_MAP = {
-  normal: { width: INITIAL_WIDTH, height: INITIAL_HEIGHT },
-  compact: { width: COMPACT_WIDTH, height: COMPACT_HEIGHT },
-  large: { width: LARGE_WIDTH, height: LARGE_HEIGHT },
+const stateHost = new StateHost();
+const windowState = {
+  mode: 'main',
+  layoutSize: 'normal',
+  ballVisible: false,
+  lastBounds: null,
 };
+
+function pushWindowState(patch) {
+  const next = { ...windowState, ...patch, updatedAt: Date.now() };
+  Object.assign(windowState, next);
+  try {
+    stateHost.push('window', windowState);
+  } catch (err) {
+    console.error('[StateHost] push window failed', err);
+  }
+  return windowState;
+}
 
 function createMainWindow() {
   const mainWindowState = windowStateKeeper({
@@ -95,9 +117,21 @@ function createBallWindow(bounds) {
     },
   });
 
-  const ballHtmlPath = path.join(__dirname, '../assets/ball/ball.html');
+  const ballHtmlPath = path.join(__dirname, 'assets', 'ball', 'ball.html');
   console.log('[BallWindow] load file', ballHtmlPath);
-  ballWindow.loadFile(ballHtmlPath);
+  ballWindow
+    .loadFile(ballHtmlPath)
+    .catch((err) => {
+      console.error('[BallWindow] failed to load ball html', err);
+      if (ballWindow) {
+        ballWindow.close();
+        ballWindow = null;
+      }
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
 
   ballWindow.once('ready-to-show', () => {
     if (!ballWindow) return;
@@ -106,33 +140,29 @@ function createBallWindow(bounds) {
 
   ballWindow.on('closed', () => {
     ballWindow = null;
+    pushWindowState({ ballVisible: false });
   });
 }
 
-function setWindowSize(mode) {
-  if (!mainWindow) return;
-  const config = SIZE_MAP[mode] || SIZE_MAP.normal;
-  mainWindow.setSize(config.width, config.height);
-  mainWindow.center();
-}
-
-// IPC handlers
-ipcMain.handle('window:minimize', () => {
-  if (mainWindow) mainWindow.minimize();
-});
-
-ipcMain.handle('window:close', () => app.quit());
-
-ipcMain.handle('window:shrinkToBall', () => {
-  if (!mainWindow || ballWindow) return;
+function shrinkToBall() {
+  if (!mainWindow) {
+    return { ok: false, error: 'main window not ready' };
+  }
+  if (ballWindow) {
+    return { ok: false, error: 'ball window already exists' };
+  }
   lastNormalBounds = mainWindow.getBounds();
   console.log('[Window] shrinkToBall -> storing bounds', lastNormalBounds);
   createBallWindow(lastNormalBounds);
   mainWindow.hide();
-});
+  const state = pushWindowState({ mode: 'ball', ballVisible: true, lastBounds: lastNormalBounds });
+  return { ok: true, state };
+}
 
-ipcMain.handle('window:restoreFromBall', () => {
-  if (!mainWindow) return;
+function restoreFromBall() {
+  if (!mainWindow) {
+    return { ok: false, error: 'main window not ready' };
+  }
   if (ballWindow) {
     ballWindow.close();
     ballWindow = null;
@@ -142,50 +172,209 @@ ipcMain.handle('window:restoreFromBall', () => {
   mainWindow.setResizable(true);
   mainWindow.show();
   mainWindow.focus();
-});
+  const state = pushWindowState({ mode: 'main', ballVisible: false });
+  return { ok: true, state };
+}
 
-ipcMain.handle('window:toggleSize', () => {
-  if (!mainWindow) return;
-  const currentSize = mainWindow.getSize();
-  const normalSize = SIZE_MAP.normal;
-  const compactSize = SIZE_MAP.compact;
-  const largeSize = SIZE_MAP.large;
+function toggleWindowSize() {
+  const current = windowState.layoutSize || 'normal';
+  const nextLayout = current === 'normal' ? 'studio' : 'normal';
+  const state = pushWindowState({ layoutSize: nextLayout });
+  return { ok: true, state };
+}
 
-  // 简单循环：normal → compact → large → normal
-  if (currentSize[0] === normalSize.width && currentSize[1] === normalSize.height) {
-    mainWindow.setSize(compactSize.width, compactSize.height);
-  } else if (currentSize[0] === compactSize.width && currentSize[1] === compactSize.height) {
-    mainWindow.setSize(largeSize.width, largeSize.height);
-  } else {
-    mainWindow.setSize(normalSize.width, normalSize.height);
+function setWindowBounds(bounds) {
+  if (!mainWindow) {
+    return { ok: false, error: 'main window not ready' };
   }
-  mainWindow.center();
+  const prevBounds = mainWindow.getBounds();
+  const nextBounds = {
+    x: typeof bounds?.x === 'number' ? bounds.x : prevBounds.x,
+    y: typeof bounds?.y === 'number' ? bounds.y : prevBounds.y,
+    width: typeof bounds?.width === 'number' ? bounds.width : prevBounds.width,
+    height: typeof bounds?.height === 'number' ? bounds.height : prevBounds.height,
+  };
+  mainWindow.setBounds(nextBounds);
+  const state = pushWindowState({ lastBounds: nextBounds });
+  return { ok: true, state };
+}
+
+async function ensureCliService() {
+  try {
+    await requestCliService('/health', 'GET');
+    return;
+  } catch {
+    startCliService();
+  }
+
+  const start = Date.now();
+  while (Date.now() - start < CLI_DEFAULT_TIMEOUT) {
+    try {
+      await requestCliService('/health', 'GET');
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+  throw new Error('CLI service failed to start');
+}
+
+function startCliService() {
+  if (cliServiceProcess) {
+    return cliServiceProcess;
+  }
+  if (!fs.existsSync(CLI_SERVICE_SCRIPT)) {
+    throw new Error(`CLI service script not found at ${CLI_SERVICE_SCRIPT}`);
+  }
+
+  cliServiceProcess = spawn(CLI_NODE_BIN, [CLI_SERVICE_SCRIPT], {
+    cwd: path.dirname(CLI_SERVICE_SCRIPT),
+    windowsHide: true,
+    stdio: 'ignore',
+  });
+
+  cliServiceProcess.on('exit', () => {
+    cliServiceProcess = null;
+  });
+
+  return cliServiceProcess;
+}
+
+function requestCliService(pathname, method = 'GET', payload) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: CLI_SERVICE_HOST,
+      port: CLI_SERVICE_PORT,
+      path: pathname,
+      method,
+      headers: {},
+    };
+
+    let body = null;
+    if (payload) {
+      body = JSON.stringify(payload);
+      options.headers['Content-Type'] = 'application/json';
+      options.headers['Content-Length'] = Buffer.byteLength(body);
+    }
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        try {
+          resolve(data ? JSON.parse(data) : {});
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function runCliBridge(payload = {}) {
+  await ensureCliService();
+  const response = await requestCliService('/run', 'POST', {
+    ...payload,
+    timeoutMs: payload.timeoutMs ?? CLI_DEFAULT_TIMEOUT,
+  });
+  if (!response.ok) {
+    throw new Error(response.error || 'CLI service error');
+  }
+  return response.result || { ok: true };
+}
+
+// IPC handlers
+ipcMain.handle('window:minimize', () => {
+  if (mainWindow) mainWindow.minimize();
 });
 
-ipcMain.handle('window:setBounds', (_, bounds) => {
-  if (!mainWindow) return;
-  const { x, y, width, height } = bounds;
-  mainWindow.setBounds({ x, y, width, height });
-});
+ipcMain.handle('window:close', () => app.quit());
 
-ipcMain.handle('window:sendCommand', (_, cmd) => {
+ipcMain.handle('window:shrinkToBall', () => shrinkToBall());
+
+ipcMain.handle('window:restoreFromBall', () => restoreFromBall());
+
+ipcMain.handle('window:toggleSize', () => toggleWindowSize());
+
+ipcMain.handle('window:setBounds', (_, bounds) => setWindowBounds(bounds));
+
+ipcMain.handle('window:sendCommand', (_, cmd, payload) => {
   switch (cmd) {
     case 'shrinkToBall':
-      ipcMain.emit('window:shrinkToBall');
-      break;
+      return shrinkToBall();
     case 'restoreFromBall':
-      ipcMain.emit('window:restoreFromBall');
-      break;
+      return restoreFromBall();
     case 'toggleSize':
-      ipcMain.emit('window:toggleSize');
-      break;
+      return toggleWindowSize();
+    case 'setBounds':
+      return setWindowBounds(payload);
     default:
       console.log('[Window] unknown command', cmd);
+      return { ok: false, error: 'unknown command' };
   }
 });
+
+ipcMain.handle('state:push', (_, { channel, payload }) => {
+  try {
+    stateHost.push(channel, payload || {});
+    return { ok: true };
+  } catch (err) {
+    console.error('[StateHost] push failed', err);
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle('cli:run', async (_, payload) => {
+  try {
+    return await runCliBridge(payload || {});
+  } catch (err) {
+    console.error('[CLI] run failed', err);
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
+stateHost
+  .start()
+  .then(() => {
+    stateHost.registerHandler('window', async (action, payload) => {
+      switch (action) {
+        case 'shrinkToBall':
+          return shrinkToBall();
+        case 'restoreFromBall':
+          return restoreFromBall();
+        case 'toggleSize':
+          return toggleWindowSize();
+        case 'setBounds':
+          return setWindowBounds(payload);
+        default:
+          throw new Error(`unknown window action: ${action}`);
+      }
+    });
+  })
+  .catch((err) => {
+    console.error('[StateHost] failed to start', err);
+  });
 
 app.whenReady().then(() => {
   createMainWindow();
+  pushWindowState({});
+});
+
+app.on('before-quit', () => {
+  if (cliServiceProcess) {
+    try {
+      cliServiceProcess.kill();
+    } catch {
+      // ignore
+    }
+    cliServiceProcess = null;
+  }
 });
 
 app.on('window-all-closed', () => {
