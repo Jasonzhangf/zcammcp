@@ -9,7 +9,7 @@
     "build": "tsc -p .",
     "build:web": "vite build",
     "build:electron": "echo 'skip electron build (using plain CJS files)'",
-    "electron": "npx electron electron.main.cjs",
+    "electron": "npm run build:web && npx electron electron.main.cjs",
     "package": "npm run build && npm run build:web && npm run build:electron && electron-builder",
     "test": "node --test dist/src/app/**/*.test.js",
     "test:ts": "ts-node src/app/**/*.test.ts",
