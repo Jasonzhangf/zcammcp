@@ -428,110 +428,127 @@ body {
   height: 100%;
 }
 
-.zcam-ptz-slider-wrap {
+.zcam-slider-wrap {
   position: relative;
-  width: 70px;
-  padding: 6px 4px;
-  border-radius: 999px;
-  border: 1px solid #333;
-  background: #1b1b1b;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  box-sizing: border-box;
-  overflow: hidden; /* 限制内部 slider 不要溢出到相邻容器, 保证命中区域与边框一致 */
+  gap: 6px;
+  width: 100%;
 }
 
-/* 通用 Slider 尺寸, 供 SliderControl 使用 */
+.zcam-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  color: #9f9f9f;
+}
+
+.zcam-slider-track-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  padding: 4px 6px;
+  outline: none;
+}
+
+.zcam-slider-track-wrapper:focus-visible {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+
+.zcam-slider-track {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.zcam-slider-track input[type='range'] {
+  width: 100%;
+  pointer-events: none;
+  -webkit-appearance: none;
+  accent-color: #ff6b35;
+  background: transparent;
+}
+
+.zcam-slider-track input[type='range']::-webkit-slider-thumb {
+  pointer-events: none;
+}
+
+.zcam-slider-thresholds {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #676767;
+}
+
 .zcam-slider-size-small {
-  width: 36px;
+  max-width: 80px;
 }
 
 .zcam-slider-size-medium {
-  width: 44px;
+  max-width: 110px;
 }
 
 .zcam-slider-size-large {
-  width: 56px;
+  max-width: 140px;
 }
 
-/* Slider 方向: 垂直 / 水平, 由 SliderControl 的 orientation 决定 */
-.zcam-slider-orientation-vertical {
-  align-items: center;
+.zcam-slider-orientation-vertical .zcam-slider-track-wrapper {
+  flex-direction: column;
 }
 
-.zcam-slider-orientation-vertical input[type='range'] {
+.zcam-slider-orientation-vertical .zcam-slider-track input[type='range'] {
   writing-mode: bt-lr;
   -webkit-appearance: slider-vertical;
-  height: 120px;
-}
-
-.zcam-slider-size-large.zcam-slider-orientation-vertical input[type='range'] {
   height: 160px;
 }
 
-.zcam-slider-orientation-horizontal {
-  width: 100%;
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
-}
-
-.zcam-slider-orientation-horizontal input[type='range'] {
+.zcam-slider-orientation-horizontal .zcam-slider-track input[type='range'] {
   writing-mode: horizontal-tb;
-  -webkit-appearance: slider-horizontal;
-  width: 100%;
-  height: auto;
 }
 
-.zcam-slider-orientation-horizontal .zcam-ptz-slider-label {
-  min-width: 48px;
-  text-align: right;
+.zcam-slider-step-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid #333;
+  background: rgba(255, 255, 255, 0.05);
+  color: #f5f5f5;
+  cursor: pointer;
+  font-size: 14px;
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.zcam-slider-orientation-horizontal .zcam-ptz-slider-value {
-  min-width: 32px;
-  text-align: right;
+.zcam-slider-step-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
-.zcam-control-disabled {
-  opacity: 0.5;
+.zcam-slider-step-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: #ff8a53;
 }
 
-.zcam-ptz-slider-label {
+.zcam-slider-value {
+  font-weight: 600;
+  color: #f0f0f0;
+}
+
+.zcam-slider-label {
+  text-transform: uppercase;
   font-size: 10px;
-  color: #888;
+  letter-spacing: 0.5px;
 }
 
-.zcam-ptz-slider-value {
-  font-size: 10px;
-  color: #999;
-}
-
-/* 调试用: 展示当前 hover 命中的容器基准点 */
-.zcam-debug-hover-marker {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #52c41a;
-  top: 0;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: none;
-}
-/* 调试用: 展示容器边界 (不影响布局, 只画 outline) */
-.zcam-debug-container-primary {
-  outline: 1px solid rgba(82, 196, 26, 0.7); /* 绿色, Zoom 等主控件 */
-}
-
+.zcam-debug-hover-marker,
+.zcam-debug-container-primary,
 .zcam-debug-container-secondary {
-  outline: 1px solid rgba(245, 34, 45, 0.7); /* 红色, Speed 等相邻控件 */
-}
-
-.zcam-ptz-slider-wrap input[type='range'] {
-  width: 100%;
+  display: none;
 }
 
 .zcam-ptz-status-row {

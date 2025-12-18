@@ -17,6 +17,11 @@ export interface SliderControlConfig {
   size?: SliderSize;
   readValue(view: ViewState): number;
   formatValue?(value: number): string;
+  valueMapper?: {
+    toDisplay?(value: number): number;
+    toActual?(value: number): number;
+  };
+  profileKey?: string;
 }
 
 export interface ToggleControlConfig {
