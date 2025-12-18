@@ -34,8 +34,9 @@ export function attachContainerPersistence(store: ContainerStore) {
     const stored = cache[state.id];
     if (stored) {
       try {
+        const safeBounds = sanitizeBounds(stored.bounds, state.bounds);
         store.update(state.id, {
-          bounds: stored.bounds,
+          bounds: safeBounds,
           visible: typeof stored.visible === 'boolean' ? stored.visible : state.visible,
         });
         return true;
@@ -52,7 +53,7 @@ export function attachContainerPersistence(store: ContainerStore) {
       return;
     }
     cache[state.id] = {
-      bounds: state.bounds,
+      bounds: sanitizeBounds(state.bounds, state.bounds),
       visible: state.visible,
     };
     try {
@@ -61,4 +62,23 @@ export function attachContainerPersistence(store: ContainerStore) {
       // storage might be full or unavailable
     }
   });
+}
+
+function sanitizeBounds(candidate: ContainerBounds, fallback: ContainerBounds): ContainerBounds {
+  const clamp = (value: number | undefined, min: number, max: number, defaultValue: number) => {
+    if (!Number.isFinite(value ?? NaN)) {
+      return defaultValue;
+    }
+    return Math.max(min, Math.min(max, value as number));
+  };
+
+  const fallbackWidth = fallback?.width ?? 100;
+  const fallbackHeight = fallback?.height ?? 100;
+
+  return {
+    x: clamp(candidate?.x, 0, 100, fallback?.x ?? 0),
+    y: clamp(candidate?.y, 0, 100, fallback?.y ?? 0),
+    width: clamp(candidate?.width, 10, 100, fallbackWidth),
+    height: clamp(candidate?.height, 10, 100, fallbackHeight),
+  };
 }
