@@ -1,10 +1,55 @@
 /* 样式来自 docs/ui-main-draft.html，做成独立 CSS 供 React 复用 */
 
+:root {
+  --zcam-safe-padding: 4px;
+  --zcam-safe-gap: 8px;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
   overflow: hidden; /* 避免在小窗口/球模式下出现滚动条 */
+}
+
+[data-container-debug='outline'] {
+  outline: 1px dashed rgba(255, 196, 0, 0.7);
+  outline-offset: 2px;
+}
+
+[data-container-debug='verbose'] {
+  outline: 1px solid rgba(255, 85, 0, 0.8);
+  outline-offset: 2px;
+  position: relative;
+}
+
+[data-container-debug='verbose']::after {
+  content: attr(data-container-id);
+  position: absolute;
+  top: -18px;
+  left: 0;
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 0 4px;
+  border-radius: 3px;
+  color: #ffab40;
+}
+
+.zcam-container-resize-handle {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  cursor: se-resize;
+  z-index: 2;
+}
+
+[data-container-debug='off'] > .zcam-container-resize-handle {
+  opacity: 0.2;
 }
 
 #zcam-camera-root {
@@ -114,9 +159,10 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 8px 10px 10px;
-  gap: 8px;
+  padding: var(--zcam-safe-padding);
+  gap: var(--zcam-safe-gap);
   overflow: visible;
+  background: #151515;
 }
 
 .control-slot {
@@ -124,22 +170,23 @@ body {
 }
 
 .page-shell[data-layout='studio'] .zcam-main {
-  padding: 10px 14px 14px;
-  gap: 12px;
+  padding: var(--zcam-safe-padding);
+  gap: var(--zcam-safe-gap);
 }
 
 .zcam-main-grid {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--zcam-safe-gap);
   flex: 1;
 }
 
 .zcam-main-control-row {
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 12px;
+  display: flex;
+  gap: var(--zcam-safe-gap);
   align-items: stretch;
+  flex-wrap: nowrap;
+  padding-right: var(--zcam-safe-gap);
 }
 
 .zcam-main-control {
@@ -225,10 +272,10 @@ body {
   background: #141414;
   border-radius: 8px;
   border: 1px solid #2a2a2a;
-  padding: 6px 8px;
+  padding: calc(var(--zcam-safe-padding) * 0.6);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(var(--zcam-safe-gap) * 0.4);
   box-sizing: border-box;
 }
 
@@ -247,7 +294,7 @@ body {
 .zcam-card-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: calc(var(--zcam-safe-gap) * 0.35);
   font-size: 11px;
 }
 
@@ -868,6 +915,69 @@ body {
   opacity: 0.5;
   cursor: default;
   border-color: #333;
+}
+
+.control-btn.control-btn-close {
+  border-color: #ff4d4f;
+  color: #ffccc7;
+}
+
+.control-btn.control-btn-close:hover {
+  background: #ff4d4f;
+  border-color: #ff7875;
+  color: #ffffff;
+}
+
+.layout-debug-toggle {
+  width: auto;
+  min-width: 100px;
+  height: 24px;
+  border-radius: 12px;
+  padding: 0 12px;
+  justify-content: center;
+  text-transform: none;
+  font-size: 11px;
+}
+
+.layout-debug-toggle-active {
+  background: #2f8f46;
+  border-color: #46c06b;
+  color: #ffffff;
+}
+
+.zcam-main-grid-status[data-container-id],
+.zcam-main-grid-shortcuts[data-container-id] {
+  min-height: calc(var(--container-height, 20) * 1%);
+}
+
+.zcam-main-control-row > [data-container-id] {
+  flex: 0 0 calc(var(--container-width, 50) * 1%);
+  max-width: calc(var(--container-width, 50) * 1%);
+}
+
+.zcam-main-grid-status[data-container-id],
+.zcam-main-grid-shortcuts[data-container-id] {
+  min-height: calc(var(--container-height, 20) * 1%);
+}
+
+.zcam-main-grid-shortcuts[data-container-id] {
+  flex: 0 0 calc(var(--container-width, 100) * 1%);
+  max-width: 100%;
+}
+
+.zcam-studio-stack > [data-container-id] {
+  flex: 1 1 auto;
+}
+
+.zcam-main-grid[data-path='zcam.layout.normal'],
+.zcam-main-grid[data-path='zcam.layout.studio'] {
+  gap: var(--zcam-safe-gap);
+  padding: 0 var(--zcam-safe-gap) var(--zcam-safe-gap);
+}
+
+[data-container-id] > .zcam-card {
+  width: 100%;
+  height: 100%;
 }
 
 .zcam-window-controls {

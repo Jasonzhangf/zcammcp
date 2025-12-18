@@ -29,15 +29,26 @@ function outputResult(data, options) {
   console.log(chalk.green('✓'), chalk.gray(JSON.stringify(data)));
 }
 
+function parseAutoOption(raw) {
+  if (typeof raw === 'string') {
+    const value = raw.trim().toLowerCase();
+    if (value === 'true' || value === '1' || value === 'on') return true;
+    if (value === 'false' || value === '0' || value === 'off') return false;
+  } else if (raw === true) {
+    return true;
+  }
+  return undefined;
+}
+
 const uvcCmd = new Command('uvc')
-  .description('UVC 相机服务控制 (ImvtCameraService)')
-  .option('--base-url <url>', 'UVC 服务地址', DEFAULT_BASE_URL)
-  .option('--timeout <ms>', '请求超时 (毫秒)', DEFAULT_TIMEOUT)
-  .option('--json', 'JSON 格式输出');
+  .description('UVC service control (ImvtCameraService)')
+  .option('--base-url <url>', 'UVC service base URL', DEFAULT_BASE_URL)
+  .option('--timeout <ms>', 'request timeout in milliseconds', DEFAULT_TIMEOUT)
+  .option('--json', 'force JSON output');
 
 uvcCmd
   .command('status')
-  .description('查询 UVC 服务 capabilities')
+  .description('Query the UVC service capabilities')
   .action(async (options, cmd) => {
     try {
       const service = createService(cmd);
@@ -51,7 +62,7 @@ uvcCmd
 
 uvcCmd
   .command('get <key>')
-  .description('读取单个属性')
+  .description('Read a single property')
   .action(async (key, options, cmd) => {
     try {
       const service = createService(cmd);
@@ -65,13 +76,14 @@ uvcCmd
 
 uvcCmd
   .command('set <key>')
-  .description('设置属性值')
-  .option('-v, --value <value>', '属性值')
-  .option('--auto', '启用 auto 模式')
+  .description('Set a property value')
+  .option('-v, --value <value>', 'property value')
+  .option('--auto [state]', 'auto mode true/false')
   .action(async (key, options, cmd) => {
     try {
       const service = createService(cmd);
-      const payload = await service.setProperty(key, options.value, { auto: options.auto === true });
+      const auto = parseAutoOption(options.auto);
+      const payload = await service.setProperty(key, options.value, { auto });
       outputResult(payload, collectOptions(cmd));
     } catch (err) {
       console.error(chalk.red('✗ set failed'), err.message);
@@ -81,7 +93,7 @@ uvcCmd
 
 uvcCmd
   .command('list-resolutions')
-  .description('列出支持的分辨率')
+  .description('List supported resolutions')
   .action(async (options, cmd) => {
     try {
       const service = createService(cmd);
@@ -95,9 +107,9 @@ uvcCmd
 
 uvcCmd
   .command('set-resolution')
-  .description('设置分辨率')
-  .requiredOption('-w, --width <width>', '宽度')
-  .requiredOption('-h, --height <height>', '高度')
+  .description('Set resolution')
+  .requiredOption('-w, --width <width>', 'width')
+  .requiredOption('-h, --height <height>', 'height')
   .action(async (options, cmd) => {
     try {
       const service = createService(cmd);
@@ -111,7 +123,7 @@ uvcCmd
 
 uvcCmd
   .command('list-framerates')
-  .description('列出支持的帧率')
+  .description('List supported frame rates')
   .action(async (options, cmd) => {
     try {
       const service = createService(cmd);
@@ -125,7 +137,7 @@ uvcCmd
 
 uvcCmd
   .command('set-framerate <value>')
-  .description('设置帧率')
+  .description('Set frame rate')
   .action(async (value, options, cmd) => {
     try {
       const service = createService(cmd);

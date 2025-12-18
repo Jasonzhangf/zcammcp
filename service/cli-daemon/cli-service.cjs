@@ -18,6 +18,9 @@ const CLI_ROOT = process.env.ZCAM_CLI_ROOT || path.resolve(__dirname, '..', '..'
 const CLI_ENTRY = process.env.ZCAM_CLI_ENTRY || path.resolve(CLI_ROOT, 'src', 'index.js');
 const NODE_BIN = process.env.ZCAM_NODE_BIN || process.execPath;
 const DEFAULT_TIMEOUT = parseInt(process.env.ZCAM_CLI_TIMEOUT || '10000', 10);
+const ALLOW_ORIGIN = typeof process.env.ZCAM_CLI_ALLOW_ORIGIN === 'string' ? process.env.ZCAM_CLI_ALLOW_ORIGIN : '*';
+const CAMERA_STATE_HOST = process.env.ZCAM_CAMERA_STATE_HOST || '127.0.0.1';
+const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292', 10);
 
 let lastResult = {
   ok: false,
@@ -25,8 +28,18 @@ let lastResult = {
   updatedAt: Date.now(),
 };
 
+function applyCors(res) {
+  if (!ALLOW_ORIGIN) {
+    return;
+  }
+  res.setHeader('Access-Control-Allow-Origin', ALLOW_ORIGIN);
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
 function respondJson(res, payload, status = 200) {
   res.statusCode = status;
+  applyCors(res);
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(payload));
 }
@@ -119,8 +132,46 @@ function updateLastResult(patch) {
   return lastResult;
 }
 
+function deriveCameraKeys(args) {
+  if (!Array.isArray(args) || args.length === 0) return [];
+  if (args[0] === 'uvc' && args[1] === 'set' && typeof args[2] === 'string') {
+    return [args[2]];
+  }
+  return [];
+}
+
+function notifyCameraState(keys) {
+  if (!CAMERA_STATE_PORT || !CAMERA_STATE_HOST) return Promise.resolve();
+  const payload = JSON.stringify({ keys });
+  const options = {
+    hostname: CAMERA_STATE_HOST,
+    port: CAMERA_STATE_PORT,
+    path: '/refresh',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(payload),
+    },
+  };
+  return new Promise((resolve, reject) => {
+    const req = http.request(options, (res) => {
+      res.on('data', () => {});
+      res.on('end', resolve);
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
+    applyCors(res);
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204;
+      res.end();
+      return;
+    }
     if (req.method === 'GET' && req.url === '/health') {
       return respondJson(res, { ok: true, pid: process.pid, updatedAt: Date.now() });
     }
@@ -135,6 +186,10 @@ const server = http.createServer(async (req, res) => {
       try {
         const result = await runCliCommand(body);
         updateLastResult({ ...result, startedAt });
+        const keys = deriveCameraKeys(body.args);
+        notifyCameraState(keys).catch((err) => {
+          console.warn('[CLI Service] camera state refresh failed', err.message || err);
+        });
         return respondJson(res, { ok: true, result });
       } catch (err) {
         updateLastResult({ ok: false, error: err.message, startedAt });

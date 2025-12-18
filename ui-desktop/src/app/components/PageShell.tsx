@@ -2,6 +2,7 @@ import React from 'react';
 
 import { WindowControls } from './WindowControls.js';
 import type { SceneConfig } from '../framework/ui/LayoutConfig.js';
+import { LayoutDebugToggle } from './LayoutDebugToggle.js';
 
 export function PageShell({ scene }: { scene: SceneConfig }) {
   return (
@@ -17,6 +18,7 @@ export function PageShell({ scene }: { scene: SceneConfig }) {
           <div className="zcam-title">ZCAM 相机控制</div>
         </div>
         <div className="zcam-header-right">
+          <LayoutDebugToggle />
           <WindowControls />
         </div>
       </div>

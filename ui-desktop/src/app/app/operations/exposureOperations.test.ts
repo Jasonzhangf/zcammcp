@@ -60,5 +60,10 @@ test('exposure.setAeEnabled / setShutter / setIso', async () => {
   );
 
   assert.equal(store.cameraState.exposure?.iso?.value, 800);
-});
 
+  const requests = cli.getRequests();
+  assert.equal(requests.length, 3);
+  assert.deepEqual(requests[0].args, ['uvc', 'set', 'exposure', '--auto', 'true']);
+  assert.deepEqual(requests[1].args, ['uvc', 'set', 'exposure', '--value', '60']);
+  assert.deepEqual(requests[2].args, ['uvc', 'set', 'gain', '--value', '800']);
+});

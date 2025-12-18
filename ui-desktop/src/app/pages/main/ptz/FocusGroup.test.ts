@@ -46,6 +46,5 @@ test('FocusGroup.setFocus operation updates state correctly', async () => {
   const requests = cli.getRequests();
   const firstRequest = requests[0];
   assert.ok(firstRequest);
-  assert.equal(firstRequest.command, 'ptz.focus');
-  assert.equal(firstRequest.params?.value, 80);
+  assert.deepEqual(firstRequest.args, ['uvc', 'set', 'focus', '--value', '80']);
 });

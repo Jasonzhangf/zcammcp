@@ -1,0 +1,6 @@
+- [x] ContainerStore：保存容器树并提供订阅接口（完成）
+- [x] UI 场景/页面：注册根容器 + 主分组（status/PTZ/image/shortcuts）并推送容器数据（完成）
+- [ ] ErrorStore / MessageBus：错误与消息订阅中心（未做）
+- [ ] StateHost / CLI：扩展 `container.*` 命令（setBounds/Visibility/Style/Data/GetState）
+- [ ] 控件层：更多组件迁移到 `useContainerState`（PTZ 之外的 slider/button）
+- [ ] Mock/文档：补充订阅、错误、消息流 Demo 与操作指南

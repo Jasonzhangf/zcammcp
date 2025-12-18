@@ -8,6 +8,7 @@ import type {
   OperationResult,
   OperationDefinition,
 } from '../../framework/state/PageStore.js';
+import { buildUvcCliRequest } from './uvcCliRequest.js';
 
 export const exposureOperations: OperationDefinition[] = [
   {
@@ -26,11 +27,7 @@ export const exposureOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `exposure-ae-${Date.now()}`,
-          command: 'exposure.ae',
-          params: { enabled },
-        },
+        cliRequest: buildUvcCliRequest('exposure', undefined, { auto: enabled }),
       };
     },
   },
@@ -53,11 +50,7 @@ export const exposureOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `exposure-shutter-${Date.now()}`,
-          command: 'exposure.shutter',
-          params: { value: clamped },
-        },
+        cliRequest: buildUvcCliRequest('exposure', clamped),
       };
     },
   },
@@ -80,13 +73,8 @@ export const exposureOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `exposure-iso-${Date.now()}`,
-          command: 'exposure.iso',
-          params: { value: clamped },
-        },
+        cliRequest: buildUvcCliRequest('gain', clamped),
       };
     },
   },
 ];
-

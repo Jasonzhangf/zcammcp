@@ -8,6 +8,7 @@ import type {
   OperationResult,
   OperationDefinition,
 } from '../../framework/state/PageStore.js';
+import { buildUvcCliRequest } from './uvcCliRequest.js';
 
 export const whiteBalanceOperations: OperationDefinition[] = [
   {
@@ -26,11 +27,7 @@ export const whiteBalanceOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `wb-awb-${Date.now()}`,
-          command: 'wb.awb',
-          params: { enabled },
-        },
+        cliRequest: buildUvcCliRequest('whitebalance', undefined, { auto: enabled }),
       };
     },
   },
@@ -51,13 +48,8 @@ export const whiteBalanceOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `wb-temp-${Date.now()}`,
-          command: 'wb.temperature',
-          params: { value: clamped },
-        },
+        cliRequest: buildUvcCliRequest('whitebalance', clamped),
       };
     },
   },
 ];
-

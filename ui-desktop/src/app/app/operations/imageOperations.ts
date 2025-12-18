@@ -7,8 +7,8 @@ import type {
   OperationPayload,
   OperationResult,
   OperationDefinition,
-  CliRequest,
 } from '../../framework/state/PageStore.js';
+import { buildUvcCliRequest } from './uvcCliRequest.js';
 
 function clamp01(value: number): number {
   if (!Number.isFinite(value)) return 50;
@@ -27,7 +27,7 @@ export const imageOperations: OperationDefinition[] = [
       };
       return {
         newStatePartial: newState,
-        cliRequest: buildUvcSetRequest('brightness', v),
+        cliRequest: buildUvcCliRequest('brightness', v),
       };
     },
   },
@@ -42,7 +42,7 @@ export const imageOperations: OperationDefinition[] = [
       };
       return {
         newStatePartial: newState,
-        cliRequest: buildUvcSetRequest('contrast', v),
+        cliRequest: buildUvcCliRequest('contrast', v),
       };
     },
   },
@@ -57,20 +57,8 @@ export const imageOperations: OperationDefinition[] = [
       };
       return {
         newStatePartial: newState,
-        cliRequest: buildUvcSetRequest('saturation', v),
+        cliRequest: buildUvcCliRequest('saturation', v),
       };
     },
   },
 ];
-
-function buildUvcSetRequest(kind: string, value: number): CliRequest {
-  return {
-    id: `uvc-${kind}-${Date.now()}`,
-    command: `uvc.set.${kind}`,
-    args: ['uvc', 'set', kind, '--value', String(value)],
-    params: {
-      key: kind,
-      value,
-    },
-  };
-}

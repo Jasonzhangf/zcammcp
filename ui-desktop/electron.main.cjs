@@ -16,12 +16,20 @@ const CLI_DEFAULT_TIMEOUT = parseInt(process.env.ZCAM_CLI_TIMEOUT || '10000', 10
 const CLI_SERVICE_HOST = process.env.ZCAM_CLI_SERVICE_HOST || '127.0.0.1';
 const CLI_SERVICE_PORT = parseInt(process.env.ZCAM_CLI_SERVICE_PORT || '6291', 10);
 const CLI_SERVICE_SCRIPT =
-  process.env.ZCAM_CLI_SERVICE_SCRIPT || path.resolve(__dirname, '..', 'service', 'cli-daemon', 'cli-service.js');
+  process.env.ZCAM_CLI_SERVICE_SCRIPT || path.resolve(__dirname, '..', 'service', 'cli-daemon', 'cli-service.cjs');
+const CAMERA_STATE_HOST = process.env.ZCAM_CAMERA_STATE_HOST || '127.0.0.1';
+const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292', 10);
+const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERVAL || '1500', 10);
+const CAMERA_STATE_SCRIPT =
+  process.env.ZCAM_CAMERA_STATE_SCRIPT || path.resolve(__dirname, '..', 'service', 'camera-state', 'camera-state.cjs');
 
 let mainWindow = null;
 let ballWindow = null;
 let lastNormalBounds = null;
 let cliServiceProcess = null;
+let cameraStateProcess = null;
+let cameraPollTimer = null;
+let cameraStateSnapshot = null;
 
 const stateHost = new StateHost();
 const windowState = {
@@ -31,6 +39,25 @@ const windowState = {
   lastBounds: null,
 };
 
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', () => {
+  if (ballWindow) {
+    restoreFromBall();
+    return;
+  }
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 function pushWindowState(patch) {
   const next = { ...windowState, ...patch, updatedAt: Date.now() };
   Object.assign(windowState, next);
@@ -39,7 +66,39 @@ function pushWindowState(patch) {
   } catch (err) {
     console.error('[StateHost] push window failed', err);
   }
+  notifyWindowRenderers(windowState);
   return windowState;
+}
+
+function notifyWindowRenderers(state) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('window:state', state);
+    } catch (err) {
+      console.error('[Window] notify renderer failed', err);
+    }
+  }
+}
+
+function pushCameraState(snapshot) {
+  if (!snapshot) return;
+  cameraStateSnapshot = snapshot;
+  try {
+    stateHost.push('camera', snapshot);
+  } catch (err) {
+    console.error('[StateHost] push camera failed', err);
+  }
+  notifyCameraRenderers(snapshot);
+}
+
+function notifyCameraRenderers(state) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('camera:state', state);
+    } catch (err) {
+      console.error('[Camera] notify renderer failed', err);
+    }
+  }
 }
 
 function createMainWindow() {
@@ -289,6 +348,117 @@ async function runCliBridge(payload = {}) {
   return response.result || { ok: true };
 }
 
+async function ensureCameraStateService() {
+  if (!CAMERA_STATE_SCRIPT) return;
+  try {
+    await requestCameraService('/health', 'GET');
+    return;
+  } catch {
+    startCameraStateService();
+  }
+
+  const start = Date.now();
+  while (Date.now() - start < CLI_DEFAULT_TIMEOUT) {
+    try {
+      await requestCameraService('/health', 'GET');
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  }
+  throw new Error('Camera state service failed to start');
+}
+
+function startCameraStateService() {
+  if (cameraStateProcess || !CAMERA_STATE_SCRIPT) {
+    return cameraStateProcess;
+  }
+
+  if (!fs.existsSync(CAMERA_STATE_SCRIPT)) {
+    throw new Error(`Camera state script not found at ${CAMERA_STATE_SCRIPT}`);
+  }
+
+  cameraStateProcess = spawn(CLI_NODE_BIN, [CAMERA_STATE_SCRIPT], {
+    cwd: path.dirname(CAMERA_STATE_SCRIPT),
+    windowsHide: true,
+    stdio: 'ignore',
+  });
+
+  cameraStateProcess.on('exit', () => {
+    cameraStateProcess = null;
+  });
+
+  return cameraStateProcess;
+}
+
+function requestCameraService(pathname, method = 'GET', payload) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: CAMERA_STATE_HOST,
+      port: CAMERA_STATE_PORT,
+      path: pathname,
+      method,
+      headers: {},
+    };
+
+    let body = null;
+    if (payload) {
+      body = JSON.stringify(payload);
+      options.headers['Content-Type'] = 'application/json';
+      options.headers['Content-Length'] = Buffer.byteLength(body);
+    }
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        try {
+          resolve(data ? JSON.parse(data) : {});
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+function startCameraStateSync() {
+  if (cameraPollTimer || !CAMERA_STATE_PORT) return;
+  const poll = async () => {
+    try {
+      const payload = await requestCameraService('/state');
+      if (payload?.state) {
+        pushCameraState(payload.state);
+      }
+    } catch (err) {
+      console.warn('[Camera] state fetch failed', err.message || err);
+    }
+  };
+  void poll();
+  cameraPollTimer = setInterval(poll, CAMERA_STATE_POLL_INTERVAL);
+}
+
+function stopCameraStateSync() {
+  if (cameraPollTimer) {
+    clearInterval(cameraPollTimer);
+    cameraPollTimer = null;
+  }
+  if (cameraStateProcess) {
+    try {
+      cameraStateProcess.kill();
+    } catch {
+      // ignore
+    }
+    cameraStateProcess = null;
+  }
+}
+
 // IPC handlers
 ipcMain.handle('window:minimize', () => {
   if (mainWindow) mainWindow.minimize();
@@ -356,6 +526,49 @@ stateHost
           throw new Error(`unknown window action: ${action}`);
       }
     });
+    stateHost.registerHandler('cli', async (action, payload = {}) => {
+      switch (action) {
+        case 'run':
+          return runCliBridge(payload);
+        case 'uvc.set': {
+          const key = typeof payload.key === 'string' ? payload.key : null;
+          if (!key) {
+            throw new Error('uvc.set requires key');
+          }
+          const args = ['uvc', 'set', key];
+          if (typeof payload.value !== 'undefined') {
+            args.push('--value', String(payload.value));
+          }
+          if (typeof payload.auto !== 'undefined') {
+            args.push('--auto', String(payload.auto));
+          }
+          return runCliBridge({
+            args,
+            timeoutMs: payload.timeoutMs,
+            expectJson: payload.expectJson !== false,
+          });
+        }
+        case 'uvc.get': {
+          const key = typeof payload.key === 'string' ? payload.key : null;
+          if (!key) {
+            throw new Error('uvc.get requires key');
+          }
+          const args = ['uvc', 'get', key];
+          return runCliBridge({
+            args,
+            timeoutMs: payload.timeoutMs,
+            expectJson: payload.expectJson !== false,
+          });
+        }
+        default:
+          throw new Error(`unknown cli action: ${action}`);
+      }
+    });
+    ensureCameraStateService()
+      .then(() => startCameraStateSync())
+      .catch((err) => {
+        console.error('[Camera] failed to start state service', err);
+      });
   })
   .catch((err) => {
     console.error('[StateHost] failed to start', err);
@@ -367,6 +580,7 @@ app.whenReady().then(() => {
 });
 
 app.on('before-quit', () => {
+  stopCameraStateSync();
   if (cliServiceProcess) {
     try {
       cliServiceProcess.kill();

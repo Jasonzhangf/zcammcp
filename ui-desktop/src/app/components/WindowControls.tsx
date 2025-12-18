@@ -50,27 +50,47 @@ export function WindowControls() {
     pushWindowPatch({ layoutSize: store.state.layoutSize });
   };
 
+  const handleClose = () => {
+    if (typeof window === 'undefined') return;
+    if (window.electronAPI?.close) {
+      void window.electronAPI.close();
+    } else {
+      window.close();
+    }
+  };
+
   const layoutLabel = scene.layoutSize === 'normal' ? 'A' : 'B';
   const layoutTitle = scene.layoutSize === 'normal' ? '布局方案 A' : '布局方案 B';
+  const toggleTitle = isBall ? '恢复主窗口' : '缩小成球';
 
   return (
     <div className="window-controls" data-path="ui.window.controls">
       <button
         type="button"
         className="control-btn"
-        title={isBall ? '恢复主窗口' : '缩小成球'}
+        title={toggleTitle}
+        aria-label={toggleTitle}
         onClick={handleModeToggle}
       >
-        {isBall ? '⬜' : '⚪'}
+        {isBall ? '▢' : '⚪'}
       </button>
       <button
         type="button"
         className="control-btn"
         title={layoutTitle}
+        aria-label={`切换${layoutTitle}`}
         onClick={handleLayoutToggle}
-        disabled={isBall}
       >
         {layoutLabel}
+      </button>
+      <button
+        type="button"
+        className="control-btn control-btn-close"
+        title="关闭应用"
+        aria-label="关闭应用"
+        onClick={handleClose}
+      >
+        ×
       </button>
     </div>
   );

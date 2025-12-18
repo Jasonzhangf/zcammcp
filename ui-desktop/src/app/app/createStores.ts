@@ -1,9 +1,12 @@
 import { OperationRegistry } from '../framework/operations/OperationRegistry.js';
 import { MockCliChannel } from '../framework/transport/CliChannel.js';
 import { RealCliChannel } from '../framework/transport/RealCliChannel.js';
+import { HttpCliChannel } from '../framework/transport/HttpCliChannel.js';
 import { PageStore, type CameraState } from '../framework/state/PageStore.js';
 import { UiSceneStore, type UiSceneState } from '../framework/state/UiSceneStore.js';
-import { ptzOperations } from '../app/operations/ptzOperations.js';
+import { ContainerStore } from '../framework/state/ContainerStore.js';
+import { attachContainerPersistence } from '../framework/state/ContainerPersistence.js';
+import { ptzOperations, PTZ_FOCUS_RANGE, PTZ_ZOOM_RANGE } from '../app/operations/ptzOperations.js';
 import { exposureOperations } from '../app/operations/exposureOperations.js';
 import { whiteBalanceOperations } from '../app/operations/whiteBalanceOperations.js';
 import { imageOperations } from '../app/operations/imageOperations.js';
@@ -17,9 +20,11 @@ export function createPageStore(): PageStore {
 
   const initialCameraState: CameraState = {
     ptz: {
-      zoom: { value: 50, view: '50' },
+      pan: { value: 0, view: '0' },
+      tilt: { value: 0, view: '0' },
+      zoom: { value: PTZ_ZOOM_RANGE.min, view: String(PTZ_ZOOM_RANGE.min) },
       speed: { value: 50, view: '50' },
-      focus: { value: 40, view: '40' },
+      focus: { value: PTZ_FOCUS_RANGE.min, view: String(PTZ_FOCUS_RANGE.min) },
     },
     exposure: {
       aeEnabled: true,
@@ -37,7 +42,7 @@ export function createPageStore(): PageStore {
     },
   };
 
-  const cli = createCliChannel();
+  const cli = createCliChannel(shouldUseMockApi());
 
   return new PageStore({
     path: 'zcam.camera.pages.main',
@@ -56,9 +61,46 @@ export function createUiSceneStore(): UiSceneStore {
   return new UiSceneStore(initial);
 }
 
-function createCliChannel() {
-  if (typeof window !== 'undefined' && window.electronAPI?.runCliCommand) {
-    return new RealCliChannel();
+export function createContainerStore(): ContainerStore {
+  const store = new ContainerStore();
+  store.register({
+    id: 'page.root',
+    kind: 'page',
+    bounds: { x: 0, y: 0, width: 100, height: 100 },
+    visible: true,
+    ui: {},
+    data: {},
+    errors: [],
+    updatedAt: Date.now(),
+  });
+  attachContainerPersistence(store);
+  return store;
+}
+
+function createCliChannel(useMock: boolean) {
+  if (useMock) {
+    return new MockCliChannel();
+  }
+  if (typeof window !== 'undefined') {
+    if (window.electronAPI?.runCliCommand) {
+      return new RealCliChannel();
+    }
+    return new HttpCliChannel();
   }
   return new MockCliChannel();
+}
+
+export function shouldUseMockApi(): boolean {
+  if (typeof window !== 'undefined' && typeof window.__ZCAM_USE_MOCK_API__ !== 'undefined') {
+    return Boolean(window.__ZCAM_USE_MOCK_API__);
+  }
+  try {
+    const env = (import.meta as unknown as { env?: Record<string, unknown> })?.env;
+    if (env && typeof env.VITE_ZCAM_USE_MOCK_API === 'string') {
+      return env.VITE_ZCAM_USE_MOCK_API.toLowerCase() === 'true';
+    }
+  } catch {
+    // ignore when import.meta not available
+  }
+  return true;
 }

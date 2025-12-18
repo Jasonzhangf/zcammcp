@@ -1,9 +1,10 @@
 // StatusCard.tsx
 // 映射路径: zcam.camera.pages.main.status
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { useViewState } from '../../../hooks/usePageStore.js';
+import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 
 // 容器元数据
 export const statusCardNode: ContainerNode = {
@@ -17,6 +18,9 @@ export const statusCardNode: ContainerNode = {
 export function StatusCard() {
   const view = useViewState();
   const cam = view.camera;
+  const containerState = useContainerState('group.status');
+  const cameraName = (containerState?.data?.['cameraName'] as string) ?? 'ZCAM PTZ-01';
+  const cameraIp = (containerState?.data?.['cameraIp'] as string) ?? '192.168.0.10';
 
   const exposureText = cam.exposure
     ? `ISO ${cam.exposure.iso?.view ?? '-' } · ${cam.exposure.shutter?.view ?? '-'}`
@@ -24,8 +28,25 @@ export function StatusCard() {
 
   const wbText = cam.whiteBalance?.temperature?.view ?? '---';
   const awbMode = cam.whiteBalance?.awbEnabled ? 'AWB' : 'MANUAL';
-
   const zoomVal = cam.ptz?.zoom?.view ?? '-';
+  const panView = cam.ptz?.pan?.view ?? '--';
+  const tiltView = cam.ptz?.tilt?.view ?? '--';
+  const containerData = useMemo(
+    () => ({
+      exposureText,
+      whiteBalance: {
+        temperature: wbText,
+        mode: awbMode,
+      },
+      ptz: {
+        pan: cam.ptz?.pan?.value ?? null,
+        tilt: cam.ptz?.tilt?.value ?? null,
+        zoom: cam.ptz?.zoom?.value ?? null,
+      },
+    }),
+    [awbMode, cam.ptz?.pan?.value, cam.ptz?.tilt?.value, cam.ptz?.zoom?.value, exposureText, wbText],
+  );
+  useContainerData('group.status', containerData);
 
   return (
     <div
@@ -40,8 +61,8 @@ export function StatusCard() {
         <div className="zcam-status-grid">
           <div data-path="zcam.camera.pages.main.status.cameraInfo">
             <div className="zcam-status-item-label">相机</div>
-            <div className="zcam-status-item-value">ZCAM PTZ-01</div>
-            <div className="zcam-status-item-sub">192.168.0.10</div>
+            <div className="zcam-status-item-value">{cameraName}</div>
+            <div className="zcam-status-item-sub">{cameraIp}</div>
           </div>
 
           <div data-path="zcam.camera.pages.main.status.videoFormat">
@@ -68,7 +89,9 @@ export function StatusCard() {
             >
               PTZ
             </div>
-            <div className="zcam-status-item-value">Pan 123 · Tilt -45</div>
+            <div className="zcam-status-item-value">
+              Pan {panView} · Tilt {tiltView}
+            </div>
             <div className="zcam-status-item-sub">Zoom {zoomVal}</div>
           </div>
         </div>

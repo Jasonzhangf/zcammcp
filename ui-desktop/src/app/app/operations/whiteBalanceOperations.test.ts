@@ -51,5 +51,9 @@ test('whiteBalance.setAwbEnabled / setTemperature', async () => {
 
   assert.equal(store.cameraState.whiteBalance?.temperature?.value, 6500);
   assert.equal(store.cameraState.whiteBalance?.temperature?.view, '6500K');
-});
 
+  const requests = cli.getRequests();
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[0].args, ['uvc', 'set', 'whitebalance', '--auto', 'true']);
+  assert.deepEqual(requests[1].args, ['uvc', 'set', 'whitebalance', '--value', '6500']);
+});

@@ -45,7 +45,8 @@ const modules = [
   'network',
   'uvc',
   'ui',
-  'config'
+  'config',
+  'camera-state'
 ];
 
 // 初始化服务容器 - 支持依赖注入

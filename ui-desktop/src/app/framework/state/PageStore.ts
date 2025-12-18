@@ -4,6 +4,8 @@
 export interface CameraState {
   // PTZ 区: 后续可扩展 pan/tilt 等字段
   ptz?: {
+    pan?: { value: number; view: string };
+    tilt?: { value: number; view: string };
     zoom?: { value: number; view: string };
     speed?: { value: number; view: string };
     focus?: { value: number; view: string };
@@ -27,7 +29,27 @@ export interface CameraState {
     brightness?: number; // 0-100
     contrast?: number;   // 0-100
     saturation?: number; // 0-100
+    sharpness?: number;
+    hue?: number;
+    gamma?: number;
   };
+}
+
+function mergeCameraStates(current: CameraState, next: CameraState): CameraState {
+  const merged: CameraState = { ...current };
+  if (next.ptz) {
+    merged.ptz = { ...(current.ptz ?? {}), ...next.ptz };
+  }
+  if (next.exposure) {
+    merged.exposure = { ...(current.exposure ?? {}), ...next.exposure };
+  }
+  if (next.whiteBalance) {
+    merged.whiteBalance = { ...(current.whiteBalance ?? {}), ...next.whiteBalance };
+  }
+  if (next.image) {
+    merged.image = { ...(current.image ?? {}), ...next.image };
+  }
+  return merged;
 }
 
 export type LayoutMode = 'full' | 'medium' | 'compact' | 'ball';
@@ -78,6 +100,7 @@ export interface CliResponse {
 export interface OperationResult {
   newStatePartial?: Partial<CameraState>;
   cliRequest?: CliRequest;
+  cliRequests?: CliRequest[];
 }
 
 export type OperationHandler = (
@@ -215,6 +238,12 @@ export class PageStore {
     }
   }
 
+  applyCameraState(partial: CameraState): void {
+    this.cameraState = mergeCameraStates(this.cameraState, partial);
+    this.updateViewSnapshot();
+    this.notify();
+  }
+
   /**
    * 运行一个写操作: 调用 OperationRegistry -> 可选 CLI -> 更新 cameraState
    */
@@ -240,8 +269,17 @@ export class PageStore {
     }
 
     // 调用 CLI（如果有）
+    const cliRequests: CliRequest[] = [];
     if (result.cliRequest) {
-      await this.cli.send(result.cliRequest);
+      cliRequests.push(result.cliRequest);
+    }
+    if (Array.isArray(result.cliRequests)) {
+      for (const req of result.cliRequests) {
+        if (req) cliRequests.push(req);
+      }
+    }
+    for (const request of cliRequests) {
+      await this.cli.send(request);
     }
 
     // 通知订阅者有新状态

@@ -9,16 +9,19 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { MainScene } from '../pages/main-scene/index.js';
 import { RootScene } from './RootScene.js';
 import { UiSceneStore } from '../framework/state/UiSceneStore.js';
-import { UiSceneStoreContext, PageStoreContext } from './contexts.js';
-import { createPageStore } from './createStores.js';
+import { UiSceneStoreContext, PageStoreContext, ContainerStoreContext } from './contexts.js';
+import { createContainerStore, createPageStore } from './createStores.js';
 import type { PageStore } from '../framework/state/PageStore.js';
 
 function withProviders(children: React.ReactNode, uiStore: UiSceneStore, pageStore?: PageStore) {
   const store = pageStore ?? createPageStore();
+  const containerStore = createContainerStore();
   return (
-    <UiSceneStoreContext.Provider value={uiStore}>
-      <PageStoreContext.Provider value={store}>{children}</PageStoreContext.Provider>
-    </UiSceneStoreContext.Provider>
+    <ContainerStoreContext.Provider value={containerStore}>
+      <UiSceneStoreContext.Provider value={uiStore}>
+        <PageStoreContext.Provider value={store}>{children}</PageStoreContext.Provider>
+      </UiSceneStoreContext.Provider>
+    </ContainerStoreContext.Provider>
   );
 }
 

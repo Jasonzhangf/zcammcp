@@ -3,11 +3,60 @@
 
 import type {
   CameraState,
+  CliRequest,
   OperationContext,
   OperationPayload,
   OperationResult,
   OperationDefinition,
 } from '../../framework/state/PageStore.js';
+import { buildUvcCliRequest } from './uvcCliRequest.js';
+
+type PtzDirection =
+  | 'up'
+  | 'down'
+  | 'left'
+  | 'right'
+  | 'up-left'
+  | 'up-right'
+  | 'down-left'
+  | 'down-right';
+
+export const PTZ_PAN_RANGE = { min: -180, max: 180 };
+export const PTZ_TILT_RANGE = { min: -90, max: 90 };
+export const PTZ_ZOOM_RANGE = { min: 950, max: 17100 };
+export const PTZ_FOCUS_RANGE = { min: 0, max: 1000 };
+
+const PTZ_DIRECTION_DELTAS: Record<PtzDirection, { pan?: number; tilt?: number }> = {
+  up: { tilt: 1 },
+  down: { tilt: -1 },
+  left: { pan: -1 },
+  right: { pan: 1 },
+  'up-left': { pan: -1, tilt: 1 },
+  'up-right': { pan: 1, tilt: 1 },
+  'down-left': { pan: -1, tilt: -1 },
+  'down-right': { pan: 1, tilt: -1 },
+};
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function deriveStep(ctx: OperationContext, payload: OperationPayload): number {
+  const explicit = Number(payload.value);
+  if (Number.isFinite(explicit) && explicit > 0) {
+    return explicit;
+  }
+  const speed = ctx.cameraState.ptz?.speed?.value ?? 50;
+  const normalized = clamp(speed, 1, 100);
+  return Math.max(1, Math.round((normalized / 100) * 20));
+}
+
+function ensurePtzState(ctx: OperationContext): NonNullable<CameraState['ptz']> {
+  return {
+    ...(ctx.cameraState.ptz ?? {}),
+  };
+}
 
 // 根据当前 CameraState 和 payload 生成新的 PTZ 子树
 export const ptzOperations: OperationDefinition[] = [
@@ -16,7 +65,7 @@ export const ptzOperations: OperationDefinition[] = [
     cliCommand: 'ptz.zoom',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const value = Number(payload.value ?? 0);
-      const clamped = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+      const clamped = clamp(value, PTZ_ZOOM_RANGE.min, PTZ_ZOOM_RANGE.max);
 
       const newState: Partial<CameraState> = {
         ptz: {
@@ -27,11 +76,7 @@ export const ptzOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `ptz-zoom-${Date.now()}`,
-          command: 'ptz.zoom',
-          params: { value: clamped },
-        },
+        cliRequest: buildUvcCliRequest('zoom', clamped),
       };
     },
   },
@@ -40,7 +85,7 @@ export const ptzOperations: OperationDefinition[] = [
     cliCommand: 'ptz.speed',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const value = Number(payload.value ?? 0);
-      const clamped = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+      const clamped = clamp(value, PTZ_FOCUS_RANGE.min, PTZ_FOCUS_RANGE.max);
 
       const newState: Partial<CameraState> = {
         ptz: {
@@ -51,11 +96,6 @@ export const ptzOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `ptz-speed-${Date.now()}`,
-          command: 'ptz.speed',
-          params: { value: clamped },
-        },
       };
     },
   },
@@ -75,11 +115,81 @@ export const ptzOperations: OperationDefinition[] = [
 
       return {
         newStatePartial: newState,
-        cliRequest: {
-          id: `ptz-focus-${Date.now()}`,
-          command: 'ptz.focus',
-          params: { value: clamped },
-        },
+        cliRequest: buildUvcCliRequest('focus', clamped),
+      };
+    },
+  },
+  {
+    id: 'ptz.setPan',
+    cliCommand: 'ptz.pan',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      const value = Number(payload.value ?? 0);
+      const clamped = clamp(value, PTZ_PAN_RANGE.min, PTZ_PAN_RANGE.max);
+      const nextState = ensurePtzState(ctx);
+      nextState.pan = { value: clamped, view: String(clamped) };
+      return {
+        newStatePartial: { ptz: nextState },
+        cliRequest: buildUvcCliRequest('pan', clamped),
+      };
+    },
+  },
+  {
+    id: 'ptz.setTilt',
+    cliCommand: 'ptz.tilt',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      const value = Number(payload.value ?? 0);
+      const clamped = clamp(value, PTZ_TILT_RANGE.min, PTZ_TILT_RANGE.max);
+      const nextState = ensurePtzState(ctx);
+      nextState.tilt = { value: clamped, view: String(clamped) };
+      return {
+        newStatePartial: { ptz: nextState },
+        cliRequest: buildUvcCliRequest('tilt', clamped),
+      };
+    },
+  },
+  {
+    id: 'ptz.nudge',
+    cliCommand: 'ptz.nudge',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      const directionSource = payload.params ? (payload.params['direction'] as string | undefined) : undefined;
+      const directionRaw =
+        (typeof directionSource === 'string' && directionSource) ||
+        (typeof payload.value === 'string' ? payload.value : '');
+      const direction = directionRaw.toLowerCase() as PtzDirection;
+      const delta = PTZ_DIRECTION_DELTAS[direction];
+      if (!delta) {
+        return { newStatePartial: ctx.cameraState.ptz ? { ptz: { ...ctx.cameraState.ptz } } : undefined };
+      }
+
+      const ptzState = ensurePtzState(ctx);
+      const requests: CliRequest[] = [];
+      const step = deriveStep(ctx, payload);
+
+      if (typeof delta.pan === 'number' && delta.pan !== 0) {
+        const currentPan = ptzState.pan?.value ?? 0;
+        const nextPan = clamp(currentPan + delta.pan * step, PTZ_PAN_RANGE.min, PTZ_PAN_RANGE.max);
+        if (nextPan !== currentPan) {
+          ptzState.pan = { value: nextPan, view: String(nextPan) };
+          requests.push(buildUvcCliRequest('pan', nextPan));
+        }
+      }
+
+      if (typeof delta.tilt === 'number' && delta.tilt !== 0) {
+        const currentTilt = ptzState.tilt?.value ?? 0;
+        const nextTilt = clamp(currentTilt + delta.tilt * step, PTZ_TILT_RANGE.min, PTZ_TILT_RANGE.max);
+        if (nextTilt !== currentTilt) {
+          ptzState.tilt = { value: nextTilt, view: String(nextTilt) };
+          requests.push(buildUvcCliRequest('tilt', nextTilt));
+        }
+      }
+
+      if (requests.length === 0) {
+        return { newStatePartial: { ptz: ptzState } };
+      }
+
+      return {
+        newStatePartial: { ptz: ptzState },
+        cliRequests: requests,
       };
     },
   },

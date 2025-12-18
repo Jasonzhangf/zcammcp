@@ -19,15 +19,26 @@ describe('UvcService', () => {
   });
 
   test('throws on timeout', async () => {
-    const fetchImpl = () =>
-      new Promise((resolve) => {
-        setTimeout(() => {
+    const fetchImpl = (_url, options = {}) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
           resolve({
             ok: true,
             status: 200,
             text: async () => '{}',
           });
         }, 1000);
+
+        if (options.signal) {
+          options.signal.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(new Error('UVC request timed out'));
+            },
+            { once: true },
+          );
+        }
       });
 
     const service = new UvcService({ baseUrl: 'http://localhost:18000', fetchImpl, timeoutMs: 10 });

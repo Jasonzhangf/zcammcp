@@ -1,8 +1,9 @@
 // ShortcutsCard.tsx
 // 路径: zcam.camera.pages.main.shortcuts
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
+import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 
 export const shortcutsCardNode: ContainerNode = {
   path: 'zcam.camera.pages.main.shortcuts',
@@ -13,6 +14,12 @@ export const shortcutsCardNode: ContainerNode = {
 };
 
 export function ShortcutsCard() {
+  const demoShortcuts = useMemo(() => ['快捷1', '快捷2', '快捷3'], []);
+  const containerData = useMemo(() => ({ shortcuts: demoShortcuts }), [demoShortcuts]);
+  useContainerData('group.shortcuts', containerData);
+  const containerState = useContainerState('group.shortcuts');
+  const editMode = containerState?.data?.['editMode'] === true;
+
   return (
     <div
       className="zcam-card"
@@ -23,7 +30,7 @@ export function ShortcutsCard() {
         <span className="zcam-card-header-right">
           <span style={{ fontSize: 10, color: '#555' }}>编辑</span>
           <span
-            className="zcam-toggle zcam-toggle-off"
+            className={`zcam-toggle ${editMode ? 'zcam-toggle-on' : 'zcam-toggle-off'}`}
             data-path="zcam.camera.pages.main.shortcuts.editToggle"
           >
             <span className="zcam-toggle-knob" />

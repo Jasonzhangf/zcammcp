@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { SliderControl } from '../../../components/SliderControl.js';
 import type { SliderControlConfig } from '../../../framework/ui/ControlConfig.js';
+import { PTZ_FOCUS_RANGE } from '../../../app/operations/ptzOperations.js';
 
 export const focusGroupNode: ContainerNode = {
   path: 'zcam.camera.pages.main.ptz.focusGroup',
@@ -19,22 +20,27 @@ const focusSliderConfig: SliderControlConfig = {
   operationId: 'ptz.setFocus',
   orientation: 'horizontal',
   size: 'medium',
-  valueRange: { min: 0, max: 100, step: 1 },
-  readValue: (view) => view.camera.ptz?.focus?.value ?? 40,
+  valueRange: { min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 5 },
+  readValue: (view) => view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min,
   formatValue: (value) => String(value),
 };
 
-export function FocusGroup() {
+interface FocusGroupProps {
+  disabled?: boolean;
+}
+
+export function FocusGroup({ disabled = false }: FocusGroupProps = {}) {
   const [afOn, setAfOn] = useState(true);
   const [editRange, setEditRange] = useState(false);
   const [editingPreset, setEditingPreset] = useState<'far' | 'near' | null>(null);
 
   const toggleAf = () => {
+    if (disabled) return;
     setAfOn((prev) => !prev);
-    // TODO: wire to ptz.setFocusMode once backend operation exists.
   };
 
   const toggleEdit = () => {
+    if (disabled) return;
     setEditRange((prev) => !prev);
     if (editRange) {
       setEditingPreset(null);
@@ -42,22 +48,22 @@ export function FocusGroup() {
   };
 
   const handlePresetClick = (target: 'far' | 'near') => {
-    if (!editRange) {
+    if (disabled || !editRange) {
       return;
     }
     setEditingPreset(target);
-    // TODO: add ptz.focusLimit handler once CLI plumbing is ready.
   };
 
   return (
     <div className="zcam-ptz-focus-wrap" data-path="zcam.camera.pages.main.ptz.focusGroup">
       <div className="zcam-slider-row" data-path="zcam.camera.pages.main.ptz.focusRow">
-        <SliderControl config={focusSliderConfig} disabled={afOn && !editRange} />
+        <SliderControl config={focusSliderConfig} disabled={disabled || (afOn && !editRange)} />
         <div className="zcam-toggle-group" data-path="zcam.camera.pages.main.ptz.focusMode">
           <button
             type="button"
             className={`zcam-toggle ${afOn ? 'zcam-toggle-on' : 'zcam-toggle-off'}`}
             onClick={toggleAf}
+            disabled={disabled}
           >
             <span className="zcam-toggle-knob" />
           </button>
@@ -68,7 +74,7 @@ export function FocusGroup() {
       </div>
 
       <div className="zcam-ptz-focus-limit-row" data-path="zcam.camera.pages.main.ptz.focusLimit">
-        <span className="zcam-ptz-focus-limit-label">Focus 限位</span>
+        <span className="zcam-ptz-focus-limit-label">Focus Limit</span>
         <div className="zcam-ptz-focus-limit-buttons">
           <button
             type="button"
@@ -78,8 +84,9 @@ export function FocusGroup() {
               color: editingPreset === 'far' ? '#fff' : '#ccc',
             }}
             onClick={() => handlePresetClick('far')}
+            disabled={disabled}
           >
-            远
+            Far
           </button>
           <button
             type="button"
@@ -89,11 +96,12 @@ export function FocusGroup() {
               color: editingPreset === 'near' ? '#fff' : '#ccc',
             }}
             onClick={() => handlePresetClick('near')}
+            disabled={disabled}
           >
-            近
+            Near
           </button>
-          <button type="button" className="zcam-ptz-focus-limit-btn" onClick={toggleEdit}>
-            {editRange ? '编辑完成' : '编辑'}
+          <button type="button" className="zcam-ptz-focus-limit-btn" onClick={toggleEdit} disabled={disabled}>
+            {editRange ? 'Finish Edit' : 'Edit'}
           </button>
         </div>
       </div>
