@@ -28,41 +28,39 @@ function findDirectionalControl(origin: HTMLElement, direction: Direction): HTML
   const allNodes = Array.from(document.querySelectorAll<HTMLElement>('.zcam-focusable-control'));
   if (allNodes.length === 0) return null;
   const groupId = origin.getAttribute('data-focus-group') ?? '';
-  const candidates = getGroupPrioritizedNodes(allNodes, origin, groupId);
   const currentRect = origin.getBoundingClientRect();
   const currentX = currentRect.left + currentRect.width / 2;
   const currentY = currentRect.top + currentRect.height / 2;
-  let best: HTMLElement | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const node of candidates) {
-    if (node === origin) continue;
-    if (node.tabIndex < 0) continue;
-    const rect = node.getBoundingClientRect();
-    const targetX = rect.left + rect.width / 2;
-    const targetY = rect.top + rect.height / 2;
-    const dx = targetX - currentX;
-    const dy = targetY - currentY;
-    if (!isDirectionalMatch(direction, dx, dy)) continue;
-    const score = Math.hypot(dx, dy);
-    if (score < bestScore) {
-      bestScore = score;
-      best = node;
-    }
-  }
-  return best;
-}
 
-function getGroupPrioritizedNodes(nodes: HTMLElement[], origin: HTMLElement, groupId: string): HTMLElement[] {
-  if (!groupId) {
-    return nodes.filter((node) => node !== origin);
+  const evaluate = (nodes: HTMLElement[]) => {
+    let best: HTMLElement | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const node of nodes) {
+      if (node === origin) continue;
+      if (node.tabIndex < 0) continue;
+      const rect = node.getBoundingClientRect();
+      const targetX = rect.left + rect.width / 2;
+      const targetY = rect.top + rect.height / 2;
+      const dx = targetX - currentX;
+      const dy = targetY - currentY;
+      if (!isDirectionalMatch(direction, dx, dy)) continue;
+      const score = Math.hypot(dx, dy);
+      if (score < bestScore) {
+        bestScore = score;
+        best = node;
+      }
+    }
+    return best;
+  };
+
+  const sameGroup = groupId
+    ? allNodes.filter((node) => node !== origin && node.getAttribute('data-focus-group') === groupId)
+    : [];
+  const sameGroupResult = evaluate(sameGroup);
+  if (sameGroupResult) {
+    return sameGroupResult;
   }
-  const sameGroup = nodes.filter(
-    (node) => node !== origin && node.getAttribute('data-focus-group') === groupId,
-  );
-  if (sameGroup.length > 0) {
-    return sameGroup;
-  }
-  return nodes.filter((node) => node !== origin);
+  return evaluate(allNodes);
 }
 
 function isDirectionalMatch(direction: Direction, dx: number, dy: number): boolean {
