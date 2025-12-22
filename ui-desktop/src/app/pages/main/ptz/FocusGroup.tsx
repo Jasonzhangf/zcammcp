@@ -23,6 +23,8 @@ const focusSliderConfig: SliderControlConfig = {
   valueRange: { min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 5 },
   readValue: (view) => view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min,
   formatValue: (value) => String(value),
+  enablePointerDrag: true,
+  profileKey: 'gentle',
 };
 
 interface FocusGroupProps {

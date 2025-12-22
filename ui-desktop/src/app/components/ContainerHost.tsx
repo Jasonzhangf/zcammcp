@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   ContainerBounds,
@@ -36,6 +36,14 @@ export function ContainerHost({
   const state = useContainerState(id);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const enableResize = resizable && resizeEnabled;
+  const [isHovered, setIsHovered] = useState(false);
+  const [isActive, setIsActive] = useState(false);
+  const lastSyncedBoundsKeyRef = useRef<string | null>(null);
+  const defaultBoundsKey = useMemo(() => {
+    if (!defaultBounds) return null;
+    const { x, y, width, height } = defaultBounds;
+    return `${x}-${y}-${width}-${height}`;
+  }, [defaultBounds]);
 
   useEffect(() => {
     if (!store.get(id)) {
@@ -50,11 +58,18 @@ export function ContainerHost({
         errors: [],
         updatedAt: Date.now(),
       });
+      if (defaultBoundsKey) {
+        lastSyncedBoundsKeyRef.current = defaultBoundsKey;
+      }
       return;
     }
     const patch: ContainerPatch = {};
-    if (defaultBounds) {
+    const shouldSyncBounds = Boolean(
+      defaultBounds && defaultBoundsKey && lastSyncedBoundsKeyRef.current !== defaultBoundsKey,
+    );
+    if (defaultBounds && shouldSyncBounds) {
       patch.bounds = defaultBounds;
+      lastSyncedBoundsKeyRef.current = defaultBoundsKey;
     }
     if (typeof visible === 'boolean') {
       patch.visible = visible;
@@ -65,9 +80,9 @@ export function ContainerHost({
     if (Object.keys(patch).length > 0) {
       store.update(id, patch);
     }
-  }, [data, defaultBounds, id, kind, parentId, store, visible]);
+  }, [data, defaultBounds, defaultBoundsKey, id, kind, parentId, store, visible]);
 
-  const showHandle = enableResize;
+  const showHandle = enableResize && isActive;
   const resolvedState = state ?? null;
   const mergedStyle = useMemo<React.CSSProperties>(() => {
     const next: React.CSSProperties = { ...(style ?? {}) };
@@ -150,8 +165,65 @@ export function ContainerHost({
     [enableResize, id, resolvedState?.bounds, store],
   );
 
+  const hostClassName = useMemo(() => {
+    const extras: string[] = [];
+    if (enableResize && isHovered) extras.push('zcam-container-resize-hover');
+    if (enableResize && isActive) extras.push('zcam-container-resize-active');
+    return [className, ...extras].filter(Boolean).join(' ');
+  }, [className, enableResize, isActive, isHovered]);
+
+  const handlePointerEnter = useCallback(() => {
+    if (!enableResize) return;
+    setIsHovered(true);
+  }, [enableResize]);
+
+  const handlePointerLeave = useCallback(() => {
+    if (!enableResize) return;
+    setIsHovered(false);
+  }, [enableResize]);
+
+  const handlePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!enableResize) return;
+      if (event.button === 0) {
+        event.preventDefault();
+        event.stopPropagation();
+        setIsActive(true);
+        setIsHovered(true);
+      }
+    },
+    [enableResize],
+  );
+
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (!enableResize) return;
+      event.preventDefault();
+      setIsActive(false);
+      setIsHovered(false);
+    },
+    [enableResize],
+  );
+
+  useEffect(() => {
+    if (!enableResize) {
+      setIsHovered(false);
+      setIsActive(false);
+    }
+  }, [enableResize]);
+
   return (
-    <div ref={hostRef} className={className} style={mergedStyle} {...dataAttrs} {...rest}>
+    <div
+      ref={hostRef}
+      className={hostClassName}
+      style={mergedStyle}
+      {...dataAttrs}
+      {...rest}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
+      onContextMenu={handleContextMenu}
+    >
       {children}
       {showHandle ? (
         <div className="zcam-container-resize-handle" onPointerDown={startResize} role="presentation" />

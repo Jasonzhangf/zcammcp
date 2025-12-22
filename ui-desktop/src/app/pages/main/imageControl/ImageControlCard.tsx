@@ -46,7 +46,10 @@ const temperatureSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 3200, max: 6500, step: 50 },
   readValue: (view) => view.camera.whiteBalance?.temperature?.value ?? 5600,
-  formatValue: (value) => `${value}K`,
+  formatValue: (value) => `${Math.round(value)}K`,
+  enablePointerDrag: true,
+  minHoldStep: 50,
+  profileKey: 'gentle',
 };
 
 const brightnessSliderConfig: SliderControlConfig = {
@@ -58,7 +61,10 @@ const brightnessSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.brightness ?? 50,
-  formatValue: (value) => String(value),
+  formatValue: (value) => `${Math.round(value)}%`,
+  enablePointerDrag: true,
+  minHoldStep: 1,
+  profileKey: 'gentle',
 };
 
 const contrastSliderConfig: SliderControlConfig = {
@@ -70,7 +76,10 @@ const contrastSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.contrast ?? 50,
-  formatValue: (value) => String(value),
+  formatValue: (value) => String(Math.round(value)),
+  enablePointerDrag: true,
+  minHoldStep: 1,
+  profileKey: 'gentle',
 };
 
 const saturationSliderConfig: SliderControlConfig = {
@@ -82,7 +91,10 @@ const saturationSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.saturation ?? 50,
-  formatValue: (value) => String(value),
+  formatValue: (value) => String(Math.round(value)),
+  enablePointerDrag: true,
+  minHoldStep: 1,
+  profileKey: 'gentle',
 };
 
 export function ImageControlCard() {

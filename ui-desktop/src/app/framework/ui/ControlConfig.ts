@@ -15,6 +15,9 @@ export interface SliderControlConfig {
   };
   orientation?: SliderOrientation;
   size?: SliderSize;
+  enablePointerDrag?: boolean;
+  minHoldStep?: number;
+  focusGroupId?: string;
   readValue(view: ViewState): number;
   formatValue?(value: number): string;
   valueMapper?: {

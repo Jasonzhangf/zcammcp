@@ -7,6 +7,7 @@ import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 import { focusGroupNode, FocusGroup } from './FocusGroup.js';
 import { PTZ_FOCUS_RANGE, PTZ_PAN_RANGE, PTZ_TILT_RANGE, PTZ_ZOOM_RANGE } from '../../../app/operations/ptzOperations.js';
+import { Direction, FOCUS_NAV_KEYS, moveFocusToDirection } from '../../../framework/ui/FocusNavigator.js';
 
 export const ptzCardNode: ContainerNode = {
   path: 'zcam.camera.pages.main.ptz',
@@ -26,6 +27,7 @@ const zoomSliderConfig: SliderControlConfig = {
   readValue: (view) => view.camera.ptz?.zoom?.value ?? PTZ_ZOOM_RANGE.min,
   formatValue: (value) => String(value),
   operationId: 'ptz.setZoom',
+  profileKey: 'aggressive',
 };
 
 const speedSliderConfig: SliderControlConfig = {
@@ -38,6 +40,7 @@ const speedSliderConfig: SliderControlConfig = {
   readValue: (view) => view.camera.ptz?.speed?.value ?? 50,
   formatValue: (value) => String(value),
   operationId: 'ptz.setSpeed',
+  profileKey: 'default',
 };
 
 type DpadDirection =
@@ -85,6 +88,15 @@ const DPAD_VECTOR: Record<DpadDirection, { pan?: number; tilt?: number }> = {
   'down-right': { pan: 1, tilt: -1 },
 };
 
+const DPAD_KEYBOARD_MAP: Record<string, DpadDirection> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+};
+
+const PAD_KEYBOARD_NODE_PATH = 'zcam.camera.pages.main.ptz.dpad.keyboard';
+
 export function PtzCard() {
   const store = usePageStore();
   const view = useViewState();
@@ -100,6 +112,7 @@ export function PtzCard() {
   const holdPathRef = useRef<string | null>(null);
   const panTargetRef = useRef<number>(panVal);
   const tiltTargetRef = useRef<number>(tiltVal);
+  const padFocusRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     panTargetRef.current = panVal;
@@ -195,6 +208,50 @@ export function PtzCard() {
     void store.runOperation('zcam.camera.pages.main.ptz.stop', 'ptz.tilt', 'ptz.setTilt', { value: 0 });
   }, [store]);
 
+  const movePadFocus = useCallback(
+    (direction: Direction) => {
+      moveFocusToDirection(padFocusRef.current, direction);
+    },
+    [],
+  );
+
+  const handlePadKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (controlsLocked) return;
+      const key = event.key;
+      const lowerKey = key.length === 1 ? key.toLowerCase() : key;
+      const navDirection = (FOCUS_NAV_KEYS as Record<string, Direction | undefined>)[lowerKey];
+      if (navDirection) {
+        event.preventDefault();
+        stopHold();
+        movePadFocus(navDirection);
+        return;
+      }
+      const direction = DPAD_KEYBOARD_MAP[key as keyof typeof DPAD_KEYBOARD_MAP];
+      if (direction) {
+        event.preventDefault();
+        startHold(direction, PAD_KEYBOARD_NODE_PATH);
+        return;
+      }
+      if (key === ' ' || key === 'Enter') {
+        event.preventDefault();
+        handleCenter();
+      }
+    },
+    [controlsLocked, handleCenter, movePadFocus, startHold, stopHold],
+  );
+
+  const handlePadKeyUp = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const direction = DPAD_KEYBOARD_MAP[event.key as keyof typeof DPAD_KEYBOARD_MAP];
+      if (direction) {
+        event.preventDefault();
+        stopHold();
+      }
+    },
+    [stopHold],
+  );
+
   return (
     <div className="zcam-card" data-path="zcam.camera.pages.main.ptz">
       <div className="zcam-card-header">
@@ -205,51 +262,85 @@ export function PtzCard() {
       </div>
       <div className="zcam-card-body">
         <div className="zcam-ptz-layout" data-path="zcam.camera.pages.main.ptz.layout">
-          <div className="zcam-ptz-grid" data-path="zcam.camera.pages.main.ptz.dpad">
-            {DPAD_LAYOUT.map((btn) => {
-              if (!btn.direction) {
-                return (
-                  <button
-                    key={btn.path}
-                    className="zcam-ptz-btn zcam-ptz-btn-main"
-                    data-path={btn.path}
-                    onClick={handleCenter}
-                    disabled={controlsLocked}
-                  >
-                    {btn.label}
-                  </button>
-                );
-              }
-              const direction = btn.direction;
-              return (
-                <button
-                  key={btn.path}
-                  className="zcam-ptz-btn"
-                  data-path={btn.path}
-                  onPointerDown={(e) => {
-                    if (controlsLocked) return;
-                      e.preventDefault();
-                      startHold(direction, btn.path);
-                    }}
-                    onPointerUp={stopHold}
-                    onPointerLeave={stopHold}
-                    onTouchStart={(e) => {
-                      if (controlsLocked) return;
-                      e.preventDefault();
-                      startHold(direction, btn.path);
-                  }}
-                  onTouchEnd={(e) => {
-                    e.preventDefault();
-                    stopHold();
-                  }}
-                  disabled={controlsLocked}
-                >
-                  {btn.label}
-                </button>
-                );
-              })}
+          <div className="zcam-ptz-pad-wrapper" data-path="zcam.camera.pages.main.ptz.controlPad">
+            <div
+              className="zcam-ptz-pad zcam-focusable-control"
+              tabIndex={controlsLocked ? -1 : 0}
+              data-focus-group="zcam.camera.pages.main.ptz"
+              onKeyDown={handlePadKeyDown}
+              onKeyUp={handlePadKeyUp}
+              onBlur={stopHold}
+              ref={padFocusRef}
+            >
+              <div className="zcam-ptz-grid" data-path="zcam.camera.pages.main.ptz.dpad">
+                {DPAD_LAYOUT.map((btn) => {
+                  if (!btn.direction) {
+                    return (
+                      <button
+                        key={btn.path}
+                        className="zcam-ptz-btn zcam-ptz-btn-main"
+                        data-path={btn.path}
+                        onClick={handleCenter}
+                        disabled={controlsLocked}
+                        tabIndex={-1}
+                      >
+                        {btn.label}
+                      </button>
+                    );
+                  }
+                  const direction = btn.direction;
+                  return (
+                    <button
+                      key={btn.path}
+                      className="zcam-ptz-btn"
+                      data-path={btn.path}
+                      tabIndex={-1}
+                      onPointerDown={(e) => {
+                        if (controlsLocked) return;
+                        e.preventDefault();
+                        startHold(direction, btn.path);
+                      }}
+                      onPointerUp={(e) => {
+                        e.preventDefault();
+                        stopHold();
+                      }}
+                      onPointerLeave={stopHold}
+                      onTouchStart={(e) => {
+                        if (controlsLocked) return;
+                        e.preventDefault();
+                        startHold(direction, btn.path);
+                      }}
+                      onTouchEnd={(e) => {
+                        e.preventDefault();
+                        stopHold();
+                      }}
+                      disabled={controlsLocked}
+                    >
+                      {btn.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="zcam-ptz-status-grid" data-path="zcam.camera.pages.main.ptz.statusGrid">
+                <div className="zcam-ptz-status-cell">
+                  <span className="zcam-ptz-status-label">Pan</span>
+                  <span className="zcam-ptz-status-value">{panVal}</span>
+                </div>
+                <div className="zcam-ptz-status-cell">
+                  <span className="zcam-ptz-status-label">Tilt</span>
+                  <span className="zcam-ptz-status-value">{tiltVal}</span>
+                </div>
+                <div className="zcam-ptz-status-cell">
+                  <span className="zcam-ptz-status-label">Zoom</span>
+                  <span className="zcam-ptz-status-value">{zoomVal}</span>
+                </div>
+                <div className="zcam-ptz-status-cell">
+                  <span className="zcam-ptz-status-label">Focus</span>
+                  <span className="zcam-ptz-status-value">{focusVal}</span>
+                </div>
+              </div>
+            </div>
           </div>
-
           <div className="zcam-ptz-sliders" data-path="zcam.camera.pages.main.ptz.sliders">
             <div className="zcam-ptz-slider-column">
               <SliderControl config={zoomSliderConfig} disabled={controlsLocked} />
@@ -261,12 +352,6 @@ export function PtzCard() {
         </div>
 
         <FocusGroup disabled={controlsLocked} />
-
-        <div className="zcam-ptz-status-row">
-          <div className="zcam-ptz-status-chip" data-path="zcam.camera.pages.main.ptz.status">
-            PTZ Pan {panVal} {'\u00b7'} Tilt {tiltVal} {'\u00b7'} Zoom {zoomVal} {'\u00b7'} Focus {focusVal}
-          </div>
-        </div>
       </div>
     </div>
   );

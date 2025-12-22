@@ -24,8 +24,8 @@ type ContainerBoundsMap = Record<'status' | 'ptz' | 'image' | 'shortcuts', Conta
 
 const NORMAL_BOUNDS: ContainerBoundsMap = {
   status: { x: 0, y: 0, width: 100, height: 18 },
-  ptz: { x: 0, y: 18, width: 55, height: 57 },
-  image: { x: 55, y: 18, width: 45, height: 57 },
+  ptz: { x: 0, y: 18, width: 60, height: 57 },
+  image: { x: 60, y: 18, width: 40, height: 57 },
   shortcuts: { x: 0, y: 75, width: 100, height: 25 },
 };
 
