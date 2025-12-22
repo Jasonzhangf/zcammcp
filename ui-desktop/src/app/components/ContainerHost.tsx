@@ -165,6 +165,53 @@ export function ContainerHost({
     [enableResize, id, resolvedState?.bounds, store],
   );
 
+  const startMove = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      if (!enableResize) return;
+      const element = hostRef.current;
+      if (!element) return;
+      const parent = element.parentElement;
+      if (!parent) return;
+      const parentRect = parent.getBoundingClientRect();
+      const bounds = resolvedState?.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const initialX = bounds.x ?? 0;
+      const initialY = bounds.y ?? 0;
+      const widthPercent = bounds.width ?? 100;
+      const heightPercent = bounds.height ?? 100;
+      event.preventDefault();
+      event.stopPropagation();
+      setIsActive(true);
+      setIsHovered(true);
+
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
+        const deltaXPct = (deltaX / parentRect.width) * 100;
+        const deltaYPct = (deltaY / parentRect.height) * 100;
+        const nextX = clampPosition(initialX + deltaXPct, widthPercent);
+        const nextY = clampPosition(initialY + deltaYPct, heightPercent);
+        store.update(id, {
+          bounds: {
+            ...bounds,
+            x: nextX,
+            y: nextY,
+          },
+        });
+      };
+
+      const onPointerUp = () => {
+        window.removeEventListener('pointermove', onPointerMove);
+        window.removeEventListener('pointerup', onPointerUp);
+      };
+
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('pointerup', onPointerUp);
+    },
+    [enableResize, id, resolvedState?.bounds, store],
+  );
+
   const hostClassName = useMemo(() => {
     const extras: string[] = [];
     if (enableResize && isHovered) extras.push('zcam-container-resize-hover');
@@ -228,6 +275,9 @@ export function ContainerHost({
       {showHandle ? (
         <div className="zcam-container-resize-handle" onPointerDown={startResize} role="presentation" />
       ) : null}
+      {enableResize && isActive ? (
+        <div className="zcam-container-move-handle" onPointerDown={startMove} role="presentation" />
+      ) : null}
     </div>
   );
 }
@@ -235,4 +285,10 @@ export function ContainerHost({
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(5, Math.min(100, Math.round(value * 100) / 100));
+}
+
+function clampPosition(value: number, size: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const max = Math.max(0, 100 - Math.max(5, size ?? 0));
+  return Math.max(0, Math.min(max, Math.round(value * 100) / 100));
 }
