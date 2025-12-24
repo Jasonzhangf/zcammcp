@@ -1,14 +1,7 @@
 // ptzOperations.ts
 // ZCAM PTZ 相关 Operation 的最小骨架
 
-import type {
-  CameraState,
-  CliRequest,
-  OperationContext,
-  OperationPayload,
-  OperationResult,
-  OperationDefinition,
-} from '../../framework/state/PageStore.js';
+import type { CliRequest, OperationContext, OperationPayload, OperationResult, OperationDefinition } from '../../framework/state/PageStore.js';
 import { buildUvcCliRequest } from './uvcCliRequest.js';
 
 type PtzDirection =
@@ -52,12 +45,6 @@ function deriveStep(ctx: OperationContext, payload: OperationPayload): number {
   return Math.max(1, Math.round((normalized / 100) * 20));
 }
 
-function ensurePtzState(ctx: OperationContext): NonNullable<CameraState['ptz']> {
-  return {
-    ...(ctx.cameraState.ptz ?? {}),
-  };
-}
-
 // 根据当前 CameraState 和 payload 生成新的 PTZ 子树
 export const ptzOperations: OperationDefinition[] = [
   {
@@ -67,16 +54,8 @@ export const ptzOperations: OperationDefinition[] = [
       const value = Number(payload.value ?? 0);
       const clamped = clamp(value, PTZ_ZOOM_RANGE.min, PTZ_ZOOM_RANGE.max);
 
-      const newState: Partial<CameraState> = {
-        ptz: {
-          ...ctx.cameraState.ptz,
-          zoom: { value: clamped, view: String(clamped) },
-        },
-      };
-
       return {
-        newStatePartial: newState,
-        cliRequest: buildUvcCliRequest('zoom', clamped),
+        cliRequest: buildUvcCliRequest('zoom', clamped, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -87,15 +66,8 @@ export const ptzOperations: OperationDefinition[] = [
       const value = Number(payload.value ?? 0);
       const clamped = clamp(value, PTZ_FOCUS_RANGE.min, PTZ_FOCUS_RANGE.max);
 
-      const newState: Partial<CameraState> = {
-        ptz: {
-          ...ctx.cameraState.ptz,
-          speed: { value: clamped, view: String(clamped) },
-        },
-      };
-
       return {
-        newStatePartial: newState,
+        cliRequest: buildUvcCliRequest('speed', clamped, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -106,16 +78,8 @@ export const ptzOperations: OperationDefinition[] = [
       const value = Number(payload.value ?? 0);
       const clamped = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
 
-      const newState: Partial<CameraState> = {
-        ptz: {
-          ...ctx.cameraState.ptz,
-          focus: { value: clamped, view: String(clamped) },
-        },
-      };
-
       return {
-        newStatePartial: newState,
-        cliRequest: buildUvcCliRequest('focus', clamped),
+        cliRequest: buildUvcCliRequest('focus', clamped, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -125,11 +89,8 @@ export const ptzOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const value = Number(payload.value ?? 0);
       const clamped = clamp(value, PTZ_PAN_RANGE.min, PTZ_PAN_RANGE.max);
-      const nextState = ensurePtzState(ctx);
-      nextState.pan = { value: clamped, view: String(clamped) };
       return {
-        newStatePartial: { ptz: nextState },
-        cliRequest: buildUvcCliRequest('pan', clamped),
+        cliRequest: buildUvcCliRequest('pan', clamped, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -139,11 +100,8 @@ export const ptzOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const value = Number(payload.value ?? 0);
       const clamped = clamp(value, PTZ_TILT_RANGE.min, PTZ_TILT_RANGE.max);
-      const nextState = ensurePtzState(ctx);
-      nextState.tilt = { value: clamped, view: String(clamped) };
       return {
-        newStatePartial: { ptz: nextState },
-        cliRequest: buildUvcCliRequest('tilt', clamped),
+        cliRequest: buildUvcCliRequest('tilt', clamped, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -158,39 +116,38 @@ export const ptzOperations: OperationDefinition[] = [
       const direction = directionRaw.toLowerCase() as PtzDirection;
       const delta = PTZ_DIRECTION_DELTAS[direction];
       if (!delta) {
-        return { newStatePartial: ctx.cameraState.ptz ? { ptz: { ...ctx.cameraState.ptz } } : undefined };
+        return {};
       }
-
-      const ptzState = ensurePtzState(ctx);
       const requests: CliRequest[] = [];
       const step = deriveStep(ctx, payload);
 
       if (typeof delta.pan === 'number' && delta.pan !== 0) {
-        const currentPan = ptzState.pan?.value ?? 0;
+        const currentPan = ctx.cameraState.ptz?.pan?.value ?? 0;
         const nextPan = clamp(currentPan + delta.pan * step, PTZ_PAN_RANGE.min, PTZ_PAN_RANGE.max);
         if (nextPan !== currentPan) {
-          ptzState.pan = { value: nextPan, view: String(nextPan) };
-          requests.push(buildUvcCliRequest('pan', nextPan));
+          requests.push(buildUvcCliRequest('pan', nextPan, { meta: extractSliderMeta(payload) }));
         }
       }
 
       if (typeof delta.tilt === 'number' && delta.tilt !== 0) {
-        const currentTilt = ptzState.tilt?.value ?? 0;
+        const currentTilt = ctx.cameraState.ptz?.tilt?.value ?? 0;
         const nextTilt = clamp(currentTilt + delta.tilt * step, PTZ_TILT_RANGE.min, PTZ_TILT_RANGE.max);
         if (nextTilt !== currentTilt) {
-          ptzState.tilt = { value: nextTilt, view: String(nextTilt) };
-          requests.push(buildUvcCliRequest('tilt', nextTilt));
+          requests.push(buildUvcCliRequest('tilt', nextTilt, { meta: extractSliderMeta(payload) }));
         }
       }
 
-      if (requests.length === 0) {
-        return { newStatePartial: { ptz: ptzState } };
-      }
-
       return {
-        newStatePartial: { ptz: ptzState },
         cliRequests: requests,
       };
     },
   },
 ];
+
+function extractSliderMeta(payload: OperationPayload): Record<string, unknown> | undefined {
+  const rawMeta = (payload.params as Record<string, unknown> | undefined)?.['sliderMeta'];
+  if (!rawMeta || typeof rawMeta !== 'object') {
+    return undefined;
+  }
+  return rawMeta as Record<string, unknown>;
+}

@@ -7,7 +7,13 @@ import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 import { focusGroupNode, FocusGroup } from './FocusGroup.js';
 import { PTZ_FOCUS_RANGE, PTZ_PAN_RANGE, PTZ_TILT_RANGE, PTZ_ZOOM_RANGE } from '../../../app/operations/ptzOperations.js';
-import { Direction, FOCUS_NAV_KEYS, moveFocusToDirection } from '../../../framework/ui/FocusNavigator.js';
+import {
+  Direction,
+  FOCUS_NAV_KEYS,
+  useFocusManager,
+  useFocusableControl,
+} from '../../../framework/ui/FocusManager.js';
+import { computeSliderStep, getProfileInterval, getSliderProfile } from '../../../framework/ui/SliderProfiles.js';
 
 export const ptzCardNode: ContainerNode = {
   path: 'zcam.camera.pages.main.ptz',
@@ -21,26 +27,32 @@ const zoomSliderConfig: SliderControlConfig = {
   nodePath: 'zcam.camera.pages.main.ptz.zoom',
   kind: 'ptz.zoom',
   label: 'Zoom',
-  size: 'large',
+  size: 'small',
   orientation: 'vertical',
   valueRange: { min: PTZ_ZOOM_RANGE.min, max: PTZ_ZOOM_RANGE.max, step: 10 },
   readValue: (view) => view.camera.ptz?.zoom?.value ?? PTZ_ZOOM_RANGE.min,
-  formatValue: (value) => String(value),
+  formatValue: (value) => String(Math.round(value)),
   operationId: 'ptz.setZoom',
-  profileKey: 'aggressive',
+  profileKey: 'zoomBoost',
+  hideHeaderValue: true,
+  focusGroupId: 'zcam.camera.pages.main.ptz',
+  keyAcceptWhenBlurred: true,
 };
 
 const speedSliderConfig: SliderControlConfig = {
   nodePath: 'zcam.camera.pages.main.ptz.speed',
   kind: 'ptz.speed',
   label: 'Speed',
-  size: 'large',
+  size: 'small',
   orientation: 'vertical',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.ptz?.speed?.value ?? 50,
-  formatValue: (value) => String(value),
+  formatValue: (value) => String(Math.round(value)),
   operationId: 'ptz.setSpeed',
   profileKey: 'default',
+  hideHeaderValue: true,
+  focusGroupId: 'zcam.camera.pages.main.ptz',
+  keyAcceptWhenBlurred: true,
 };
 
 type DpadDirection =
@@ -96,6 +108,14 @@ const DPAD_KEYBOARD_MAP: Record<string, DpadDirection> = {
 };
 
 const PAD_KEYBOARD_NODE_PATH = 'zcam.camera.pages.main.ptz.dpad.keyboard';
+const DPAD_PROFILE_KEY = 'aggressive';
+const DPAD_STEP_SCALE = 0.2;
+
+interface AxisStepMeta {
+  stepPerInterval: number;
+  intervalMs: number;
+  direction: 1 | -1;
+}
 
 export function PtzCard() {
   const store = usePageStore();
@@ -106,13 +126,25 @@ export function PtzCard() {
   const focusVal = view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min;
   const panVal = view.camera.ptz?.pan?.value ?? 0;
   const tiltVal = view.camera.ptz?.tilt?.value ?? 0;
+  const panDisplay = Math.round(panVal);
+  const tiltDisplay = Math.round(tiltVal);
+  const zoomDisplay = Math.round(zoomVal);
+  const focusDisplay = Math.round(focusVal);
 
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdDirectionRef = useRef<DpadDirection | null>(null);
   const holdPathRef = useRef<string | null>(null);
+  const holdTickRef = useRef(0);
   const panTargetRef = useRef<number>(panVal);
   const tiltTargetRef = useRef<number>(tiltVal);
   const padFocusRef = useRef<HTMLDivElement | null>(null);
+  const focusManager = useFocusManager();
+  useFocusableControl(padFocusRef, {
+    nodeId: 'zcam.camera.pages.main.ptz.controlPad',
+    groupId: 'zcam.camera.pages.main.ptz',
+    disabled: controlsLocked,
+  });
+  const keyboardHoldKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     panTargetRef.current = panVal;
@@ -130,78 +162,119 @@ export function PtzCard() {
 
   const containerData = useMemo(
     () => ({
-      pan: panVal,
-      tilt: tiltVal,
-      zoom: zoomVal,
-      focus: focusVal,
-      speed: speedValue,
+      pan: panDisplay,
+      tilt: tiltDisplay,
+      zoom: zoomDisplay,
+      focus: focusDisplay,
+      speed: Math.round(speedValue),
     }),
-    [focusVal, panVal, speedValue, tiltVal, zoomVal],
+    [focusDisplay, panDisplay, speedValue, tiltDisplay, zoomDisplay],
   );
   useContainerData('group.ptz', containerData);
+  const dpadProfile = useMemo(() => getSliderProfile(DPAD_PROFILE_KEY), []);
 
   const adjustAxis = useCallback(
-    (axis: 'pan' | 'tilt', delta: number, nodePath: string) => {
+    (axis: 'pan' | 'tilt', delta: number, nodePath: string, stepMeta?: AxisStepMeta) => {
       const ref = axis === 'pan' ? panTargetRef : tiltTargetRef;
       const range = axis === 'pan' ? PTZ_PAN_RANGE : PTZ_TILT_RANGE;
       const current = ref.current ?? (axis === 'pan' ? panVal : tiltVal);
-      const next = clamp(current + delta, range.min, range.max);
+      const candidate = Math.round(current + delta);
+      const next = clamp(candidate, range.min, range.max);
       ref.current = next;
       const opId = axis === 'pan' ? 'ptz.setPan' : 'ptz.setTilt';
       const kind = axis === 'pan' ? 'ptz.pan' : 'ptz.tilt';
-      void store.runOperation(nodePath, kind, opId, { value: next });
+      const payload = stepMeta
+        ? { value: next, params: { sliderMeta: stepMeta } }
+        : { value: next };
+      void store.runOperation(nodePath, kind, opId, payload);
     },
     [panVal, store, tiltVal],
   );
 
   const applyDirection = useCallback(
-    (direction: DpadDirection, nodePath: string) => {
+    (direction: DpadDirection, nodePath: string, tick = 0) => {
       const vector = DPAD_VECTOR[direction];
       if (!vector) return;
+      const stepMagnitude = Math.max(1, computeSliderStep(dpadProfile, tick, baseStep));
+      const scaledStep = Math.max(1, Math.round(stepMagnitude * DPAD_STEP_SCALE));
+      const intervalMs = getProfileInterval(dpadProfile);
       if (vector.pan) {
-        adjustAxis('pan', vector.pan * baseStep, nodePath);
+        const direction = vector.pan > 0 ? 1 : -1;
+        adjustAxis('pan', vector.pan * scaledStep, nodePath, {
+          stepPerInterval: Math.abs(vector.pan * scaledStep),
+          intervalMs,
+          direction,
+        });
       }
       if (vector.tilt) {
-        adjustAxis('tilt', vector.tilt * baseStep, nodePath);
+        const direction = vector.tilt > 0 ? 1 : -1;
+        adjustAxis('tilt', vector.tilt * scaledStep, nodePath, {
+          stepPerInterval: Math.abs(vector.tilt * scaledStep),
+          intervalMs,
+          direction,
+        });
       }
     },
-    [adjustAxis, baseStep],
-  );
-
-  const startHold = useCallback(
-    (direction: DpadDirection, nodePath: string) => {
-      holdDirectionRef.current = direction;
-      holdPathRef.current = nodePath;
-      applyDirection(direction, nodePath);
-      if (holdTimerRef.current) {
-        clearInterval(holdTimerRef.current);
-      }
-      holdTimerRef.current = setInterval(() => {
-        if (holdDirectionRef.current && holdPathRef.current) {
-          applyDirection(holdDirectionRef.current, holdPathRef.current);
-        }
-      }, 200);
-    },
-    [applyDirection],
+    [adjustAxis, baseStep, dpadProfile],
   );
 
   const stopHold = useCallback(() => {
     holdDirectionRef.current = null;
     holdPathRef.current = null;
+    holdTickRef.current = 0;
     if (holdTimerRef.current) {
       clearInterval(holdTimerRef.current);
       holdTimerRef.current = null;
     }
+    keyboardHoldKeyRef.current = null;
   }, []);
+
+  const startHold = useCallback(
+    (direction: DpadDirection, nodePath: string) => {
+      holdDirectionRef.current = direction;
+      holdPathRef.current = nodePath;
+      holdTickRef.current = 0;
+      applyDirection(direction, nodePath, 0);
+      if (holdTimerRef.current) {
+        clearInterval(holdTimerRef.current);
+      }
+      const interval = getProfileInterval(dpadProfile);
+      holdTimerRef.current = setInterval(() => {
+        if (holdDirectionRef.current && holdPathRef.current) {
+          holdTickRef.current += 1;
+          applyDirection(holdDirectionRef.current, holdPathRef.current, holdTickRef.current);
+        }
+      }, interval);
+    },
+    [applyDirection, dpadProfile],
+  );
 
   useEffect(() => {
     return () => {
-      if (holdTimerRef.current) {
-        clearInterval(holdTimerRef.current);
-        holdTimerRef.current = null;
+      stopHold();
+    };
+  }, [stopHold]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (!keyboardHoldKeyRef.current) return;
+      if (event.key === keyboardHoldKeyRef.current) {
+        stopHold();
       }
     };
-  }, []);
+    const handleBlur = () => {
+      if (keyboardHoldKeyRef.current) {
+        stopHold();
+      }
+    };
+    window.addEventListener('keyup', handleKeyUp, true);
+    window.addEventListener('blur', handleBlur, true);
+    return () => {
+      window.removeEventListener('keyup', handleKeyUp, true);
+      window.removeEventListener('blur', handleBlur, true);
+    };
+  }, [stopHold]);
 
   const handleCenter = useCallback(() => {
     void store.runOperation('zcam.camera.pages.main.ptz.stop', 'ptz.pan', 'ptz.setPan', { value: 0 });
@@ -210,9 +283,9 @@ export function PtzCard() {
 
   const movePadFocus = useCallback(
     (direction: Direction) => {
-      moveFocusToDirection(padFocusRef.current, direction);
+      focusManager.moveToDirection(padFocusRef.current, direction);
     },
-    [],
+    [focusManager],
   );
 
   const handlePadKeyDown = useCallback(
@@ -230,6 +303,10 @@ export function PtzCard() {
       const direction = DPAD_KEYBOARD_MAP[key as keyof typeof DPAD_KEYBOARD_MAP];
       if (direction) {
         event.preventDefault();
+        if (event.repeat && holdDirectionRef.current === direction) {
+          return;
+        }
+        keyboardHoldKeyRef.current = key;
         startHold(direction, PAD_KEYBOARD_NODE_PATH);
         return;
       }
@@ -298,10 +375,24 @@ export function PtzCard() {
                       onPointerDown={(e) => {
                         if (controlsLocked) return;
                         e.preventDefault();
+                        if (e.currentTarget.setPointerCapture) {
+                          try {
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                          } catch {
+                            // ignore
+                          }
+                        }
                         startHold(direction, btn.path);
                       }}
                       onPointerUp={(e) => {
                         e.preventDefault();
+                        if (e.currentTarget.releasePointerCapture) {
+                          try {
+                            e.currentTarget.releasePointerCapture(e.pointerId);
+                          } catch {
+                            // ignore
+                          }
+                        }
                         stopHold();
                       }}
                       onPointerLeave={stopHold}
@@ -324,19 +415,19 @@ export function PtzCard() {
               <div className="zcam-ptz-status-grid" data-path="zcam.camera.pages.main.ptz.statusGrid">
                 <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Pan</span>
-                  <span className="zcam-ptz-status-value">{panVal}</span>
+                  <span className="zcam-ptz-status-value">{panDisplay}</span>
                 </div>
                 <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Tilt</span>
-                  <span className="zcam-ptz-status-value">{tiltVal}</span>
+                  <span className="zcam-ptz-status-value">{tiltDisplay}</span>
                 </div>
                 <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Zoom</span>
-                  <span className="zcam-ptz-status-value">{zoomVal}</span>
+                  <span className="zcam-ptz-status-value">{zoomDisplay}</span>
                 </div>
                 <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Focus</span>
-                  <span className="zcam-ptz-status-value">{focusVal}</span>
+                  <span className="zcam-ptz-status-value">{focusDisplay}</span>
                 </div>
               </div>
             </div>

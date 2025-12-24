@@ -5,10 +5,12 @@ export interface SliderProfile {
   baseStepScale?: number;
 }
 
+const defaultMultipliers = [1, 1, 1.5, 2, 2.5, 3, 4, 5];
+
 const profiles: Record<string, SliderProfile> = {
   default: {
     id: 'default',
-    multipliers: [1, 1, 1.5, 2, 2.5, 3, 4, 5],
+    multipliers: defaultMultipliers,
     intervalMs: 140,
     baseStepScale: 1,
   },
@@ -23,6 +25,12 @@ const profiles: Record<string, SliderProfile> = {
     multipliers: [1, 2, 3, 4, 6, 8, 10],
     intervalMs: 100,
     baseStepScale: 1.2,
+  },
+  zoomBoost: {
+    id: 'zoomBoost',
+    multipliers: [1, 1, 1.5, 2, 2.5, 5, 10, 20, 40, 60, 80, 110, 140, 200, 400],
+    intervalMs: 50,
+    baseStepScale: 1,
   },
 };
 

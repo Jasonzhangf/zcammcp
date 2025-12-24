@@ -9,6 +9,26 @@ import { IsoSelect } from '../../../controls/image/IsoSelect/IsoSelect.js';
 import { useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 
+const TEMPERATURE_MIN = 3200;
+const TEMPERATURE_MAX = 6500;
+const TEMPERATURE_STEP = 50;
+
+function clamp(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(clamp(value, 0, 100))}%`;
+}
+
+function formatTemperature(value: number): string {
+  const limited = clamp(value, TEMPERATURE_MIN, TEMPERATURE_MAX);
+  const snapped =
+    TEMPERATURE_MIN + Math.round((limited - TEMPERATURE_MIN) / TEMPERATURE_STEP) * TEMPERATURE_STEP;
+  return `${clamp(snapped, TEMPERATURE_MIN, TEMPERATURE_MAX)}K`;
+}
+
 export const imageControlCardNode: ContainerNode = {
   path: 'zcam.camera.pages.main.imageControl',
   role: 'container',
@@ -46,7 +66,7 @@ const temperatureSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 3200, max: 6500, step: 50 },
   readValue: (view) => view.camera.whiteBalance?.temperature?.value ?? 5600,
-  formatValue: (value) => `${Math.round(value)}K`,
+  formatValue: (value) => formatTemperature(value),
   enablePointerDrag: true,
   minHoldStep: 50,
   profileKey: 'gentle',
@@ -61,7 +81,7 @@ const brightnessSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.brightness ?? 50,
-  formatValue: (value) => `${Math.round(value)}%`,
+  formatValue: (value) => formatPercent(value),
   enablePointerDrag: true,
   minHoldStep: 1,
   profileKey: 'gentle',
@@ -76,7 +96,7 @@ const contrastSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.contrast ?? 50,
-  formatValue: (value) => String(Math.round(value)),
+  formatValue: (value) => String(Math.round(clamp(value, 0, 100))),
   enablePointerDrag: true,
   minHoldStep: 1,
   profileKey: 'gentle',
@@ -91,7 +111,7 @@ const saturationSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.saturation ?? 50,
-  formatValue: (value) => String(Math.round(value)),
+  formatValue: (value) => String(Math.round(clamp(value, 0, 100))),
   enablePointerDrag: true,
   minHoldStep: 1,
   profileKey: 'gentle',

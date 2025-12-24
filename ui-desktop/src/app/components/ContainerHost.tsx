@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   ContainerBounds,
@@ -38,6 +38,7 @@ export function ContainerHost({
   const enableResize = resizable && resizeEnabled;
   const [isHovered, setIsHovered] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [translate, setTranslate] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const lastSyncedBoundsKeyRef = useRef<string | null>(null);
   const defaultBoundsKey = useMemo(() => {
     if (!defaultBounds) return null;
@@ -86,6 +87,7 @@ export function ContainerHost({
   const resolvedState = state ?? null;
   const mergedStyle = useMemo<React.CSSProperties>(() => {
     const next: React.CSSProperties = { ...(style ?? {}) };
+    const baseTransform = typeof next.transform === 'string' ? next.transform : undefined;
     if (resolvedState?.bounds) {
       const { x, y, width, height } = resolvedState.bounds;
       const custom = next as Record<string, string | number>;
@@ -93,6 +95,10 @@ export function ContainerHost({
       custom['--container-y'] = `${y}`;
       custom['--container-width'] = `${width}`;
       custom['--container-height'] = `${height}`;
+      if (enableResize) {
+        const translateValue = `translate(${translate.x}px, ${translate.y}px)`;
+        next.transform = baseTransform ? `${baseTransform} ${translateValue}` : translateValue;
+      }
     }
     if (resolvedState?.ui?.background) {
       next.background = resolvedState.ui.background;
@@ -113,7 +119,7 @@ export function ContainerHost({
       next.position = 'relative';
     }
     return next;
-  }, [resolvedState, showHandle, style]);
+  }, [enableResize, resolvedState, showHandle, style, translate.x, translate.y]);
 
   const debugMode = resolvedState?.ui?.debugMode ?? 'off';
   const isVisible = resolvedState?.visible ?? true;
@@ -256,8 +262,56 @@ export function ContainerHost({
     if (!enableResize) {
       setIsHovered(false);
       setIsActive(false);
+      setTranslate({ x: 0, y: 0 });
     }
   }, [enableResize]);
+
+  useLayoutEffect(() => {
+    if (!enableResize) {
+      setTranslate({ x: 0, y: 0 });
+      return;
+    }
+    const element = hostRef.current;
+    const parent = element?.parentElement;
+    if (!element || !parent) {
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+      frame = requestAnimationFrame(() => {
+        const rect = parent.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+          setTranslate({ x: 0, y: 0 });
+          return;
+        }
+        const bounds = resolvedState?.bounds;
+        const xPercent = bounds?.x ?? 0;
+        const yPercent = bounds?.y ?? 0;
+        setTranslate({
+          x: (xPercent / 100) * rect.width,
+          y: (yPercent / 100) * rect.height,
+        });
+      });
+    };
+    update();
+    const handleResize = () => update();
+    window.addEventListener('resize', handleResize);
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => update());
+      observer.observe(parent);
+    }
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+      observer?.disconnect();
+    };
+  }, [enableResize, resolvedState?.bounds?.x, resolvedState?.bounds?.y]);
 
   return (
     <div
@@ -275,7 +329,7 @@ export function ContainerHost({
       {showHandle ? (
         <div className="zcam-container-resize-handle" onPointerDown={startResize} role="presentation" />
       ) : null}
-      {enableResize && isActive ? (
+      {enableResize && (isActive || isHovered) ? (
         <div className="zcam-container-move-handle" onPointerDown={startMove} role="presentation" />
       ) : null}
     </div>

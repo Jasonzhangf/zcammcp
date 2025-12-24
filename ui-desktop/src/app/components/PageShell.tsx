@@ -1,8 +1,8 @@
 import React from 'react';
 
 import { WindowControls } from './WindowControls.js';
+import { DebugControls } from './DebugControls.js';
 import type { SceneConfig } from '../framework/ui/LayoutConfig.js';
-import { LayoutDebugToggle } from './LayoutDebugToggle.js';
 
 export function PageShell({ scene }: { scene: SceneConfig }) {
   return (
@@ -11,14 +11,14 @@ export function PageShell({ scene }: { scene: SceneConfig }) {
       data-path="ui.window.shell"
       data-layout={scene.layoutSize}
     >
-      {/* Header with WindowControls */}
+      {/* Header with WindowControls and DebugControls */}
       <div className="zcam-header" data-path="ui.window.header">
         <div className="zcam-header-left">
           <div className="zcam-badge">Z</div>
-          <div className="zcam-title">ZCAM 相机控制</div>
+          <div className="zcam-title">ZCAM 鐩告満鎺у埗</div>
         </div>
         <div className="zcam-header-right">
-          <LayoutDebugToggle />
+          <DebugControls />
           <WindowControls />
         </div>
       </div>
@@ -37,3 +37,4 @@ export function PageShell({ scene }: { scene: SceneConfig }) {
     </div>
   );
 }
+

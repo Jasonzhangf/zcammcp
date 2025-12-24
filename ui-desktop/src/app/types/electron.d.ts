@@ -61,6 +61,19 @@ export interface ElectronAPI {
   devReport?: (report: unknown) => void;
   onWindowState?: (callback: (state: WindowStatePayload) => void) => () => void;
   onCameraState?: (callback: (snapshot: CameraStateSnapshot) => void) => () => void;
+  registerTestHandler?: (handler: (command: TestCommandMessage) => Promise<TestHandlerResult> | TestHandlerResult) => () => void;
+}
+
+export interface TestCommandMessage {
+  requestId: string;
+  action: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface TestHandlerResult {
+  ok: boolean;
+  data?: unknown;
+  error?: string;
 }
 
 declare global {

@@ -7,6 +7,8 @@ import { startMockCameraState } from './app/mock/mockCameraState.js';
 import type { UiSceneState, UiSceneStore } from './framework/state/UiSceneStore.js';
 import type { CameraState, PageStore } from './framework/state/PageStore.js';
 import { RootScene } from './app/RootScene.js';
+import { FocusManagerProvider } from './framework/ui/FocusManager.js';
+import { installTestHarness } from './app/TestHarness.js';
 
 import '../styles/main.css';
 
@@ -130,33 +132,17 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
   return Object.keys(next).length > 0 ? next : null;
 }
 
-function shouldAutoCycleMock(): boolean {
-  if (typeof window !== 'undefined' && typeof window.__ZCAM_MOCK_AUTO_CYCLE__ !== 'undefined') {
-    return Boolean(window.__ZCAM_MOCK_AUTO_CYCLE__);
-  }
-  try {
-    const env = (import.meta as unknown as { env?: Record<string, unknown> })?.env;
-    if (env && typeof env.VITE_ZCAM_MOCK_AUTO_CYCLE === 'string') {
-      return env.VITE_ZCAM_MOCK_AUTO_CYCLE.toLowerCase() === 'true';
-    }
-  } catch {
-    // ignore env issues
-  }
-  return false;
-}
-
 const rootEl = document.getElementById('root');
 
 if (rootEl) {
   const root = ReactDOM.createRoot(rootEl);
-  const pageStore = createPageStore();
+  const useMockApi = shouldUseMockApi();
+  const { store: pageStore, mockDevice } = createPageStore({ useMockApi });
   const uiSceneStore = createUiSceneStore();
   const containerStore = createContainerStore();
-  const useMockApi = shouldUseMockApi();
-  const autoCycleMock = shouldAutoCycleMock();
   attachUiStateReporter(uiSceneStore);
-  if (useMockApi) {
-    const stop = startMockCameraState(pageStore, { autoCycle: autoCycleMock });
+  if (useMockApi && mockDevice) {
+    const stop = startMockCameraState(pageStore, mockDevice);
     if (typeof window !== 'undefined') {
       window.addEventListener('beforeunload', () => stop?.());
     }
@@ -164,16 +150,19 @@ if (rootEl) {
     attachCameraStateBridge(pageStore);
   }
   attachWindowStateBridge(uiSceneStore);
+  installTestHarness({ store: pageStore });
 
   root.render(
     <React.StrictMode>
-      <ContainerStoreContext.Provider value={containerStore}>
-        <UiSceneStoreContext.Provider value={uiSceneStore}>
-          <PageStoreContext.Provider value={pageStore}>
-            <RootScene />
-          </PageStoreContext.Provider>
-        </UiSceneStoreContext.Provider>
-      </ContainerStoreContext.Provider>
+      <FocusManagerProvider>
+        <ContainerStoreContext.Provider value={containerStore}>
+          <UiSceneStoreContext.Provider value={uiSceneStore}>
+            <PageStoreContext.Provider value={pageStore}>
+              <RootScene />
+            </PageStoreContext.Provider>
+          </UiSceneStoreContext.Provider>
+        </ContainerStoreContext.Provider>
+      </FocusManagerProvider>
     </React.StrictMode>,
   );
 }

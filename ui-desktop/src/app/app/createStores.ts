@@ -10,8 +10,15 @@ import { ptzOperations, PTZ_FOCUS_RANGE, PTZ_ZOOM_RANGE } from '../app/operation
 import { exposureOperations } from '../app/operations/exposureOperations.js';
 import { whiteBalanceOperations } from '../app/operations/whiteBalanceOperations.js';
 import { imageOperations } from '../app/operations/imageOperations.js';
+import { MockCameraDevice } from './mock/MockCameraDevice.js';
 
-export function createPageStore(): PageStore {
+export interface PageStoreBundle {
+  store: PageStore;
+  mockDevice?: MockCameraDevice;
+}
+
+export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBundle {
+  const useMock = options?.useMockApi ?? shouldUseMockApi();
   const ops = new OperationRegistry();
 
   for (const def of [...ptzOperations, ...exposureOperations, ...whiteBalanceOperations, ...imageOperations]) {
@@ -42,14 +49,17 @@ export function createPageStore(): PageStore {
     },
   };
 
-  const cli = createCliChannel(shouldUseMockApi());
+  const { cli, mockDevice } = createCliChannel(useMock, initialCameraState);
 
-  return new PageStore({
-    path: 'zcam.camera.pages.main',
-    operations: ops,
-    cli,
-    initialCameraState,
-  });
+  return {
+    store: new PageStore({
+      path: 'zcam.camera.pages.main',
+      operations: ops,
+      cli,
+      initialCameraState,
+    }),
+    mockDevice,
+  };
 }
 
 export function createUiSceneStore(): UiSceneStore {
@@ -77,17 +87,22 @@ export function createContainerStore(): ContainerStore {
   return store;
 }
 
-function createCliChannel(useMock: boolean) {
+function createCliChannel(useMock: boolean, initialCameraState: CameraState): {
+  cli: MockCliChannel | RealCliChannel | HttpCliChannel;
+  mockDevice?: MockCameraDevice;
+} {
   if (useMock) {
-    return new MockCliChannel();
+    const device = new MockCameraDevice(initialCameraState);
+    const cli = new MockCliChannel(device);
+    return { cli, mockDevice: device };
   }
   if (typeof window !== 'undefined') {
     if (window.electronAPI?.runCliCommand) {
-      return new RealCliChannel();
+      return { cli: new RealCliChannel() };
     }
-    return new HttpCliChannel();
+    return { cli: new HttpCliChannel() };
   }
-  return new MockCliChannel();
+  return { cli: new MockCliChannel() };
 }
 
 export function shouldUseMockApi(): boolean {

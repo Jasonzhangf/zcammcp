@@ -15,6 +15,6 @@
     "electron.*.mts",
     "electron.*.ts",
     "src",
-    "src/app/pages/ball/init.ts"
+    "src/app/pages/ball/init.tsx"
   ]
 }

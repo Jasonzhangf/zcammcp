@@ -1,20 +1,35 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { OperationPayload } from '../framework/state/PageStore.js';
 import type { SliderControlConfig } from '../framework/ui/ControlConfig.js';
 import { usePageStore, useViewState } from '../hooks/usePageStore.js';
 import { computeSliderStep, getProfileInterval, getSliderProfile } from '../framework/ui/SliderProfiles.js';
-import { Direction, FOCUS_NAV_KEYS, deriveFocusGroupId, moveFocusToDirection } from '../framework/ui/FocusNavigator.js';
+import {
+  Direction,
+  FOCUS_NAV_KEYS,
+  deriveFocusGroupId,
+  useFocusManager,
+  useFocusableControl,
+} from '../framework/ui/FocusManager.js';
+import { useKeyboardBinding } from '../hooks/useKeyboardBinding.js';
+import { logInteraction } from '../framework/debug/InteractionLogger.js';
 
 export interface SliderControlProps {
   config: SliderControlConfig;
   disabled?: boolean;
 }
 
+interface SliderOperationMeta {
+  stepPerInterval?: number;
+  intervalMs?: number;
+  direction?: 1 | -1;
+  stop?: boolean;
+}
+
 export function SliderControl({ config, disabled = false }: SliderControlProps) {
   const store = usePageStore();
   const view = useViewState();
   const actualValue = config.readValue(view);
-  const [localValue, setLocalValue] = useState<number | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const profile = useMemo(() => getSliderProfile(config.profileKey), [config.profileKey]);
   const min = config.valueRange.min;
@@ -25,12 +40,14 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const pointerInteractive = config.enablePointerDrag === true && !disabled;
   const rawValueRef = useRef(actualValue);
   const lastCommittedRef = useRef(snapToStep(actualValue, baseStep, min));
+  const pendingTargetRef = useRef<number | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdTickRef = useRef(0);
   const holdDirectionRef = useRef<1 | -1 | null>(null);
   const holdStepScaleRef = useRef(1);
-  const trackValue = clamp(localValue ?? actualValue, min, max);
-  const displaySource = localValue ?? snapToStep(actualValue, baseStep, min);
+  const keyboardHoldKeyRef = useRef<string | null>(null);
+  const trackValue = clamp(actualValue, min, max);
+  const displaySource = snapToStep(actualValue, baseStep, min);
   const displayValueNumber = transform.toDisplay ? transform.toDisplay(displaySource) : displaySource;
   const displayValue = config.formatValue
     ? config.formatValue(displayValueNumber)
@@ -39,6 +56,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const displayMax = transform.toDisplay ? transform.toDisplay(max) : max;
   const orientation = config.orientation ?? 'horizontal';
   const sliderRootRef = useRef<HTMLDivElement | null>(null);
+  const focusManager = useFocusManager();
   const sliderPercent = useMemo(() => {
     if (!Number.isFinite(trackValue) || max === min) {
       return 0;
@@ -54,10 +72,10 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     rawValueRef.current = actualValue;
     const snappedActual = snapToStep(actualValue, baseStep, min);
     lastCommittedRef.current = snappedActual;
-    if (localValue !== null && snappedActual === localValue) {
-      setLocalValue(null);
+    if (pendingTargetRef.current !== null && snappedActual === pendingTargetRef.current) {
+      pendingTargetRef.current = null;
     }
-  }, [actualValue, baseStep, localValue, min]);
+  }, [actualValue, baseStep, min]);
 
   useEffect(() => {
     if (disabled && isFocused) {
@@ -66,22 +84,39 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   }, [disabled, isFocused]);
 
   const commitValue = useCallback(
-    (next: number) => {
+    (next: number, meta?: SliderOperationMeta) => {
       if (disabled) return;
-      void store.runOperation(config.nodePath, config.kind, config.operationId, { value: next }).catch(() => undefined);
+      const payload: OperationPayload = { value: next };
+      if (meta) {
+        payload.params = {
+          sliderMeta: meta,
+        };
+      }
+      void store.runOperation(config.nodePath, config.kind, config.operationId, payload).catch(() => undefined);
     },
     [config, disabled, store],
   );
 
   const commitQuantizedValue = useCallback(
-    (rawValue: number) => {
-      const snapped = clamp(snapToStep(rawValue, baseStep, min), min, max);
+    (rawValue: number, meta?: SliderOperationMeta) => {
+      const snapped = clamp(snapToStep(rawValue, baseStep, min), min, max);     
       if (snapped === lastCommittedRef.current) return;
       lastCommittedRef.current = snapped;
-      setLocalValue(snapped);
-      commitValue(snapped);
+      pendingTargetRef.current = snapped;
+      logInteraction({
+        source: 'slider',
+        path: config.nodePath,
+        action: 'commit',
+        data: {
+          value: snapped,
+          meta,
+          operationId: config.operationId,
+          kind: config.kind,
+        },
+      });
+      commitValue(snapped, meta);
     },
-    [baseStep, commitValue, max, min],
+    [baseStep, commitValue, config.nodePath, max, min],
   );
 
   const applyStep = useCallback(
@@ -89,16 +124,28 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       if (disabled) return;
       const scale = typeof stepScale === 'number' ? stepScale : holdStepScaleRef.current ?? 1;
       const stepMagnitude = Math.abs(computeSliderStep(profile, tick, baseStep) * scale);
-      const effectiveStep = Math.max(minHoldStep, stepMagnitude);
-      const current = rawValueRef.current ?? actualValue;
-      const nextRaw = clamp(current + direction * effectiveStep, min, max);
+      const intervalMs = getProfileInterval(profile);
+      const baseValue = pendingTargetRef.current ?? rawValueRef.current ?? actualValue;
+      const normalizedLimited = limitStepByNormalizedSpeed(
+        Math.max(minHoldStep, stepMagnitude),
+        intervalMs,
+        min,
+        max,
+      );
+      const nextRaw = clamp(baseValue + direction * normalizedLimited, min, max);
       rawValueRef.current = nextRaw;
-      commitQuantizedValue(nextRaw);
+      pendingTargetRef.current = nextRaw;
+      commitQuantizedValue(nextRaw, {
+        stepPerInterval: normalizedLimited,
+        intervalMs,
+        direction,
+      });
     },
     [actualValue, baseStep, commitQuantizedValue, disabled, max, min, minHoldStep, profile],
   );
 
   const stopHold = useCallback(() => {
+    const hadHold = Boolean(holdDirectionRef.current || holdTimerRef.current || keyboardHoldKeyRef.current);
     if (holdTimerRef.current) {
       clearInterval(holdTimerRef.current);
       holdTimerRef.current = null;
@@ -106,16 +153,48 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     holdDirectionRef.current = null;
     holdTickRef.current = 0;
     holdStepScaleRef.current = 1;
-  }, []);
+    keyboardHoldKeyRef.current = null;
+    if (!hadHold) return;
+    const targetSource =
+      pendingTargetRef.current ?? rawValueRef.current ?? lastCommittedRef.current ?? actualValue;
+    const currentValue = clamp(targetSource, min, max);
+    if (!Number.isFinite(currentValue)) return;
+    const snapped = clamp(snapToStep(currentValue, baseStep, min), min, max);
+    rawValueRef.current = snapped;
+    pendingTargetRef.current = snapped;
+    lastCommittedRef.current = snapped;
+    logInteraction({
+      source: 'slider',
+      path: config.nodePath,
+      action: 'stopHold',
+      data: {
+        value: snapped,
+      },
+    });
+    commitValue(snapped, { stop: true });
+  }, [actualValue, baseStep, commitValue, config.nodePath, max, min]);
 
   const startHold = useCallback(
-    (direction: 1 | -1, stepScale = 1) => {
+    (direction: 1 | -1, stepScale = 1, options?: { key?: string }) => {
       if (disabled) return;
       stopHold();
       holdDirectionRef.current = direction;
       holdStepScaleRef.current = stepScale;
       holdTickRef.current = 0;
+      logInteraction({
+        source: 'slider',
+        path: config.nodePath,
+        action: 'startHold',
+        data: {
+          direction,
+          stepScale,
+          key: options?.key,
+        },
+      });
       applyStep(direction, 0, stepScale);
+      if (options?.key) {
+        keyboardHoldKeyRef.current = options.key;
+      }
       holdTimerRef.current = setInterval(() => {
         holdTickRef.current += 1;
         applyStep(direction, holdTickRef.current);
@@ -134,56 +213,90 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     orientation === 'horizontal' ? 'zcam-slider-orientation-horizontal' : 'zcam-slider-orientation-vertical';
   const sizeClass = `zcam-slider-size-${config.size ?? 'medium'}`;
   const focusGroupId = config.focusGroupId ?? deriveFocusGroupId(config.nodePath);
+  useFocusableControl(sliderRootRef, { nodeId: config.nodePath, groupId: focusGroupId, disabled });
 
   const ariaLabel = useMemo(() => config.label ?? config.kind, [config]);
 
   const moveFocus = useCallback(
     (direction: Direction) => {
-      moveFocusToDirection(sliderRootRef.current, direction);
+      focusManager.moveToDirection(sliderRootRef.current, direction);
     },
-    [],
+    [focusManager],
   );
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (disabled) return;
+  const defaultKeyBindings = useMemo(() => {
+    const axisKeys =
+      orientation === 'vertical'
+        ? ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown']
+        : ['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'];
+    return [...axisKeys, 'Home', 'End', 'w', 'a', 's', 'd'];
+  }, [orientation]);
+
+  const effectiveKeyBindings =
+    Array.isArray(config.keyBindings) && config.keyBindings.length > 0 ? config.keyBindings : defaultKeyBindings;
+
+  const handleKeyboardCommand = useCallback(
+    (event: KeyboardEvent) => {
+      if (disabled) return false;
       const key = event.key;
       const lowerKey = key.length === 1 ? key.toLowerCase() : key;
       const navDirection = (FOCUS_NAV_KEYS as Record<string, Direction | undefined>)[lowerKey];
       if (navDirection) {
-        event.preventDefault();
         stopHold();
         moveFocus(navDirection);
-        return;
+        return true;
       }
       const positiveKeys = orientation === 'vertical' ? ['ArrowUp', 'PageUp'] : ['ArrowRight', 'PageUp'];
       const negativeKeys = orientation === 'vertical' ? ['ArrowDown', 'PageDown'] : ['ArrowLeft', 'PageDown'];
       const stopKeys = new Set(['Escape', 'Enter', 'Tab']);
-      const modifierScale = resolveModifierScale(event);
+      const modifierScale = resolveModifierScale({
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+      });
       if (positiveKeys.includes(key)) {
-        event.preventDefault();
-        startHold(1, modifierScale);
-      } else if (negativeKeys.includes(key)) {
-        event.preventDefault();
-        startHold(-1, modifierScale);
-      } else if (stopKeys.has(key)) {
+        if (event.repeat && keyboardHoldKeyRef.current === key) {
+          return true;
+        }
+        startHold(1, modifierScale, { key });
+        return true;
+      }
+      if (negativeKeys.includes(key)) {
+        if (event.repeat && keyboardHoldKeyRef.current === key) {
+          return true;
+        }
+        startHold(-1, modifierScale, { key });
+        return true;
+      }
+      if (stopKeys.has(key)) {
         stopHold();
-      } else if (key === 'Home') {
-        event.preventDefault();
+        return true;
+      }
+      if (key === 'Home') {
         rawValueRef.current = min;
         commitQuantizedValue(min);
-      } else if (key === 'End') {
-        event.preventDefault();
+        return true;
+      }
+      if (key === 'End') {
         rawValueRef.current = max;
         commitQuantizedValue(max);
+        return true;
       }
+      return false;
     },
     [commitQuantizedValue, disabled, max, min, moveFocus, orientation, startHold, stopHold],
   );
 
-  const handleKeyUp = useCallback(() => {
-    stopHold();
-  }, [stopHold]);
+  useKeyboardBinding({
+    keys: effectiveKeyBindings,
+    mode: config.keyInputMode ?? 'focus',
+    acceptWhenBlurred: config.keyAcceptWhenBlurred ?? false,
+    targetRef: sliderRootRef,
+    enabled: !disabled,
+    onKeyDown: handleKeyboardCommand,
+    onKeyUp: () => stopHold(),
+  });
 
   const handleFocus = useCallback(() => {
     if (disabled) return;
@@ -225,10 +338,24 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       className="zcam-slider-step-btn zcam-slider-step-increase"
       onPointerDown={(e) => {
         e.preventDefault();
+        if (e.currentTarget.setPointerCapture) {
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // ignore if capture fails
+          }
+        }
         startHold(1, resolveModifierScale(e));
       }}
       onPointerUp={(e) => {
         e.preventDefault();
+        if (e.currentTarget.releasePointerCapture) {
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          } catch {
+            // ignore release errors
+          }
+        }
         stopHold();
       }}
       onPointerLeave={stopHold}
@@ -261,10 +388,24 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       className="zcam-slider-step-btn zcam-slider-step-decrease"
       onPointerDown={(e) => {
         e.preventDefault();
+        if (e.currentTarget.setPointerCapture) {
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // ignore
+          }
+        }
         startHold(-1, resolveModifierScale(e));
       }}
       onPointerUp={(e) => {
         e.preventDefault();
+        if (e.currentTarget.releasePointerCapture) {
+          try {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          } catch {
+            // ignore
+          }
+        }
         stopHold();
       }}
       onPointerLeave={stopHold}
@@ -298,7 +439,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     >
       <div className="zcam-slider-header">
         {config.label ? <span className="zcam-slider-label">{config.label}</span> : null}
-        <span className="zcam-slider-value">{displayValue}</span>
+        {!config.hideHeaderValue ? <span className="zcam-slider-value">{displayValue}</span> : null}
       </div>
       <div
         className="zcam-slider-track-wrapper zcam-focusable-control"
@@ -309,8 +450,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         aria-valuemax={displayMax}
         aria-valuenow={displayValueNumber}
         data-focus-group={focusGroupId}
-        onKeyDown={handleKeyDown}
-        onKeyUp={handleKeyUp}
+        data-path={config.nodePath}
         onFocus={handleFocus}
         onBlur={handleBlur}
         ref={sliderRootRef}
@@ -380,4 +520,23 @@ function resolveModifierScale(event: Pick<React.KeyboardEvent | React.PointerEve
   if (event.altKey) return 0.5;
   if (event.ctrlKey || event.metaKey) return 2;
   return 1;
+}
+
+export const NORMALIZED_RANGE_UNITS = 100;
+export const MAX_NORMALIZED_UNITS_PER_SECOND = 10;
+
+export function limitStepByNormalizedSpeed(step: number, intervalMs: number, min: number, max: number): number {
+  if (!Number.isFinite(step) || step <= 0) {
+    return 0;
+  }
+  const span = Math.max(1, max - min);
+  const perTickNormalized = (MAX_NORMALIZED_UNITS_PER_SECOND * intervalMs) / 1000;
+  if (!Number.isFinite(perTickNormalized) || perTickNormalized <= 0) {
+    return step;
+  }
+  const actualLimit = (span * perTickNormalized) / NORMALIZED_RANGE_UNITS;
+  if (!Number.isFinite(actualLimit) || actualLimit <= 0) {
+    return step;
+  }
+  return Math.min(step, actualLimit);
 }

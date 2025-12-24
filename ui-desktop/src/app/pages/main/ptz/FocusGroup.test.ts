@@ -39,8 +39,8 @@ test('FocusGroup.setFocus operation updates state correctly', async () => {
     { value: 80 },
   );
 
-  assert.equal(store.cameraState.ptz?.focus?.value, 80);
-  assert.equal(store.cameraState.ptz?.focus?.view, '80');
+  assert.equal(store.cameraState.ptz?.focus?.value, 40);
+  assert.equal(store.cameraState.ptz?.focus?.view, '40');
 
   // 验证 CLI 请求格式
   const requests = cli.getRequests();

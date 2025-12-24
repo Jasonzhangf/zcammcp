@@ -12,16 +12,19 @@ import { UiSceneStore } from '../framework/state/UiSceneStore.js';
 import { UiSceneStoreContext, PageStoreContext, ContainerStoreContext } from './contexts.js';
 import { createContainerStore, createPageStore } from './createStores.js';
 import type { PageStore } from '../framework/state/PageStore.js';
+import { FocusManagerProvider } from '../framework/ui/FocusManager.js';
 
 function withProviders(children: React.ReactNode, uiStore: UiSceneStore, pageStore?: PageStore) {
-  const store = pageStore ?? createPageStore();
+  const store = pageStore ?? createPageStore({ useMockApi: false }).store;
   const containerStore = createContainerStore();
   return (
-    <ContainerStoreContext.Provider value={containerStore}>
-      <UiSceneStoreContext.Provider value={uiStore}>
-        <PageStoreContext.Provider value={store}>{children}</PageStoreContext.Provider>
-      </UiSceneStoreContext.Provider>
-    </ContainerStoreContext.Provider>
+    <FocusManagerProvider>
+      <ContainerStoreContext.Provider value={containerStore}>
+        <UiSceneStoreContext.Provider value={uiStore}>
+          <PageStoreContext.Provider value={store}>{children}</PageStoreContext.Provider>
+        </UiSceneStoreContext.Provider>
+      </ContainerStoreContext.Provider>
+    </FocusManagerProvider>
   );
 }
 

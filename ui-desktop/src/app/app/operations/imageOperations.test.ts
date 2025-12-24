@@ -55,9 +55,10 @@ test('image.setBrightness / setContrast / setSaturation', async () => {
     { value: 80 } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.image?.brightness, 60);
-  assert.equal(store.cameraState.image?.contrast, 70);
-  assert.equal(store.cameraState.image?.saturation, 80);
+  // 状态不会立即更新，等待硬件回读
+  assert.equal(store.cameraState.image?.brightness, 40);
+  assert.equal(store.cameraState.image?.contrast, 40);
+  assert.equal(store.cameraState.image?.saturation, 40);
 
   const requests = cli.getRequests();
   assert.equal(requests.length, 3);

@@ -23,6 +23,8 @@ const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERV
 const CAMERA_STATE_SCRIPT =
   process.env.ZCAM_CAMERA_STATE_SCRIPT || path.resolve(__dirname, '..', 'service', 'camera-state', 'camera-state.cjs');
 
+const TEST_COMMAND_TIMEOUT_MS = parseInt(process.env.ZCAM_TEST_COMMAND_TIMEOUT || '8000', 10);
+
 let mainWindow = null;
 let ballWindow = null;
 let lastNormalBounds = null;
@@ -30,6 +32,7 @@ let cliServiceProcess = null;
 let cameraStateProcess = null;
 let cameraPollTimer = null;
 let cameraStateSnapshot = null;
+const pendingTestCommands = new Map();
 
 const stateHost = new StateHost();
 const windowState = {
@@ -509,6 +512,24 @@ ipcMain.handle('cli:run', async (_, payload) => {
   }
 });
 
+ipcMain.on('test:response', (_event, message = {}) => {
+  const { requestId } = message;
+  if (!requestId) {
+    return;
+  }
+  const pending = pendingTestCommands.get(requestId);
+  if (!pending) {
+    return;
+  }
+  pendingTestCommands.delete(requestId);
+  clearTimeout(pending.timer);
+  if (message.ok === false) {
+    pending.reject(new Error(message.error || 'test command failed'));
+  } else {
+    pending.resolve(message.result ?? message.data ?? null);
+  }
+});
+
 stateHost
   .start()
   .then(() => {
@@ -564,6 +585,25 @@ stateHost
           throw new Error(`unknown cli action: ${action}`);
       }
     });
+    stateHost.registerHandler('uiTest', async (action, payload = {}) => {       
+      switch (action) {
+        case 'focus':
+        case 'blur':
+        case 'keyDown':
+        case 'keyUp':
+        case 'keySequence':
+        case 'ping':
+        case 'queryFocus':
+        case 'getViewState':
+        case 'getInteractionLog':
+        case 'clearInteractionLog':
+        case 'setInputTrace':
+        case 'replayInteractions':
+          return runRendererTestCommand(action, payload);
+        default:
+          throw new Error(`unknown uiTest action: ${action}`);
+      }
+    });
     ensureCameraStateService()
       .then(() => startCameraStateSync())
       .catch((err) => {
@@ -598,3 +638,27 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
 });
+
+function runRendererTestCommand(action, payload) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    throw new Error('main window unavailable');
+  }
+  if (!mainWindow.webContents) {
+    throw new Error('renderer not ready');
+  }
+  const requestId = `ui-test:${Date.now()}:${Math.random().toString(36).slice(2, 7)}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pendingTestCommands.delete(requestId);
+      reject(new Error(`test command timeout (${action})`));
+    }, TEST_COMMAND_TIMEOUT_MS);
+    pendingTestCommands.set(requestId, { resolve, reject, timer });
+    try {
+      mainWindow.webContents.send('test:command', { requestId, action, payload });
+    } catch (err) {
+      clearTimeout(timer);
+      pendingTestCommands.delete(requestId);
+      reject(err);
+    }
+  });
+}

@@ -56,7 +56,11 @@ test('PageStore.runOperation updates cameraState and calls CLI', async (t) => {
   // 运行 operation: 设置为 80
   await store.runOperation('zcam.camera.pages.main.ptz.zoom', 'ptz.zoom', setZoomOpId, { value: 80 });
 
-  // 应该更新 cameraState
+  // newStatePartial 立即写回 cameraState
   assert.equal(store.cameraState.ptz?.zoom?.value, 80);
   assert.equal(store.cameraState.ptz?.zoom?.view, '80');
+
+  const requests = cli.getRequests();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].command, 'ptz.zoom');
 });

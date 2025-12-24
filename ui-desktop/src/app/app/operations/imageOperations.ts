@@ -1,13 +1,7 @@
 // imageOperations.ts
 // 图像调节相关 Operation 集合 (亮度/对比度/饱和度)
 
-import type {
-  CameraState,
-  OperationContext,
-  OperationPayload,
-  OperationResult,
-  OperationDefinition,
-} from '../../framework/state/PageStore.js';
+import type { OperationContext, OperationPayload, OperationResult, OperationDefinition } from '../../framework/state/PageStore.js';
 import { buildUvcCliRequest } from './uvcCliRequest.js';
 
 function clamp01(value: number): number {
@@ -21,13 +15,8 @@ export const imageOperations: OperationDefinition[] = [
     cliCommand: 'image.brightness',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
-      const img = ctx.cameraState.image ?? {};
-      const newState: Partial<CameraState> = {
-        image: { ...img, brightness: v },
-      };
       return {
-        newStatePartial: newState,
-        cliRequest: buildUvcCliRequest('brightness', v),
+        cliRequest: buildUvcCliRequest('brightness', v, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -36,13 +25,8 @@ export const imageOperations: OperationDefinition[] = [
     cliCommand: 'image.contrast',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
-      const img = ctx.cameraState.image ?? {};
-      const newState: Partial<CameraState> = {
-        image: { ...img, contrast: v },
-      };
       return {
-        newStatePartial: newState,
-        cliRequest: buildUvcCliRequest('contrast', v),
+        cliRequest: buildUvcCliRequest('contrast', v, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -51,14 +35,15 @@ export const imageOperations: OperationDefinition[] = [
     cliCommand: 'image.saturation',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
-      const img = ctx.cameraState.image ?? {};
-      const newState: Partial<CameraState> = {
-        image: { ...img, saturation: v },
-      };
       return {
-        newStatePartial: newState,
-        cliRequest: buildUvcCliRequest('saturation', v),
+        cliRequest: buildUvcCliRequest('saturation', v, { meta: extractSliderMeta(payload) }),
       };
     },
   },
 ];
+
+function extractSliderMeta(payload: OperationPayload): Record<string, unknown> | undefined {
+  const rawMeta = (payload.params as Record<string, unknown> | undefined)?.['sliderMeta'];
+  if (!rawMeta || typeof rawMeta !== 'object') return undefined;
+  return rawMeta as Record<string, unknown>;
+}

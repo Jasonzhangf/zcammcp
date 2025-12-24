@@ -18,6 +18,10 @@ export interface SliderControlConfig {
   enablePointerDrag?: boolean;
   minHoldStep?: number;
   focusGroupId?: string;
+  hideHeaderValue?: boolean;
+  keyBindings?: string[];
+  keyInputMode?: 'focus' | 'global';
+  keyAcceptWhenBlurred?: boolean;
   readValue(view: ViewState): number;
   formatValue?(value: number): string;
   valueMapper?: {
@@ -36,3 +40,5 @@ export interface ToggleControlConfig {
   trueLabel?: string;
   falseLabel?: string;
 }
+
+

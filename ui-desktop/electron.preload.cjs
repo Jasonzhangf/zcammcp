@@ -25,4 +25,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('camera:state', handler);
     return () => ipcRenderer.removeListener('camera:state', handler);
   },
+  registerTestHandler: (handler) => {
+    if (typeof handler !== 'function') {
+      return () => {};
+    }
+    const listener = async (_event, message) => {
+      const requestId = message?.requestId;
+      if (!requestId) {
+        return;
+      }
+      try {
+        const result = await handler(message);
+        ipcRenderer.send('test:response', { requestId, ok: result?.ok !== false, result });
+      } catch (err) {
+        ipcRenderer.send('test:response', {
+          requestId,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    };
+    ipcRenderer.on('test:command', listener);
+    return () => {
+      ipcRenderer.removeListener('test:command', listener);
+    };
+  },
 });

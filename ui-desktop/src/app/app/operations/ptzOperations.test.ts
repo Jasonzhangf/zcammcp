@@ -35,8 +35,8 @@ test('ptz.setZoom operation integrates with PageStore', async () => {
     { value: targetZoom } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.ptz?.zoom?.value, targetZoom);
-  assert.equal(store.cameraState.ptz?.zoom?.view, String(targetZoom));
+  assert.equal(store.cameraState.ptz?.zoom?.value, 10);
+  assert.equal(store.cameraState.ptz?.zoom?.view, '10');
 
   const requests = cli.getRequests();
   assert.equal(requests.length, 1);
@@ -71,13 +71,8 @@ test('ptz.nudge updates pan/tilt and emits CLI requests', async () => {
     { params: { direction: 'up-right' } },
   );
 
-  const panValue = store.cameraState.ptz?.pan?.value ?? 0;
-  const tiltValue = store.cameraState.ptz?.tilt?.value ?? 0;
-  assert.ok(panValue > 0);
-  assert.ok(tiltValue > 0);
-
   const requests = cli.getRequests();
   assert.equal(requests.length, 2);
-  assert.deepEqual(requests[0].args, ['uvc', 'set', 'pan', '--value', String(panValue)]);
-  assert.deepEqual(requests[1].args, ['uvc', 'set', 'tilt', '--value', String(tiltValue)]);
+  assert.deepEqual(requests[0].args, ['uvc', 'set', 'pan', '--value', '10']);
+  assert.deepEqual(requests[1].args, ['uvc', 'set', 'tilt', '--value', '10']);
 });

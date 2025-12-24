@@ -40,7 +40,7 @@ test('whiteBalance.setAwbEnabled / setTemperature', async () => {
     { value: true } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.whiteBalance?.awbEnabled, true);
+  assert.equal(store.cameraState.whiteBalance?.awbEnabled, false);
 
   await store.runOperation(
     'zcam.camera.pages.main.whiteBalance.temperature',
@@ -49,8 +49,8 @@ test('whiteBalance.setAwbEnabled / setTemperature', async () => {
     { value: 6500 } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.whiteBalance?.temperature?.value, 6500);
-  assert.equal(store.cameraState.whiteBalance?.temperature?.view, '6500K');
+  assert.equal(store.cameraState.whiteBalance?.temperature?.value, 5600);
+  assert.equal(store.cameraState.whiteBalance?.temperature?.view, '5600K');
 
   const requests = cli.getRequests();
   assert.equal(requests.length, 2);

@@ -41,7 +41,7 @@ test('exposure.setAeEnabled / setShutter / setIso', async () => {
     { value: true } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.exposure?.aeEnabled, true);
+  assert.equal(store.cameraState.exposure?.aeEnabled, false);
 
   await store.runOperation(
     'zcam.camera.pages.main.exposure.shutter',
@@ -50,7 +50,7 @@ test('exposure.setAeEnabled / setShutter / setIso', async () => {
     { value: 60 } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.exposure?.shutter?.value, 60);
+  assert.equal(store.cameraState.exposure?.shutter?.value, 30);
 
   await store.runOperation(
     'zcam.camera.pages.main.exposure.iso',
@@ -59,7 +59,7 @@ test('exposure.setAeEnabled / setShutter / setIso', async () => {
     { value: 800 } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.exposure?.iso?.value, 800);
+  assert.equal(store.cameraState.exposure?.iso?.value, 400);
 
   const requests = cli.getRequests();
   assert.equal(requests.length, 3);
