@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useUiSceneState } from './useUiSceneStore.js';
 
 const SAFE_MARGIN_PX = 4;
 
 export function useRootScale(): number {
+  const { windowMode } = useUiSceneState();
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
@@ -10,9 +12,17 @@ export function useRootScale(): number {
       return;
     }
 
+    if (windowMode !== 'ball') {
+      // 主窗口不做整体缩放，只在球窗口中通过缩放避免裁切。
+      setScale(1);
+      return;
+    }
+
     let frame = 0;
     const update = () => {
-      const root = document.querySelector('.zcam-root-scale.page-shell') as HTMLElement | null;
+      const root = document.querySelector(
+        '.zcam-root-scale.page-shell',
+      ) as HTMLElement | null;
       if (!root) {
         return;
       }
@@ -26,8 +36,10 @@ export function useRootScale(): number {
       const naturalWidth = scrollWidth;
       const naturalHeight = scrollHeight;
 
-      const availWidth = (window.innerWidth || naturalWidth) - SAFE_MARGIN_PX * 2;
-      const availHeight = (window.innerHeight || naturalHeight) - SAFE_MARGIN_PX * 2;
+      const availWidth =
+        (window.innerWidth || naturalWidth) - SAFE_MARGIN_PX * 2;
+      const availHeight =
+        (window.innerHeight || naturalHeight) - SAFE_MARGIN_PX * 2;
 
       const scaleX = availWidth / naturalWidth;
       const scaleY = availHeight / naturalHeight;
@@ -52,7 +64,7 @@ export function useRootScale(): number {
         cancelAnimationFrame(frame);
       }
     };
-  }, []);
+  }, [windowMode]);
 
   return scale;
 }
