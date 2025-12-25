@@ -11,33 +11,20 @@ export function useRootScale(): number {
     }
 
     let frame = 0;
-    let currentScale = 1;
-
-    const applyScale = (next: number) => {
-      currentScale = next;
-      setScale(next);
-    };
-
     const update = () => {
       const root = document.querySelector('.zcam-root-scale.page-shell') as HTMLElement | null;
       if (!root) {
-        if (currentScale !== 1) {
-          applyScale(1);
-        }
         return;
       }
 
       const scrollWidth = root.scrollWidth || root.clientWidth;
       const scrollHeight = root.scrollHeight || root.clientHeight;
       if (scrollWidth <= 0 || scrollHeight <= 0) {
-        if (currentScale !== 1) {
-          applyScale(1);
-        }
         return;
       }
 
-      const naturalWidth = scrollWidth / currentScale;
-      const naturalHeight = scrollHeight / currentScale;
+      const naturalWidth = scrollWidth;
+      const naturalHeight = scrollHeight;
 
       const availWidth = (window.innerWidth || naturalWidth) - SAFE_MARGIN_PX * 2;
       const availHeight = (window.innerHeight || naturalHeight) - SAFE_MARGIN_PX * 2;
@@ -46,10 +33,7 @@ export function useRootScale(): number {
       const scaleY = availHeight / naturalHeight;
       const raw = Math.min(1, scaleX, scaleY);
       const next = raw > 0 && Number.isFinite(raw) ? raw : 1;
-
-      if (Math.abs(next - currentScale) > 0.001) {
-        applyScale(next);
-      }
+      setScale(next);
     };
 
     const schedule = () => {
