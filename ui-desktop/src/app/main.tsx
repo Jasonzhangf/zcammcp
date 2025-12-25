@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-
 import { ContainerStoreContext, PageStoreContext, UiSceneStoreContext } from './app/contexts.js';
 import { createContainerStore, createPageStore, createUiSceneStore, shouldUseMockApi } from './app/createStores.js';
 import { startMockCameraState } from './app/mock/mockCameraState.js';
@@ -12,11 +11,16 @@ import { installTestHarness } from './app/TestHarness.js';
 
 import '../styles/main.css';
 
+if (typeof document !== 'undefined' && document.body) {
+  document.body.style.margin = '0';
+  document.body.style.padding = '0';
+  document.body.style.background = '#151515';
+}
+
 function attachUiStateReporter(store: UiSceneStore) {
   if (typeof window === 'undefined') {
     return;
   }
-
   const api = window.electronAPI;
   const pushState = api?.pushState;
   if (!api || !pushState) {
@@ -166,3 +170,4 @@ if (rootEl) {
     </React.StrictMode>,
   );
 }
+
