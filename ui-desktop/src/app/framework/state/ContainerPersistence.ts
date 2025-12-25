@@ -36,8 +36,8 @@ export function attachContainerPersistence(store: ContainerStore) {
       try {
         const safeBounds = sanitizeBounds(stored.bounds, state.bounds);
         store.update(state.id, {
+          // 只恢复布局尺寸，不覆盖可见性，避免误把某些分组永久隐藏
           bounds: safeBounds,
-          visible: typeof stored.visible === 'boolean' ? stored.visible : state.visible,
         });
         return true;
       } catch {
