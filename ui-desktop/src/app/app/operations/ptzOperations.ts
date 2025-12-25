@@ -76,7 +76,7 @@ export const ptzOperations: OperationDefinition[] = [
     cliCommand: 'ptz.focus',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const value = Number(payload.value ?? 0);
-      const clamped = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+      const clamped = clamp(value, PTZ_FOCUS_RANGE.min, PTZ_FOCUS_RANGE.max);
 
       return {
         cliRequest: buildUvcCliRequest('focus', clamped, { meta: extractSliderMeta(payload) }),
