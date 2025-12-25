@@ -27,16 +27,17 @@ export function useRootScale(): number {
         return;
       }
 
-      const rect = root.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) {
+      const scrollWidth = root.scrollWidth || root.clientWidth;
+      const scrollHeight = root.scrollHeight || root.clientHeight;
+      if (scrollWidth <= 0 || scrollHeight <= 0) {
         if (currentScale !== 1) {
           applyScale(1);
         }
         return;
       }
 
-      const naturalWidth = rect.width / currentScale;
-      const naturalHeight = rect.height / currentScale;
+      const naturalWidth = scrollWidth / currentScale;
+      const naturalHeight = scrollHeight / currentScale;
 
       const availWidth = (window.innerWidth || naturalWidth) - SAFE_MARGIN_PX * 2;
       const availHeight = (window.innerHeight || naturalHeight) - SAFE_MARGIN_PX * 2;
@@ -71,4 +72,3 @@ export function useRootScale(): number {
 
   return scale;
 }
-
