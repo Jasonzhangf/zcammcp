@@ -436,6 +436,13 @@ body {
   color: #ffffff;
 }
 
+.zcam-ptz-btn-active {
+  background: #262626;
+  border-color: #ff7a45;
+  box-shadow: 0 0 0 2px rgba(255, 122, 69, 0.6);
+  color: #ffffff;
+}
+
 .zcam-ptz-btn-main {
   width: 62px;
   height: 62px;

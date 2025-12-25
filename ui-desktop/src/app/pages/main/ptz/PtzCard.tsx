@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { SliderControl } from '../../../components/SliderControl.js';
@@ -13,7 +13,7 @@ import {
   useFocusManager,
   useFocusableControl,
 } from '../../../framework/ui/FocusManager.js';
-import { computeSliderStep, getProfileInterval, getSliderProfile } from '../../../framework/ui/SliderProfiles.js';
+import { computeNormalizedStep, getProfileInterval, getSliderProfile } from '../../../framework/ui/SliderProfiles.js';
 
 export const ptzCardNode: ContainerNode = {
   path: 'zcam.camera.pages.main.ptz',
@@ -33,7 +33,7 @@ const zoomSliderConfig: SliderControlConfig = {
   readValue: (view) => view.camera.ptz?.zoom?.value ?? PTZ_ZOOM_RANGE.min,
   formatValue: (value) => String(Math.round(value)),
   operationId: 'ptz.setZoom',
-  profileKey: 'zoomBoost',
+  profileKey: 'zoom',
   hideHeaderValue: true,
   focusGroupId: 'zcam.camera.pages.main.ptz',
   keyAcceptWhenBlurred: true,
@@ -131,7 +131,9 @@ export function PtzCard() {
   const zoomDisplay = Math.round(zoomVal);
   const focusDisplay = Math.round(focusVal);
 
-  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [activeDirection, setActiveDirection] = useState<DpadDirection | null>(null);
+
+  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);     
   const holdDirectionRef = useRef<DpadDirection | null>(null);
   const holdPathRef = useRef<string | null>(null);
   const holdTickRef = useRef(0);
@@ -195,8 +197,9 @@ export function PtzCard() {
     (direction: DpadDirection, nodePath: string, tick = 0) => {
       const vector = DPAD_VECTOR[direction];
       if (!vector) return;
-      const stepMagnitude = Math.max(1, computeSliderStep(dpadProfile, tick, baseStep));
-      const scaledStep = Math.max(1, Math.round(stepMagnitude * DPAD_STEP_SCALE));
+      // DPAD使用固定步长，不受归一化速度影响
+      const baseStep = 1;
+      const scaledStep = Math.max(1, baseStep * DPAD_STEP_SCALE);
       const intervalMs = getProfileInterval(dpadProfile);
       if (vector.pan) {
         const direction = vector.pan > 0 ? 1 : -1;
@@ -222,6 +225,7 @@ export function PtzCard() {
     holdDirectionRef.current = null;
     holdPathRef.current = null;
     holdTickRef.current = 0;
+    setActiveDirection(null);
     if (holdTimerRef.current) {
       clearInterval(holdTimerRef.current);
       holdTimerRef.current = null;
@@ -234,6 +238,7 @@ export function PtzCard() {
       holdDirectionRef.current = direction;
       holdPathRef.current = nodePath;
       holdTickRef.current = 0;
+       setActiveDirection(direction);
       applyDirection(direction, nodePath, 0);
       if (holdTimerRef.current) {
         clearInterval(holdTimerRef.current);
@@ -366,10 +371,11 @@ export function PtzCard() {
                     );
                   }
                   const direction = btn.direction;
+                  const isActive = activeDirection === direction;
                   return (
                     <button
                       key={btn.path}
-                      className="zcam-ptz-btn"
+                      className={`zcam-ptz-btn${isActive ? ' zcam-ptz-btn-active' : ''}`}
                       data-path={btn.path}
                       tabIndex={-1}
                       onPointerDown={(e) => {
