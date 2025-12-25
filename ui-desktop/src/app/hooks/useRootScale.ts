@@ -21,11 +21,16 @@ export function useRootScale(): number {
         return;
       }
 
-      const naturalWidth = root.scrollWidth || root.clientWidth;
-      const naturalHeight = root.scrollHeight || root.clientHeight;
-      if (naturalWidth <= 0 || naturalHeight <= 0) {
+      const baseWidth = root.scrollWidth || root.clientWidth;
+      const baseHeight = root.scrollHeight || root.clientHeight;
+      if (baseWidth <= 0 || baseHeight <= 0) {
         return;
       }
+
+      // 为了避免控件的阴影 / 描边在缩放后被“吃掉”，这里把自然尺寸略微放大一个 SAFE_MARGIN，
+      // 再用窗口尺寸减去 SAFE_MARGIN 计算可用空间，相当于多缩一点点，保证四条边都有缓冲。
+      const naturalWidth = baseWidth + SAFE_MARGIN_PX * 2;
+      const naturalHeight = baseHeight + SAFE_MARGIN_PX * 2;
 
       const availWidth =
         (window.innerWidth || naturalWidth) - SAFE_MARGIN_PX * 2;
@@ -59,4 +64,3 @@ export function useRootScale(): number {
 
   return scale;
 }
-
