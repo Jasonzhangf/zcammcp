@@ -16,6 +16,7 @@ export interface ContainerHostProps extends React.HTMLAttributes<HTMLDivElement>
   data?: Record<string, unknown>;
   visible?: boolean;
   resizable?: boolean;
+  layoutMode?: 'flow' | 'transform';
 }
 
 export function ContainerHost({
@@ -29,6 +30,7 @@ export function ContainerHost({
   data,
   visible,
   resizable = false,
+  layoutMode = 'transform',
   ...rest
 }: ContainerHostProps) {
   const store = useContainerStore();
@@ -95,8 +97,10 @@ export function ContainerHost({
       custom['--container-y'] = `${y}`;
       custom['--container-width'] = `${width}`;
       custom['--container-height'] = `${height}`;
-      const translateValue = `translate(${translate.x}px, ${translate.y}px)`;
-      next.transform = baseTransform ? `${baseTransform} ${translateValue}` : translateValue;
+      if (layoutMode === 'transform') {
+        const translateValue = `translate(${translate.x}px, ${translate.y}px)`;
+        next.transform = baseTransform ? `${baseTransform} ${translateValue}` : translateValue;
+      }
     }
     if (resolvedState?.ui?.background) {
       next.background = resolvedState.ui.background;
@@ -264,6 +268,10 @@ export function ContainerHost({
   }, [enableResize]);
 
   useLayoutEffect(() => {
+    if (layoutMode !== 'transform') {
+      return;
+    }
+
     const element = hostRef.current;
     const parent = element?.parentElement;
     if (!element || !parent) {
@@ -304,7 +312,7 @@ export function ContainerHost({
       }
       observer?.disconnect();
     };
-  }, [enableResize, resolvedState?.bounds?.x, resolvedState?.bounds?.y]);
+  }, [enableResize, layoutMode, resolvedState?.bounds?.x, resolvedState?.bounds?.y]);
 
   return (
     <div

@@ -161,7 +161,7 @@ body {
   flex-direction: column;
   padding: var(--zcam-safe-padding);
   gap: var(--zcam-safe-gap);
-  overflow: auto;
+  overflow: hidden;
   background: #151515;
 }
 

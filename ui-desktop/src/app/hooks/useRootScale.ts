@@ -12,12 +12,6 @@ export function useRootScale(): number {
       return;
     }
 
-    if (windowMode !== 'ball') {
-      // 主窗口不做整体缩放，只在球窗口中通过缩放避免裁切。
-      setScale(1);
-      return;
-    }
-
     let frame = 0;
     const update = () => {
       const root = document.querySelector(
@@ -68,3 +62,4 @@ export function useRootScale(): number {
 
   return scale;
 }
+

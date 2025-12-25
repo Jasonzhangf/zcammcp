@@ -43,6 +43,7 @@ function MainNormalLayout() {
         id="group.status"
         parentId="page.root"
         kind="group"
+        layoutMode="flow"
         className="zcam-main-grid-status"
         data-path="zcam.layout.normal.status"
         defaultBounds={NORMAL_BOUNDS.status}
@@ -55,6 +56,7 @@ function MainNormalLayout() {
           id="group.ptz"
           parentId="page.root"
           kind="group"
+          layoutMode="flow"
           className="zcam-main-control zcam-main-control-ptz"
           data-path="zcam.layout.normal.ptz"
           defaultBounds={NORMAL_BOUNDS.ptz}
@@ -66,6 +68,7 @@ function MainNormalLayout() {
           id="group.image"
           parentId="page.root"
           kind="group"
+          layoutMode="flow"
           className="zcam-main-control zcam-main-control-image"
           data-path="zcam.layout.normal.image"
           defaultBounds={NORMAL_BOUNDS.image}
@@ -78,6 +81,7 @@ function MainNormalLayout() {
         id="group.shortcuts"
         parentId="page.root"
         kind="group"
+        layoutMode="flow"
         className="zcam-main-grid-shortcuts"
         data-path="zcam.layout.normal.shortcuts"
         defaultBounds={NORMAL_BOUNDS.shortcuts}
@@ -96,6 +100,7 @@ function MainStudioLayout() {
         id="group.status"
         parentId="page.root"
         kind="group"
+        layoutMode="flow"
         className="zcam-main-grid-status"
         data-path="zcam.layout.studio.status"
         defaultBounds={STUDIO_BOUNDS.status}
@@ -108,6 +113,7 @@ function MainStudioLayout() {
           id="group.image"
           parentId="page.root"
           kind="group"
+          layoutMode="flow"
           className="zcam-studio-block"
           data-path="zcam.layout.studio.image"
           defaultBounds={STUDIO_BOUNDS.image}
@@ -119,6 +125,7 @@ function MainStudioLayout() {
           id="group.ptz"
           parentId="page.root"
           kind="group"
+          layoutMode="flow"
           className="zcam-studio-block"
           data-path="zcam.layout.studio.ptz"
           defaultBounds={STUDIO_BOUNDS.ptz}
@@ -131,6 +138,7 @@ function MainStudioLayout() {
         id="group.shortcuts"
         parentId="page.root"
         kind="group"
+        layoutMode="flow"
         className="zcam-main-grid-shortcuts"
         data-path="zcam.layout.studio.shortcuts"
         defaultBounds={STUDIO_BOUNDS.shortcuts}
