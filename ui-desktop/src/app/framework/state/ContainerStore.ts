@@ -126,9 +126,16 @@ export class ContainerStore {
 
   private normalize(container: ContainerState): ContainerState {
     const bounds = container.bounds ?? { x: 0, y: 0, width: 100, height: 100 };
+    let parentId = container.parentId;
+    if (container.kind === 'group') {
+      const parent = parentId ? this.containers.get(parentId) : null;
+      if (!parent || parent.kind !== 'page') {
+        parentId = 'page.root';
+      }
+    }
     return {
       id: container.id,
-      parentId: container.parentId,
+      parentId,
       kind: container.kind,
       bounds: {
         x: bounds.x ?? 0,
