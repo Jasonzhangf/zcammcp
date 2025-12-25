@@ -1155,14 +1155,14 @@ body {
 
 .debug-grid {
   display: grid;
-  grid-template-columns: repeat(2, 60px);
-  grid-template-rows: repeat(2, 34px);
+  grid-template-columns: repeat(2, 64px);
+  grid-template-rows: repeat(2, 64px);
   gap: 4px;
 }
 
 .debug-grid-btn {
-  width: 60px;
-  height: 34px;
+  width: 64px;
+  height: 64px;
   padding: 2px 4px;
   font-size: 10px;
   border-radius: 6px;
@@ -1287,10 +1287,10 @@ body {
   max-width: 60px;
 }
 
-/* Debug controls override: ensure square/rect buttons instead of circles */
+/* Debug controls override: ensure square/rect buttons instead of circles */    
 .debug-grid .control-btn {
-  width: 60px;
-  height: 34px;
+  width: 64px;
+  height: 64px;
   padding: 2px 4px;
   border-radius: 6px;
   font-size: 10px;
@@ -1300,4 +1300,11 @@ body {
   justify-content: center;
   text-align: center;
   line-height: 1.1;
+}
+
+.debug-btn-active {
+  background: #262626;
+  border-color: #ff7a45;
+  box-shadow: 0 0 0 1px rgba(255, 122, 69, 0.6);
+  color: #ffffff;
 }

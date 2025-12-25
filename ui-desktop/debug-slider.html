@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Slider Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 10px; border: 1px solid #ccc; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Slider Debug Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        
+        function addResult(test, passed, message) {
+            const div = document.createElement('div');
+            div.className = `test-section ${passed ? 'success' : 'error'}`;
+            div.innerHTML = `<strong>${test}:</strong> ${passed ? 'PASS' : 'FAIL'} - ${message}`;
+            results.appendChild(div);
+        }
+        
+        // Test 1: Check percentage-based speed system
+        try {
+            // Simulate the new computeNormalizedStep function logic
+            function computeNormalizedStep(profile, tick, speedMultiplier = 1) {
+                // Simple sliders: use normalizedSpeed
+                if (profile.normalizedSpeed !== undefined) {
+                    return profile.normalizedSpeed * speedMultiplier;
+                }
+                
+                // Complex sliders: use percentage speed system
+                if (profile.maxSpeed !== undefined && profile.speedPercentages && Array.isArray(profile.speedPercentages)) {
+                    const curveIndex = Math.max(0, Math.min(tick, profile.speedPercentages.length - 1));
+                    const speedPercentage = profile.speedPercentages[curveIndex] || 0;
+                    
+                    // Convert percentage to actual speed: percentage × maxSpeed × speedMultiplier
+                    const actualSpeed = (speedPercentage / 100) * profile.maxSpeed * speedMultiplier;
+                    
+                    return Math.min(actualSpeed, profile.maxSpeed);
+                }
+                
+                return 1 * speedMultiplier;
+            }
+            
+            const zoomProfile = {
+                id: 'zoom',
+                maxSpeed: 10,
+                speedPercentages: [5, 10, 20, 35, 50, 70, 85, 100], // Normal acceleration curve
+                intervalMs: 60,
+            };
+            
+            // Test: speed 100 = 1.0 multiplier, last step (100% of max speed) = 10
+            const step1 = computeNormalizedStep(zoomProfile, 7, 1.0); 
+            // Test: speed 50 = 0.5 multiplier, last step = 5 (50% of max speed)
+            const step2 = computeNormalizedStep(zoomProfile, 7, 0.5); 
+            // Test: speed 100 = 1.0 multiplier, first step (5% of max speed) = 0.5
+            const step3 = computeNormalizedStep(zoomProfile, 0, 1.0); 
+            
+            addResult('Percentage Speed System', 
+                step1 === 10 && step2 === 5 && step3 === 0.5,
+                `100% speed: ${step1}, 50% speed: ${step2}, Start: ${step3}`);
+                
+        } catch (error) {
+            addResult('Percentage Speed System', false, error.message);
+        }
+        
+        // Test 2: Check speed multiplier calculation (speed 100 = 1.0)
+        try {
+            function getSpeedMultiplier(speedValue) {
+                return Math.max(0.1, speedValue / 100);
+            }
+            
+            const mult1 = getSpeedMultiplier(100); // Should be 1.0 (full speed)
+            const mult2 = getSpeedMultiplier(50);  // Should be 0.5 (half speed) 
+            const mult3 = getSpeedMultiplier(0);   // Should be 0.1 (minimum speed)
+            
+            addResult('Speed Multiplier (100 = Full Speed)',
+                mult1 === 1.0 && mult2 === 0.5 && mult3 === 0.1,
+                `Speed 100: ${mult1}, Speed 50: ${mult2}, Speed 0: ${mult3}`);
+                
+        } catch (error) {
+            addResult('Speed Multiplier (100 = Full Speed)', false, error.message);
+        }
+        
+        // Test 3: Check percentage curve calculation
+        try {
+            const maxSpeed = 10;
+            const percentages = [5, 10, 20, 35, 50, 70, 85, 100];
+            
+            // Test: 5% of max speed = 0.5
+            const step0 = (percentages[0] / 100) * maxSpeed;
+            // Test: 35% of max speed = 3.5
+            const step3 = (percentages[3] / 100) * maxSpeed;
+            // Test: 100% of max speed = 10
+            const step7 = (percentages[7] / 100) * maxSpeed;
+            
+            addResult('Percentage Curve Calculation',
+                step0 === 0.5 && step3 === 3.5 && step7 === 10,
+                `5%: ${step0}, 35%: ${step3}, 100%: ${step7}`);
+                
+        } catch (error) {
+            addResult('Percentage Curve Calculation', false, error.message);
+        }
+        
+        // Test 4: Check different curve types
+        try {
+            const curves = {
+                gentle: [2, 4, 8, 15, 25, 40, 60, 100],
+                normal: [5, 10, 20, 35, 50, 70, 85, 100],
+                aggressive: [10, 20, 35, 50, 65, 80, 90, 100]
+            };
+            
+            const maxSpeed = 10;
+            const gentleLast = (curves.gentle[7] / 100) * maxSpeed;
+            const normalLast = (curves.normal[7] / 100) * maxSpeed;
+            const aggressiveLast = (curves.aggressive[7] / 100) * maxSpeed;
+            
+            // All should reach max speed at last step
+            addResult('Different Curve Types',
+                gentleLast === 10 && normalLast === 10 && aggressiveLast === 10,
+                `Gentle: ${gentleLast}, Normal: ${normalLast}, Aggressive: ${aggressiveLast}`);
+                
+        } catch (error) {
+            addResult('Different Curve Types', false, error.message);
+        }
+        
+        console.log('Slider debug tests completed');
+    </script>
+</body>
+</html>

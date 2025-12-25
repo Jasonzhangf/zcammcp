@@ -11,6 +11,7 @@ import { exposureOperations } from '../app/operations/exposureOperations.js';
 import { whiteBalanceOperations } from '../app/operations/whiteBalanceOperations.js';
 import { imageOperations } from '../app/operations/imageOperations.js';
 import { MockCameraDevice } from './mock/MockCameraDevice.js';
+import { loadMockCameraState } from './mock/MockCameraPersistence.js';
 
 export interface PageStoreBundle {
   store: PageStore;
@@ -25,13 +26,13 @@ export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBu
     ops.register(def);
   }
 
-  const initialCameraState: CameraState = {
+  const baseCameraState: CameraState = {
     ptz: {
       pan: { value: 0, view: '0' },
       tilt: { value: 0, view: '0' },
-      zoom: { value: PTZ_ZOOM_RANGE.min, view: String(PTZ_ZOOM_RANGE.min) },
+      zoom: { value: PTZ_ZOOM_RANGE.min, view: String(PTZ_ZOOM_RANGE.min) },    
       speed: { value: 50, view: '50' },
-      focus: { value: PTZ_FOCUS_RANGE.min, view: String(PTZ_FOCUS_RANGE.min) },
+      focus: { value: PTZ_FOCUS_RANGE.min, view: String(PTZ_FOCUS_RANGE.min) }, 
     },
     exposure: {
       aeEnabled: true,
@@ -48,6 +49,10 @@ export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBu
       saturation: 50,
     },
   };
+
+  const initialCameraState: CameraState = useMock
+    ? loadMockCameraState(baseCameraState)
+    : baseCameraState;
 
   const { cli, mockDevice } = createCliChannel(useMock, initialCameraState);
 

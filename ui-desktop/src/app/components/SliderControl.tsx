@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { OperationPayload } from '../framework/state/PageStore.js';
 import type { SliderControlConfig } from '../framework/ui/ControlConfig.js';
 import { usePageStore, useViewState } from '../hooks/usePageStore.js';
-import { computeSliderStep, getProfileInterval, getSliderProfile } from '../framework/ui/SliderProfiles.js';
+import { computeNormalizedStep, getProfileInterval, getSliderProfile } from '../framework/ui/SliderProfiles.js';
 import {
   Direction,
   FOCUS_NAV_KEYS,
@@ -20,9 +20,11 @@ export interface SliderControlProps {
 }
 
 interface SliderOperationMeta {
-  stepPerInterval?: number;
+  normalizedSpeed?: number;
+  speedMultiplier?: number;
   intervalMs?: number;
   direction?: 1 | -1;
+  tick?: number;
   stop?: boolean;
 }
 
@@ -31,7 +33,14 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const view = useViewState();
   const actualValue = config.readValue(view);
   const [isFocused, setIsFocused] = useState(false);
-  const profile = useMemo(() => getSliderProfile(config.profileKey), [config.profileKey]);
+  const profile = useMemo(() => {
+    try {
+      return getSliderProfile(config.profileKey);
+    } catch (error) {
+      console.warn('Error getting slider profile:', error);
+      return getSliderProfile('default'); // 出错时使用默认profile
+    }
+  }, [config.profileKey]);
   const min = config.valueRange.min;
   const max = config.valueRange.max;
   const baseStep = config.valueRange.step ?? 1;
@@ -39,7 +48,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const transform = useMemo(() => config.valueMapper ?? identityTransform(), [config.valueMapper]);
   const pointerInteractive = config.enablePointerDrag === true && !disabled;
   const rawValueRef = useRef(actualValue);
-  const lastCommittedRef = useRef(snapToStep(actualValue, baseStep, min));
+  const lastCommittedRef = useRef(actualValue);
   const pendingTargetRef = useRef<number | null>(null);
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdTickRef = useRef(0);
@@ -47,7 +56,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const holdStepScaleRef = useRef(1);
   const keyboardHoldKeyRef = useRef<string | null>(null);
   const trackValue = clamp(actualValue, min, max);
-  const displaySource = snapToStep(actualValue, baseStep, min);
+  const displaySource = actualValue; // 直接使用实际值，支持浮点
   const displayValueNumber = transform.toDisplay ? transform.toDisplay(displaySource) : displaySource;
   const displayValue = config.formatValue
     ? config.formatValue(displayValueNumber)
@@ -70,12 +79,11 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const sliderLabelClass = centerCovered ? 'zcam-slider-track-label-filled' : 'zcam-slider-track-label-empty';
   useEffect(() => {
     rawValueRef.current = actualValue;
-    const snappedActual = snapToStep(actualValue, baseStep, min);
-    lastCommittedRef.current = snappedActual;
-    if (pendingTargetRef.current !== null && snappedActual === pendingTargetRef.current) {
+    lastCommittedRef.current = actualValue;
+    if (pendingTargetRef.current !== null && Math.abs(actualValue - pendingTargetRef.current) < Number.EPSILON) {
       pendingTargetRef.current = null;
     }
-  }, [actualValue, baseStep, min]);
+  }, [actualValue]);
 
   useEffect(() => {
     if (disabled && isFocused) {
@@ -99,49 +107,83 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
 
   const commitQuantizedValue = useCallback(
     (rawValue: number, meta?: SliderOperationMeta) => {
-      const snapped = clamp(snapToStep(rawValue, baseStep, min), min, max);     
-      if (snapped === lastCommittedRef.current) return;
-      lastCommittedRef.current = snapped;
-      pendingTargetRef.current = snapped;
+      // 直接使用实际值，支持浮点精度
+      const clampedValue = clamp(rawValue, min, max);     
+      if (Math.abs(clampedValue - lastCommittedRef.current) < Number.EPSILON) return;
+      lastCommittedRef.current = clampedValue;
+      pendingTargetRef.current = clampedValue;
       logInteraction({
         source: 'slider',
         path: config.nodePath,
         action: 'commit',
         data: {
-          value: snapped,
+          value: clampedValue,
           meta,
           operationId: config.operationId,
           kind: config.kind,
         },
       });
-      commitValue(snapped, meta);
+      commitValue(clampedValue, meta);
     },
-    [baseStep, commitValue, config.nodePath, max, min],
+    [commitValue, config.nodePath, max, min],
   );
 
+  // 获取speed乘数的函数
+  const getSpeedMultiplier = useCallback(() => {
+    try {
+      // 如果是zoom滑块，从view中获取speed值
+      if (config.kind === 'ptz.zoom' && view?.camera?.ptz?.speed?.value !== undefined) {
+        const speedValue = view.camera.ptz.speed.value;
+        // speed范围0-100，映射为归一化乘数
+        // speed满值(100) = 1.0 (满速)
+        // speed 50 = 0.5 (半速)
+        // speed 0 = 0.1 (最小速度)
+        const multiplier = Math.max(0.1, speedValue / 100);
+        return multiplier;
+      }
+    } catch (error) {
+      console.warn('Error getting speed multiplier:', error);
+    }
+    return 1; // 非zoom滑块或出错时使用1倍速度
+  }, [config.kind, view]);
+
   const applyStep = useCallback(
-    (direction: 1 | -1, tick: number, stepScale?: number) => {
+    (direction: 1 | -1, tick: number = 0, stepScale?: number) => {
       if (disabled) return;
+      
       const scale = typeof stepScale === 'number' ? stepScale : holdStepScaleRef.current ?? 1;
-      const stepMagnitude = Math.abs(computeSliderStep(profile, tick, baseStep) * scale);
-      const intervalMs = getProfileInterval(profile);
-      const baseValue = pendingTargetRef.current ?? rawValueRef.current ?? actualValue;
-      const normalizedLimited = limitStepByNormalizedSpeed(
-        Math.max(minHoldStep, stepMagnitude),
-        intervalMs,
-        min,
-        max,
-      );
-      const nextRaw = clamp(baseValue + direction * normalizedLimited, min, max);
+      const speedMultiplier = getSpeedMultiplier();
+      
+      // 计算归一化速度
+      if (!profile) {
+        console.warn('Profile is undefined, using default speed');
+        return;
+      }
+      const normalizedSpeed = computeNormalizedStep(profile, tick, speedMultiplier) * scale;
+      
+      // 计算当前归一化位置
+      const currentNormalized = max === min ? 0 : (rawValueRef.current - min) / (max - min);
+      
+      // 归一化速度转换为百分比变化 (0-1范围)
+      const normalizedChange = normalizedSpeed / 100;
+      
+      // 应用归一化速度
+      const nextNormalized = clamp(currentNormalized + direction * normalizedChange, 0, 1);
+      
+      // 转换回实际值
+      const nextRaw = nextNormalized * (max - min) + min;
       rawValueRef.current = nextRaw;
       pendingTargetRef.current = nextRaw;
+      
       commitQuantizedValue(nextRaw, {
-        stepPerInterval: normalizedLimited,
-        intervalMs,
+        normalizedSpeed,
+        speedMultiplier,
+        intervalMs: getProfileInterval(profile),
         direction,
+        tick,
       });
     },
-    [actualValue, baseStep, commitQuantizedValue, disabled, max, min, minHoldStep, profile],
+    [commitQuantizedValue, disabled, getSpeedMultiplier, max, min, profile],
   );
 
   const stopHold = useCallback(() => {
@@ -159,19 +201,18 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       pendingTargetRef.current ?? rawValueRef.current ?? lastCommittedRef.current ?? actualValue;
     const currentValue = clamp(targetSource, min, max);
     if (!Number.isFinite(currentValue)) return;
-    const snapped = clamp(snapToStep(currentValue, baseStep, min), min, max);
-    rawValueRef.current = snapped;
-    pendingTargetRef.current = snapped;
-    lastCommittedRef.current = snapped;
+    rawValueRef.current = currentValue;
+    pendingTargetRef.current = currentValue;
+    lastCommittedRef.current = currentValue;
     logInteraction({
       source: 'slider',
       path: config.nodePath,
       action: 'stopHold',
       data: {
-        value: snapped,
+        value: currentValue,
       },
     });
-    commitValue(snapped, { stop: true });
+    commitValue(currentValue, { stop: true });
   }, [actualValue, baseStep, commitValue, config.nodePath, max, min]);
 
   const startHold = useCallback(
@@ -498,13 +539,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function snapToStep(value: number, step: number, origin: number): number {
-  if (!Number.isFinite(step) || step <= 0) return value;
-  if (!Number.isFinite(value)) return origin;
-  const offset = value - origin;
-  const steps = Math.round(offset / step);
-  return origin + steps * step;
-}
+
 
 function identityTransform() {
   return {
@@ -522,21 +557,5 @@ function resolveModifierScale(event: Pick<React.KeyboardEvent | React.PointerEve
   return 1;
 }
 
-export const NORMALIZED_RANGE_UNITS = 100;
-export const MAX_NORMALIZED_UNITS_PER_SECOND = 10;
-
-export function limitStepByNormalizedSpeed(step: number, intervalMs: number, min: number, max: number): number {
-  if (!Number.isFinite(step) || step <= 0) {
-    return 0;
-  }
-  const span = Math.max(1, max - min);
-  const perTickNormalized = (MAX_NORMALIZED_UNITS_PER_SECOND * intervalMs) / 1000;
-  if (!Number.isFinite(perTickNormalized) || perTickNormalized <= 0) {
-    return step;
-  }
-  const actualLimit = (span * perTickNormalized) / NORMALIZED_RANGE_UNITS;
-  if (!Number.isFinite(actualLimit) || actualLimit <= 0) {
-    return step;
-  }
-  return Math.min(step, actualLimit);
-}
+// 归一化速度常量
+export const DEFAULT_NORMALIZED_SPEED = 0.01;  // 每次更新1%
