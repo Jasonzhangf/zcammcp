@@ -95,10 +95,8 @@ export function ContainerHost({
       custom['--container-y'] = `${y}`;
       custom['--container-width'] = `${width}`;
       custom['--container-height'] = `${height}`;
-      if (enableResize) {
-        const translateValue = `translate(${translate.x}px, ${translate.y}px)`;
-        next.transform = baseTransform ? `${baseTransform} ${translateValue}` : translateValue;
-      }
+      const translateValue = `translate(${translate.x}px, ${translate.y}px)`;
+      next.transform = baseTransform ? `${baseTransform} ${translateValue}` : translateValue;
     }
     if (resolvedState?.ui?.background) {
       next.background = resolvedState.ui.background;
@@ -262,15 +260,10 @@ export function ContainerHost({
     if (!enableResize) {
       setIsHovered(false);
       setIsActive(false);
-      setTranslate({ x: 0, y: 0 });
     }
   }, [enableResize]);
 
   useLayoutEffect(() => {
-    if (!enableResize) {
-      setTranslate({ x: 0, y: 0 });
-      return;
-    }
     const element = hostRef.current;
     const parent = element?.parentElement;
     if (!element || !parent) {
