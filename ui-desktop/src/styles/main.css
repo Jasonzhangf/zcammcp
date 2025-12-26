@@ -246,12 +246,26 @@ body {
 }
 
 .zcam-status-grid {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  column-gap: 16px;
-  row-gap: 4px;
-  padding: 0 32px 4px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 16px 4px 16px;
   box-sizing: border-box;
+}
+
+.zcam-status-grid-row {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.zcam-status-grid-row-wide {
+  justify-content: space-between;
+}
+
+.zcam-status-item {
+  min-width: 0;
 }
 
 .zcam-status-item-label {
@@ -266,6 +280,17 @@ body {
 .zcam-status-item-sub {
   font-size: 10px;
   color: #666;
+}
+
+.zcam-status-chip-group {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+}
+
+.zcam-status-chip-group-right {
+  justify-content: flex-end;
 }
 
 .zcam-card {

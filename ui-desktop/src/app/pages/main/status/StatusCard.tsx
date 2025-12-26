@@ -58,60 +58,94 @@ export function StatusCard() {
         <span style={{ fontSize: 10, color: '#777' }}>实时相机参数</span>
       </div>
       <div className="zcam-card-body">
-        <div className="zcam-status-grid">
-          <div data-path="zcam.camera.pages.main.status.cameraInfo">
-            <div className="zcam-status-item-label">相机</div>
-            <div className="zcam-status-item-value">{cameraName}</div>
-            <div className="zcam-status-item-sub">{cameraIp}</div>
-          </div>
-
-          <div data-path="zcam.camera.pages.main.status.videoFormat">
-            <div className="zcam-status-item-label">格式</div>
-            <div className="zcam-status-item-value">3840x2160 @ 59.94</div>
-            <div className="zcam-status-item-sub">H.264 · 8Mbps</div>
-          </div>
-
-          <div data-path="zcam.camera.pages.main.status.exposure">
-            <div className="zcam-status-item-label">曝光</div>
-            <div className="zcam-status-item-value">{exposureText}</div>
+        <div className="zcam-status-grid" data-path="zcam.camera.pages.main.status.summary">
+          {/* row 1: PTZ 状态 */}
+          <div className="zcam-status-grid-row">
             <div
-              className="zcam-status-item-sub"
-              data-path="zcam.camera.pages.main.status.whiteBalance"
-            >
-              {wbText} · {awbMode}
-            </div>
-          </div>
-
-          <div>
-            <div
-              className="zcam-status-item-label"
+              className="zcam-status-item"
               data-path="zcam.camera.pages.main.status.ptz"
             >
-              PTZ
+              <div className="zcam-status-item-label">PTZ</div>
+              <div className="zcam-status-item-value">
+                Pan {panView} · Tilt {tiltView}
+              </div>
+              <div className="zcam-status-item-sub">Zoom {zoomVal}</div>
             </div>
-            <div className="zcam-status-item-value">
-              Pan {panView} · Tilt {tiltView}
-            </div>
-            <div className="zcam-status-item-sub">Zoom {zoomVal}</div>
           </div>
-        </div>
 
-        <div className="zcam-chip-row">
-          <div
-            className="zcam-chip-row"
-            style={{ flex: 1, justifyContent: 'flex-start' }}
-            data-path="zcam.camera.pages.main.status.recording"
-          >
-            <span className="zcam-chip zcam-chip-active">REC ● 00:12:34</span>
-            <span className="zcam-chip">剩余 2h 15m</span>
+          {/* row 2: 图像状态（白平衡 / 曝光） */}
+          <div className="zcam-status-grid-row">
+            <div
+              className="zcam-status-item"
+              data-path="zcam.camera.pages.main.status.whiteBalance"
+            >
+              <div className="zcam-status-item-label">White Balance</div>
+              <div className="zcam-status-item-value">{wbText}</div>
+              <div className="zcam-status-item-sub">{awbMode}</div>
+            </div>
+            <div
+              className="zcam-status-item"
+              data-path="zcam.camera.pages.main.status.exposure"
+            >
+              <div className="zcam-status-item-label">Exposure</div>
+              <div className="zcam-status-item-value">{exposureText}</div>
+              <div className="zcam-status-item-sub">AE {cam.exposure?.aeEnabled ? 'ON' : 'OFF'}</div>
+            </div>
           </div>
-          <div
-            className="zcam-chip-row"
-            style={{ flex: 1, justifyContent: 'flex-end' }}
-            data-path="zcam.camera.pages.main.status.streaming"
-          >
-            <span className="zcam-chip zcam-chip-active">STREAM ● RTMP</span>
-            <span className="zcam-chip">1080p60 / 8Mbps</span>
+
+          {/* row 3: 图像状态（亮度 / 对比度 / 饱和度） */}
+          <div className="zcam-status-grid-row">
+            <div
+              className="zcam-status-item"
+              data-path="zcam.camera.pages.main.status.image.brightness"
+            >
+              <div className="zcam-status-item-label">Brightness</div>
+              <div className="zcam-status-item-value">
+                {typeof cam.image?.brightness === 'number'
+                  ? `${cam.image.brightness}%`
+                  : '--'}
+              </div>
+            </div>
+            <div
+              className="zcam-status-item"
+              data-path="zcam.camera.pages.main.status.image.contrast"
+            >
+              <div className="zcam-status-item-label">Contrast</div>
+              <div className="zcam-status-item-value">
+                {typeof cam.image?.contrast === 'number'
+                  ? `${cam.image.contrast}%`
+                  : '--'}
+              </div>
+            </div>
+            <div
+              className="zcam-status-item"
+              data-path="zcam.camera.pages.main.status.image.saturation"
+            >
+              <div className="zcam-status-item-label">Saturation</div>
+              <div className="zcam-status-item-value">
+                {typeof cam.image?.saturation === 'number'
+                  ? `${cam.image.saturation}%`
+                  : '--'}
+              </div>
+            </div>
+          </div>
+
+          {/* row 4: 文件 / 推流 / 录制 状态 */}
+          <div className="zcam-status-grid-row zcam-status-grid-row-wide">
+            <div
+              className="zcam-status-chip-group"
+              data-path="zcam.camera.pages.main.status.recording"
+            >
+              <span className="zcam-chip zcam-chip-active">REC ● 00:12:34</span>
+              <span className="zcam-chip">剩余 2h 15m</span>
+            </div>
+            <div
+              className="zcam-status-chip-group zcam-status-chip-group-right"
+              data-path="zcam.camera.pages.main.status.streaming"
+            >
+              <span className="zcam-chip zcam-chip-active">STREAM ● RTMP</span>
+              <span className="zcam-chip">1080p60 / 8Mbps</span>
+            </div>
           </div>
         </div>
       </div>
