@@ -1153,6 +1153,36 @@ body {
   gap: 4px;
 }
 
+.debug-menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.debug-menu-toggle {
+  min-width: 72px;
+  height: 24px;
+  border-radius: 12px;
+  padding: 0 10px;
+  justify-content: center;
+  font-size: 11px;
+}
+
+.debug-menu-open {
+  background: #262626;
+  border-color: #ff7a45;
+  color: #ffffff;
+}
+
+.debug-menu-panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 20;
+}
+
 .debug-grid {
   display: grid;
   grid-template-columns: repeat(2, 64px);
