@@ -943,6 +943,19 @@ body {
   color: #888;
 }
 
+.zcam-select-trigger {
+  min-width: 72px;
+  max-width: 110px;
+  font-size: 11px;
+  background: #111;
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 3px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
 .zcam-grid-trigger {
   flex: 0 0 auto;
   min-width: 64px;
