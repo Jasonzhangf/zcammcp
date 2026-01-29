@@ -121,6 +121,12 @@ export function shouldUseMockApi(): boolean {
     }
   } catch {
     // ignore when import.meta not available
+    return true;
   }
+
+  if (typeof window !== 'undefined' && window.electronAPI?.runCliCommand) {
+    return false;
+  }
+
   return true;
 }

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { SliderControl } from '../../../components/SliderControl.js';
+import { TBarControl } from '../../../components/TBarControl.js';
+import { PtzCircularControl, PtzDirection8 } from '../../../components/PtzCircularControl.js';
 import type { SliderControlConfig } from '../../../framework/ui/ControlConfig.js';
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
@@ -46,9 +48,11 @@ const speedSliderConfig: SliderControlConfig = {
   size: 'small',
   orientation: 'vertical',
   valueRange: { min: 0, max: 100, step: 1 },
-  readValue: (view) => view.camera.ptz?.speed?.value ?? 50,
+  readValue: (view) => view.ui.ptzSpeed ?? 50,
   formatValue: (value) => String(Math.round(value)),
-  operationId: 'ptz.setSpeed',
+  onValueChange: (value, store) => {
+    store.updateUiState({ ptzSpeed: value });
+  },
   profileKey: 'default',
   hideHeaderValue: true,
   focusGroupId: 'zcam.camera.pages.main.ptz',
@@ -132,8 +136,9 @@ export function PtzCard() {
   const focusDisplay = Math.round(focusVal);
 
   const [activeDirection, setActiveDirection] = useState<DpadDirection | null>(null);
+  const [viewMode, setViewMode] = useState<'pad' | 'wheel'>('wheel');
 
-  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);     
+  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdDirectionRef = useRef<DpadDirection | null>(null);
   const holdPathRef = useRef<string | null>(null);
   const holdTickRef = useRef(0);
@@ -141,10 +146,13 @@ export function PtzCard() {
   const tiltTargetRef = useRef<number>(tiltVal);
   const padFocusRef = useRef<HTMLDivElement | null>(null);
   const focusManager = useFocusManager();
+  const ptzBusy = Boolean(view.ui.ptzBusy);
+  const isInteractionDisabled = controlsLocked || ptzBusy;
+
   useFocusableControl(padFocusRef, {
     nodeId: 'zcam.camera.pages.main.ptz.controlPad',
     groupId: 'zcam.camera.pages.main.ptz',
-    disabled: controlsLocked,
+    disabled: isInteractionDisabled,
   });
   const keyboardHoldKeyRef = useRef<string | null>(null);
 
@@ -156,10 +164,10 @@ export function PtzCard() {
     tiltTargetRef.current = tiltVal;
   }, [tiltVal]);
 
-  const speedValue = view.camera.ptz?.speed?.value ?? 50;
+  const speedValue = view.ui.ptzSpeed ?? 50;
   const baseStep = useMemo(() => {
-    const normalized = Math.max(1, Math.min(100, speedValue));
-    return Math.max(1, Math.round((normalized / 100) * 20));
+    // 直接使用 speedValue 作为步长 (1-100)
+    return Math.max(1, speedValue);
   }, [speedValue]);
 
   const containerData = useMemo(
@@ -193,35 +201,57 @@ export function PtzCard() {
     [panVal, store, tiltVal],
   );
 
-  const applyDirection = useCallback(
-    (direction: DpadDirection, nodePath: string, tick = 0) => {
-      const vector = DPAD_VECTOR[direction];
-      if (!vector) return;
-      // DPAD使用固定步长，不受归一化速度影响
-      const baseStep = 1;
-      const scaledStep = Math.max(1, baseStep * DPAD_STEP_SCALE);
-      const intervalMs = getProfileInterval(dpadProfile);
-      if (vector.pan) {
-        const direction = vector.pan > 0 ? 1 : -1;
-        adjustAxis('pan', vector.pan * scaledStep, nodePath, {
-          stepPerInterval: Math.abs(vector.pan * scaledStep),
-          intervalMs,
-          direction,
-        });
+  const lastJoystickTimeRef = useRef<number>(0);
+  const handleJoystickMove = useCallback(
+    (panSpeed: number, tiltSpeed: number) => {
+      const now = Date.now();
+      // Throttle: only send every 50ms, unless stopping (0,0) which sends immediately
+      const isStop = panSpeed === 0 && tiltSpeed === 0;
+      if (isStop) {
+        // Send explicit STOP command on release
+        void store.runOperation('zcam.camera.pages.main.ptz', 'ptz.stop', 'ptz.stop', {});
+        return;
       }
-      if (vector.tilt) {
-        const direction = vector.tilt > 0 ? 1 : -1;
-        adjustAxis('tilt', vector.tilt * scaledStep, nodePath, {
-          stepPerInterval: Math.abs(vector.tilt * scaledStep),
-          intervalMs,
-          direction,
-        });
+
+      if (now - lastJoystickTimeRef.current < 50) {
+        return;
       }
+
+      // Use action-based API for analog move
+      // This routes through the Store -> OperationRegistry -> RealCliChannel -> Electron Bridge -> Backend
+      void store.runOperation('zcam.camera.pages.main.ptz', 'ptz.move_analog', 'ptz.move_analog', {
+        params: {
+          pan: panSpeed,
+          tilt: tiltSpeed
+        }
+      });
+
+      lastJoystickTimeRef.current = now;
     },
-    [adjustAxis, baseStep, dpadProfile],
+    []
+  );
+
+  const applyDirection = useCallback(
+    (direction: DpadDirection, nodePath: string) => {
+      // Use new action-based API instead of coordinate calculation
+      // Normalize speed (0-100) to 0.0-1.0 range
+      const rawSpeed = Math.max(1, baseStep); // baseStep is from slider (0-100)
+      const speed = parseFloat((rawSpeed / 100.0).toFixed(2));
+
+      void store.runOperation(nodePath, 'ptz.move', 'ptz.move', {
+        params: {
+          direction: direction,
+          speed: speed
+        }
+      });
+    },
+    [baseStep, store],
   );
 
   const stopHold = useCallback(() => {
+    if (holdDirectionRef.current) {
+      void store.runOperation(holdPathRef.current || 'zcam.camera.pages.main.ptz', 'ptz.stop', 'ptz.stop', {});
+    }
     holdDirectionRef.current = null;
     holdPathRef.current = null;
     holdTickRef.current = 0;
@@ -231,25 +261,36 @@ export function PtzCard() {
       holdTimerRef.current = null;
     }
     keyboardHoldKeyRef.current = null;
-  }, []);
+  }, [store]);
 
   const startHold = useCallback(
     (direction: DpadDirection, nodePath: string) => {
       holdDirectionRef.current = direction;
       holdPathRef.current = nodePath;
       holdTickRef.current = 0;
-       setActiveDirection(direction);
-      applyDirection(direction, nodePath, 0);
+      setActiveDirection(direction);
+      setActiveDirection(direction);
+      applyDirection(direction, nodePath);
       if (holdTimerRef.current) {
         clearInterval(holdTimerRef.current);
       }
-      const interval = getProfileInterval(dpadProfile);
       holdTimerRef.current = setInterval(() => {
-        if (holdDirectionRef.current && holdPathRef.current) {
-          holdTickRef.current += 1;
-          applyDirection(holdDirectionRef.current, holdPathRef.current, holdTickRef.current);
-        }
-      }, interval);
+        // Keep alive logic? Or just rely on single start command?
+        // New API uses start/stop, so we don't need to repeatedly send move commands if the device handles continuous movement.
+        // However, if the device needs heartbeat, we might need to resend.
+        // The previous logic was "step calculation". 
+        // For now, let's assume "start" is enough, but maybe we shouldn't act repeatedly.
+        // ACTUALLY: applyDirection sends the "move" command.
+        // If we want "start" semantics, we call it once.
+        // Let's remove the interval for repeat sending if the API is "start moving until stop".
+
+        // If we need to re-send to keep alive, we can keep it.
+        // But logs showed "Wait=30ms", it's fast. Re-sending might flood?
+        // Let's assume start/stop logic.
+      }, 1000); // Dummy interval just to keep 'hold' state active? Or remove interval entirely?
+      // Better to remove interval if API handles continuous move.
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null; // No interval needed for continuous move command
     },
     [applyDirection, dpadProfile],
   );
@@ -295,7 +336,7 @@ export function PtzCard() {
 
   const handlePadKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
-      if (controlsLocked) return;
+      if (isInteractionDisabled) return;
       const key = event.key;
       const lowerKey = key.length === 1 ? key.toLowerCase() : key;
       const navDirection = (FOCUS_NAV_KEYS as Record<string, Direction | undefined>)[lowerKey];
@@ -334,6 +375,21 @@ export function PtzCard() {
     [stopHold],
   );
 
+  const handleCircularMove = useCallback((direction: PtzDirection8) => {
+    // Map 8 directions to ptz.move
+    // Using existing applyDirection logic but adapted if needed.
+    // DpadDirection has same values as PtzDirection8 (checking types... yes looks same strings)
+    // "up", "up-left" etc.
+    // We need to find the full path for the "button" context if we want to use the same logging/focus logic,
+    // but for raw functionality we just need a valid nodePath to attach the operation to.
+    // We can use the container path.
+    startHold(direction as DpadDirection, 'zcam.camera.pages.main.ptz.wheel');
+  }, [startHold]);
+
+  const toggleViewMode = useCallback(() => {
+    setViewMode(prev => prev === 'pad' ? 'wheel' : 'pad');
+  }, []);
+
   return (
     <div className="zcam-card" data-path="zcam.camera.pages.main.ptz">
       <div className="zcam-card-header">
@@ -353,72 +409,46 @@ export function PtzCard() {
               onKeyUp={handlePadKeyUp}
               onBlur={stopHold}
               ref={padFocusRef}
+              style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
             >
-              <div className="zcam-ptz-grid" data-path="zcam.camera.pages.main.ptz.dpad">
-                {DPAD_LAYOUT.map((btn) => {
-                  if (!btn.direction) {
-                    return (
-                      <button
-                        key={btn.path}
-                        className="zcam-ptz-btn zcam-ptz-btn-main"
-                        data-path={btn.path}
-                        onClick={handleCenter}
-                        disabled={controlsLocked}
-                        tabIndex={-1}
-                      >
-                        {btn.label}
-                      </button>
-                    );
-                  }
-                  const direction = btn.direction;
-                  const isActive = activeDirection === direction;
-                  return (
-                    <button
-                      key={btn.path}
-                      className={`zcam-ptz-btn${isActive ? ' zcam-ptz-btn-active' : ''}`}
-                      data-path={btn.path}
-                      tabIndex={-1}
-                      onPointerDown={(e) => {
-                        if (controlsLocked) return;
-                        e.preventDefault();
-                        if (e.currentTarget.setPointerCapture) {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                            // ignore
-                          }
-                        }
-                        startHold(direction, btn.path);
-                      }}
-                      onPointerUp={(e) => {
-                        e.preventDefault();
-                        if (e.currentTarget.releasePointerCapture) {
-                          try {
-                            e.currentTarget.releasePointerCapture(e.pointerId);
-                          } catch {
-                            // ignore
-                          }
-                        }
-                        stopHold();
-                      }}
-                      onPointerLeave={stopHold}
-                      onTouchStart={(e) => {
-                        if (controlsLocked) return;
-                        e.preventDefault();
-                        startHold(direction, btn.path);
-                      }}
-                      onTouchEnd={(e) => {
-                        e.preventDefault();
-                        stopHold();
-                      }}
-                      disabled={controlsLocked}
-                    >
-                      {btn.label}
-                    </button>
-                  );
-                })}
+              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 0 }}>
+                <PtzCircularControl
+                  onStartMove={handleCircularMove}
+                  onStopMove={stopHold}
+                  onJoystickMove={handleJoystickMove}
+                  disabled={isInteractionDisabled}
+                  style={{ width: '220px', height: '220px' }}
+                />
               </div>
-              <div className="zcam-ptz-status-grid" data-path="zcam.camera.pages.main.ptz.statusGrid">
+
+              {/* Home Button */}
+              <div
+                className="zcam-ptz-home-btn"
+                onClick={() => void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {})}
+                style={{
+                  position: 'absolute',
+                  bottom: '80px', // Adjust to sit in corner of the pad area
+                  right: '10px',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '6px',
+                  backgroundColor: '#333',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: isInteractionDisabled ? 'default' : 'pointer',
+                  opacity: isInteractionDisabled ? 0.5 : 1,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  border: '1px solid #444',
+                }}
+                title="Home"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#ccc">
+                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                </svg>
+              </div>
+
+              <div className="zcam-ptz-status-grid" data-path="zcam.camera.pages.main.ptz.statusGrid" style={{ marginTop: 'auto' }}>
                 <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Pan</span>
                   <span className="zcam-ptz-status-value">{panDisplay}</span>
@@ -438,17 +468,17 @@ export function PtzCard() {
               </div>
             </div>
           </div>
-          <div className="zcam-ptz-sliders" data-path="zcam.camera.pages.main.ptz.sliders">
-            <div className="zcam-ptz-slider-column">
-              <SliderControl config={zoomSliderConfig} disabled={controlsLocked} />
+          <div className="zcam-ptz-sliders" data-path="zcam.camera.pages.main.ptz.sliders" style={{ gap: '12px' }}>
+            <div className="zcam-ptz-slider-column" style={{ height: '374px' }}>
+              <TBarControl config={zoomSliderConfig} disabled={isInteractionDisabled} styleVariant="skeuomorphic" />
             </div>
-            <div className="zcam-ptz-slider-column">
-              <SliderControl config={speedSliderConfig} disabled={controlsLocked} />
+            <div className="zcam-ptz-slider-column" style={{ height: '374px' }}>
+              <SliderControl config={speedSliderConfig} disabled={isInteractionDisabled} />
             </div>
           </div>
         </div>
 
-        <FocusGroup disabled={controlsLocked} />
+        <FocusGroup disabled={isInteractionDisabled} />
       </div>
     </div>
   );

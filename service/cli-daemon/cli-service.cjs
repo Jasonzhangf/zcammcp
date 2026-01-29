@@ -76,6 +76,16 @@ function runCliCommand(payload = {}) {
       return reject(new Error(`CLI entry not found at ${CLI_ENTRY}`));
     }
     const args = buildCliArgs(payload.args, payload.expectJson !== false);
+
+    // Inject default target host/port if not present
+    // This ensures local UI connects to local service by default
+    if (!args.includes('--host')) {
+      args.push('--host', '127.0.0.1');
+    }
+    if (!args.includes('--port')) {
+      args.push('--port', '17988');
+    }
+
     if (args.length === 0) {
       return reject(new Error('CLI args are required'));
     }
@@ -137,6 +147,20 @@ function deriveCameraKeys(args) {
   if (args[0] === 'uvc' && args[1] === 'set' && typeof args[2] === 'string') {
     return [args[2]];
   }
+  if (args[0] === 'image' && args[1] === 'adjust' && typeof args[2] === 'string') {
+    if (args[2] === 'iso') return ['iso'];
+    if (args[2] === 'shutter_time') return ['exposure'];
+    return [args[2]];
+  }
+  if (args[0] === 'ctrl' && args[1] === 'set' && typeof args[2] === 'string') {
+    // Map 'ctrl set iso ...' to ['iso'] or ['exposure']?
+    // User requested usage of 'iso' key in other contexts.
+    // If the state service expects 'gain' for ISO (legacy uvc), we might need to map it.
+    // But 'iso' is likely supported if camera-state uses it.
+    // Let's assume 'iso' -> 'iso' is correct for the new generic ctrl command.
+    // OR if we preserve legacy behavior: args[2] is 'iso'.
+    return [args[2]];
+  }
   return [];
 }
 
@@ -155,7 +179,7 @@ function notifyCameraState(keys) {
   };
   return new Promise((resolve, reject) => {
     const req = http.request(options, (res) => {
-      res.on('data', () => {});
+      res.on('data', () => { });
       res.on('end', resolve);
     });
     req.on('error', reject);

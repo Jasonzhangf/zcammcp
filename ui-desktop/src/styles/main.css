@@ -9,7 +9,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  overflow: hidden; /* 避免在小窗口/球模式下出现滚动条 */
+  overflow: hidden;
+  /* 避免在小窗口/球模式下出现滚动条 */
 }
 
 [data-container-debug='outline'] {
@@ -48,7 +49,7 @@ body {
   z-index: 2;
 }
 
-[data-container-debug='off'] > .zcam-container-resize-handle {
+[data-container-debug='off']>.zcam-container-resize-handle {
   opacity: 0.2;
 }
 
@@ -421,13 +422,17 @@ body {
 
 .zcam-ptz-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(90px, 120px);
-  column-gap: 20px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  /* Auto width for sliders column */
+  column-gap: 12px;
+  /* Left Drop = 12px */
   align-items: stretch;
   justify-content: center;
   margin-bottom: 4px;
   flex: 1;
   width: 100%;
+  padding-right: 8px;
+  /* Right Drop = 4px(base) + 8px = 12px. Balance! */
 }
 
 .zcam-ptz-grid {
@@ -494,6 +499,35 @@ body {
   justify-content: center;
   flex: 1 1 0;
   height: 100%;
+  /* Match thickness of horizontal sliders (e.g. Brightness ~32px) */
+  --zcam-slider-vertical-width: 32px;
+}
+
+/* Force vertical sliders within PTZ column to fill available height and match width */
+.zcam-ptz-slider-column .zcam-slider-wrap,
+.zcam-ptz-slider-column .zcam-tbar-wrap {
+  height: 100%;
+  /* Force override width here because .zcam-slider-wrap resets it */
+  --zcam-slider-vertical-width: 40px;
+}
+
+
+
+.zcam-ptz-slider-column .zcam-slider-track-wrapper {
+  flex: 1;
+  min-height: 0;
+  /* Ensure it takes available space */
+}
+
+.zcam-ptz-slider-column .zcam-slider-orientation-vertical .zcam-slider-track {
+  height: auto;
+  /* Override fixed 180px */
+  flex: 1;
+  /* Expand to fill wrapper */
+}
+
+.zcam-ptz-slider-column .zcam-slider-orientation-vertical .zcam-slider-track input[type='range'] {
+  height: 100%;
 }
 
 .zcam-slider-wrap {
@@ -506,6 +540,25 @@ body {
   --zcam-slider-track-padding-y: 6px;
   --zcam-slider-track-padding-x: 8px;
   --zcam-slider-vertical-width: 48px;
+}
+
+/* ... existing code ... */
+
+/* Skeuomorphic Handle: The T-Shape */
+.zcam-tbar-skeuomorphic .zcam-tbar-handle {
+  width: 40px;
+  /* Reduced from 48px to match slimmer track */
+  height: 24px;
+  /* Reduced from 32px (3/4 size) */
+  top: -12px;
+  /* Half of height */
+  background: linear-gradient(180deg, #ffc069, #ff7a45);
+  border: 1px solid #d4380d;
+  border-top: 1px solid #ffd591;
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
 }
 
 .zcam-slider-header {
@@ -799,6 +852,229 @@ body {
 .zcam-ptz-focus-limit-label {
   font-size: 10px;
   color: #888;
+}
+
+/* =========================================
+   T-Bar Control Styles
+   ========================================= */
+
+.zcam-tbar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  min-height: 160px;
+  /* Reduced from 240px */
+  user-select: none;
+  touch-action: none;
+  width: 100%;
+}
+
+.zcam-tbar-content-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  /* width: 100%;  <-- Removed to let it shrink to track width (fix "fat") */
+  padding: 4px 6px;
+  /* Match zcam-slider-size-small padding */
+  background: rgba(255, 107, 53, 0.08);
+  border-radius: 10px;
+}
+
+/* Ensure thresholds span full width to separate values */
+.zcam-tbar-wrap .zcam-slider-thresholds {
+  width: 100%;
+}
+
+.zcam-tbar-inner {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  min-height: 140px;
+  /* Reduced from 200px */
+  margin: 10px 0;
+  /* Add margin to prevent handle covering buttons */
+}
+
+/* Track / Bed */
+.zcam-tbar-track-area {
+  position: relative;
+  width: var(--zcam-slider-vertical-width, 44px);
+  /* Match slider small width */
+  height: 100%;
+  background: #111;
+  border-radius: 999px;
+  /* Match speed slider capsule shape */
+  border: 1px solid #2a2a2a;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  overflow: visible;
+  /* Handle extends outside */
+}
+
+.zcam-tbar-skeuomorphic .zcam-tbar-track-area {
+  background: linear-gradient(90deg, #0a0a0a, #1a1a1a 20%, #1a1a1a 80%, #0a0a0a);
+  border: 1px solid #333;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.9);
+}
+
+/* Central Rail - Restored to narrow groove */
+.zcam-tbar-rail {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  /* Narrow groove */
+  background: #000;
+  border-radius: 999px;
+  border: 1px solid #222;
+}
+
+.zcam-tbar-skeuomorphic .zcam-tbar-rail {
+  background: #050505;
+  border: 1px solid #1a1a1a;
+  box-shadow: 0 0 2px rgba(255, 255, 255, 0.05);
+}
+
+/* Handle Container (The moving part's pivot) */
+.zcam-tbar-handle-container {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  /* top set by JS */
+  width: 100%;
+  height: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+/* The actual Handle */
+.zcam-tbar-handle {
+  pointer-events: auto;
+  width: 40px;
+  /* Reduced from 60px */
+  height: 24px;
+  /* Reduced from 36px */
+  border-radius: 3px;
+  background: #333;
+  position: absolute;
+  /* Center handle on the pivot point */
+  top: -12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.zcam-tbar-handle:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+/* Skeuomorphic Handle: The T-Shape - Updated size */
+.zcam-tbar-skeuomorphic .zcam-tbar-handle {
+  width: 48px;
+  /* Matches original width, fits 40px track */
+  height: 24px;
+  /* Increased to 4/3 of 18px as requested */
+  top: -12px;
+  /* Half of height */
+  background: linear-gradient(180deg, #ffc069, #ff7a45);
+  border: 1px solid #d4380d;
+  border-top: 1px solid #ffd591;
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+}
+
+/* Grip Lines */
+.zcam-tbar-skeuomorphic .zcam-tbar-handle::after {
+  content: '';
+  width: 50%;
+  height: 6px;
+  border-top: 2px solid rgba(0, 0, 0, 0.3);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.3);
+  opacity: 0.6;
+}
+
+/* Flat Style Handle */
+.zcam-tbar-flat .zcam-tbar-handle {
+  width: 48px;
+  /* Reduced from 70px */
+  height: 20px;
+  /* Reduced from 28px */
+  top: -10px;
+  background: #ff6b35;
+  border-radius: 10px;
+  border: none;
+  box-shadow: 0 3px 8px rgba(255, 107, 53, 0.4);
+}
+
+/* Markings */
+.zcam-tbar-mark {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.zcam-tbar-mark.major {
+  background: rgba(255, 255, 255, 0.15);
+  left: 4px;
+  right: 4px;
+}
+
+/* Buttons Area */
+.zcam-tbar-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 5;
+}
+
+.zcam-tbar-btn {
+  width: 22px;
+  /* Match Speed button width */
+  height: 22px;
+  /* Match Speed button height */
+  border-radius: 6px;
+  /* Match Speed button radius */
+  border: 1px solid #333;
+  background: rgba(255, 255, 255, 0.05);
+  /* Match Speed button bg */
+  color: #f5f5f5;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.1s;
+}
+
+.zcam-tbar-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: #ff8a53;
+  color: #fff;
+}
+
+.zcam-tbar-btn:active {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .zcam-ptz-focus-limit-buttons {
@@ -1273,7 +1549,7 @@ body {
   min-height: calc(var(--container-height, 20) * 1%);
 }
 
-.zcam-main-control-row > [data-container-id] {
+.zcam-main-control-row>[data-container-id] {
   flex: 0 0 calc(var(--container-width, 50) * 1%);
   max-width: calc(var(--container-width, 50) * 1%);
 }
@@ -1288,7 +1564,7 @@ body {
   max-width: 100%;
 }
 
-.zcam-studio-stack > [data-container-id] {
+.zcam-studio-stack>[data-container-id] {
   flex: 1 1 auto;
 }
 
@@ -1298,7 +1574,7 @@ body {
   padding: 0 var(--zcam-safe-gap) var(--zcam-safe-gap);
 }
 
-[data-container-id] > .zcam-card {
+[data-container-id]>.zcam-card {
   width: 100%;
   height: 100%;
 }
@@ -1355,7 +1631,7 @@ body {
   max-width: 60px;
 }
 
-/* Debug controls override: ensure square/rect buttons instead of circles */    
+/* Debug controls override: ensure square/rect buttons instead of circles */
 .debug-grid .control-btn {
   width: 64px;
   height: 64px;

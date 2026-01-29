@@ -8,15 +8,18 @@
 
 const http = require('http');
 const { URL } = require('url');
+const WebSocket = require('ws');
 
 const CAMERA_STATE_HOST = process.env.ZCAM_CAMERA_STATE_HOST || '127.0.0.1';
 const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292', 10);
 const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERVAL || '0', 10);
 const UVC_BASE_URL = process.env.ZCAM_UVC_BASE || 'http://127.0.0.1:17988';
+const UVC_WS_URL = process.env.ZCAM_UVC_WS || 'ws://127.0.0.1:17988/ws';
+const WS_RECONNECT_INTERVAL = 3000;
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,zoom,focus,exposure,gain,whitebalance,brightness,contrast,saturation,sharpness,hue,gamma'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,exposure,gain,iso,shutter_time,mwb,brightness,contrast,saturation'
 )
   .split(',')
   .map((k) => k.trim())
@@ -28,6 +31,8 @@ const state = {
 };
 
 let pollingTimer = null;
+let wsClient = null;
+let wsReconnectTimer = null;
 
 function ensureFetch() {
   if (typeof globalThis.fetch === 'function') {
@@ -44,8 +49,30 @@ function ensureFetch() {
 const fetchImpl = ensureFetch();
 
 async function fetchProperty(key) {
-  const url = new URL('/usbvideoctrl', UVC_BASE_URL);
-  url.searchParams.set('key', key);
+  if (key === 'pan' || key === 'tilt') {
+    const url = new URL('/ctrl/pt', UVC_BASE_URL);
+    url.searchParams.set('action', 'query');
+    url.searchParams.set('detail', 'y');
+    const res = await fetchImpl(url.toString(), { method: 'GET' });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
+
+    // Map response fields to value
+    // Response expected: { pan_pos: ..., tilt_pos: ... }
+    let val = null;
+    if (key === 'pan') val = data.pan_pos;
+    if (key === 'tilt') val = data.tilt_pos ?? data.tile_pos; // Handle potential typo in firmware
+
+    return normalizeValue(key, { ...data, value: val });
+  }
+
+  const url = new URL('/ctrl/get', UVC_BASE_URL);
+  url.searchParams.set('k', key);
   const res = await fetchImpl(url.toString(), { method: 'GET' });
   const text = await res.text();
   let data;
@@ -123,11 +150,19 @@ function projectCameraState(values) {
   const projectValue = (key) => {
     const entry = values[key];
     if (!entry || typeof entry.value === 'undefined' || entry.value === null) return undefined;
+
+    // DEBUG LOGGING
+    if (key === 'iso' || key === 'shutter_time') {
+      const opts = entry.raw?.opts ?? entry.raw?.options;
+      console.log(`[CameraState] Projecting ${key}: val=${entry.value}, optsLen=${opts?.length ?? 0}`);
+    }
+
     return {
       value: entry.value,
       view: String(entry.value),
+      opts: entry.raw?.opts ?? entry.raw?.options, // Alias opts for frontend compatibility
       updatedAt: entry.updatedAt,
-      raw: entry.raw,
+      w: entry.raw,
     };
   };
 
@@ -135,14 +170,25 @@ function projectCameraState(values) {
     ptz: {
       pan: projectValue('pan'),
       tilt: projectValue('tilt'),
-      zoom: projectValue('zoom'),
-      focus: projectValue('focus'),
+      zoom: projectValue('lens_zoom_pos'),
+      focus: projectValue('lens_focus_pos'),
+      speed: projectValue('speed') || projectValue('ptz_common_speed'),
     },
     exposure: {
       exposure: projectValue('exposure'),
       gain: projectValue('gain'),
+      iso: projectValue('iso'),
+      shutter: projectValue('shutter_time'),
     },
-    whiteBalance: projectValue('whitebalance'),
+    whiteBalance: (() => {
+      const wbEntry = projectValue('whitebalance');
+      const mwbEntry = projectValue('mwb');
+      return {
+        ...wbEntry,
+        awbEnabled: wbEntry?.value === 'auto',
+        temperature: mwbEntry,
+      };
+    })(),
     image: {
       brightness: projectValue('brightness'),
       contrast: projectValue('contrast'),
@@ -260,7 +306,114 @@ function startPolling() {
   }, CAMERA_STATE_POLL_INTERVAL);
 }
 
+function connectWebSocket() {
+  if (wsClient) {
+    try {
+      wsClient.close();
+    } catch (err) {
+      // ignore
+    }
+    wsClient = null;
+  }
+
+  try {
+    wsClient = new WebSocket(UVC_WS_URL);
+
+    wsClient.on('open', () => {
+      console.log('[CameraState] WebSocket connected to', UVC_WS_URL);
+    });
+
+    wsClient.on('message', (data) => {
+      try {
+        const msg = JSON.parse(data.toString());
+        handleWebSocketMessage(msg);
+      } catch (err) {
+        console.error('[CameraState] Failed to parse WebSocket message', err);
+      }
+    });
+
+    wsClient.on('error', (err) => {
+      console.error('[CameraState] WebSocket error', err.message || err);
+    });
+
+    wsClient.on('close', () => {
+      console.log('[CameraState] WebSocket closed, reconnecting...');
+      wsClient = null;
+      if (!wsReconnectTimer) {
+        wsReconnectTimer = setTimeout(() => {
+          wsReconnectTimer = null;
+          connectWebSocket();
+        }, WS_RECONNECT_INTERVAL);
+      }
+    });
+  } catch (err) {
+    console.error('[CameraState] Failed to connect WebSocket', err);
+  }
+}
+
+function handleWebSocketMessage(msg) {
+  // Debug log for all WS messages
+  // console.log('[CameraState] WS msg:', JSON.stringify(msg));
+
+  if (msg.what === 'ptzfChanged' || msg.what === 'configChanged') {
+    const key = msg.key;
+    const value = msg.value;
+    const isAuto = typeof msg.isAuto === 'boolean' ? msg.isAuto : undefined;
+    const supportsAuto = typeof msg.supportsAuto === 'boolean' ? msg.supportsAuto : undefined;
+
+    if (key && (typeof value !== 'undefined' || typeof isAuto !== 'undefined' || typeof supportsAuto !== 'undefined')) {
+      const prev = state.values[key];
+      const nextValue = typeof value !== 'undefined' ? value : prev?.value;
+      const prevRaw = prev?.raw && typeof prev.raw === 'object' ? prev.raw : {};
+      const nextRaw = {
+        ...prevRaw,
+      };
+      if (typeof value !== 'undefined') {
+        nextRaw.current = value;
+      }
+      if (typeof isAuto !== 'undefined') {
+        nextRaw.isAuto = isAuto;
+      }
+      if (typeof supportsAuto !== 'undefined') {
+        nextRaw.supportsAuto = supportsAuto;
+      }
+      // 更新缓存
+      state.values[key] = {
+        key,
+        value: nextValue,
+        raw: nextRaw,
+        updatedAt: Date.now(),
+        error: undefined
+      };
+      state.updatedAt = Date.now();
+
+      console.log(`[CameraState] WebSocket update: ${key} = ${nextValue}`);
+    }
+  } else {
+    // Log unhandled message types that might be relevant
+    if (msg.key === 'speed' || msg.what?.includes('Speed')) {
+      console.log('[CameraState] Potential speed message ignored:', JSON.stringify(msg));
+    }
+  }
+}
+
+function stopWebSocket() {
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  if (wsClient) {
+    try {
+      wsClient.close();
+    } catch (err) {
+      // ignore
+    }
+    wsClient = null;
+  }
+}
+
 function shutdown() {
+  stopWebSocket();
   if (pollingTimer) {
     clearInterval(pollingTimer);
     pollingTimer = null;
@@ -274,3 +427,4 @@ process.on('SIGTERM', shutdown);
 startServer();
 initialRefresh();
 startPolling();
+connectWebSocket();

@@ -20,11 +20,24 @@ export const exposureOperations: OperationDefinition[] = [
     id: 'exposure.setShutter',
     cliCommand: 'exposure.shutter',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
-      const value = Number(payload.value ?? 0);
-      const clamped = Number.isFinite(value) ? Math.max(1, value) : 1;
+      const value = payload.value;
+      // Allow string values (e.g. "1/100") directly. Only clamp if it's purely numeric.
+      let finalValue = String(value);
+
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        // Existing numeric logic (clamping if needed, but usually shutter is string or specific numbers)
+        // Actually, for Z CAM, shutter can be angles (numbers) or time (fractions).
+        // If it's a number, we pass it. If string, we pass it.
+        finalValue = String(value);
+      }
+
       void ctx;
       return {
-        cliRequest: buildUvcCliRequest('exposure', clamped, { meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `image-shutter-${Date.now()}`,
+          command: `image adjust shutter_time ${finalValue}`,
+          args: ['image', 'adjust', 'shutter_time', finalValue],
+        },
       };
     },
   },
@@ -32,11 +45,14 @@ export const exposureOperations: OperationDefinition[] = [
     id: 'exposure.setIso',
     cliCommand: 'exposure.iso',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
-      const value = Number(payload.value ?? 0);
-      const clamped = Number.isFinite(value) ? Math.max(100, value) : 100;
-      void ctx;
+      const value = String(payload.value ?? 'Auto');
+      // The user requested a specific CLI command format: node src/index.js image adjust iso <value>
       return {
-        cliRequest: buildUvcCliRequest('gain', clamped, { meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `image-iso-${Date.now()}`,
+          command: `image adjust iso ${value}`,
+          args: ['image', 'adjust', 'iso', value],
+        },
       };
     },
   },

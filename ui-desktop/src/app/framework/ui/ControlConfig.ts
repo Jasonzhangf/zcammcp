@@ -7,7 +7,7 @@ export interface SliderControlConfig {
   nodePath: string;
   kind: string;
   label: string;
-  operationId: string;
+  operationId?: string;
   valueRange: {
     min: number;
     max: number;
@@ -22,13 +22,15 @@ export interface SliderControlConfig {
   keyBindings?: string[];
   keyInputMode?: 'focus' | 'global';
   keyAcceptWhenBlurred?: boolean;
-  readValue(view: ViewState): number;
-  formatValue?(value: number): string;
+  readValue?: (view: ViewState) => number;
+  readValueRange?: (view: ViewState) => { min: number; max: number; step: number };
+  formatValue?: (value: number, range?: { min: number; max: number; step: number }) => string;
   valueMapper?: {
     toDisplay?(value: number): number;
     toActual?(value: number): number;
   };
   profileKey?: string;
+  onValueChange?: (value: number, store: any) => void;
 }
 
 export interface ToggleControlConfig {

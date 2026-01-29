@@ -10,10 +10,10 @@ class ControlService {
     'down': 'down',
     'left': 'left',
     'right': 'right',
-    'up-left': 'upleft',
-    'up-right': 'upright',
-    'down-left': 'downleft',
-    'down-right': 'downright'
+    'up-left': 'leftup',
+    'up-right': 'rightup',
+    'down-left': 'leftdown',
+    'down-right': 'rightdown'
   };
 
   // ===== PTZ云台控制 =====
@@ -44,9 +44,10 @@ class ControlService {
       throw new Error(`无效的方向: ${direction}。支持的方向: ${Object.keys(this.directionMap).join(', ')}`);
     }
 
-    const speedNum = parseInt(speed);
-    if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
-      throw new Error('速度必须是1-9之间的数字');
+    // Allow float speed
+    const speedNum = parseFloat(speed);
+    if (isNaN(speedNum) || speedNum <= 0) {
+      throw new Error('速度必须是大于0的数字');
     }
 
     return await api.get(`/ctrl/pt?action=${validDirection}&fspeed=${speedNum}`);
@@ -68,6 +69,14 @@ class ControlService {
     }
 
     return await api.get(`/ctrl/pt?action=pt&pan_speed=${pan}&tilt_speed=${tilt}`);
+  }
+
+  /**
+   * PTZ模拟移动 (支持浮点数)
+   * API: /ctrl/pt?action=pt&pan_speed={pan}&tilt_speed={tilt}
+   */
+  static async ptzAnalogMove(api, panSpeed, tiltSpeed) {
+    return await api.get(`/ctrl/pt?action=pt&pan_speed=${panSpeed}&tilt_speed=${tiltSpeed}`);
   }
 
   /**
@@ -222,7 +231,7 @@ class ControlService {
       throw new Error('变焦值必须是0-99999之间的数字');
     }
 
-    return await api.get(`/ctrl/lens?action=zoom&value=${valueNum}`);
+    return await api.get(`/ctrl/set?lens_zoom_pos=${valueNum}`);
   }
 
   /**

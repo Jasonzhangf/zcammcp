@@ -14,14 +14,14 @@ export interface CameraState {
   // 曝光设置
   exposure?: {
     aeEnabled?: boolean;
-    shutter?: { value: number; view: string };
-    iso?: { value: number; view: string };
+    shutter?: { value: string | number; view: string; options?: string[] };
+    iso?: { value: string; view: string; options?: string[] };
   };
 
   // 白平衡设置
   whiteBalance?: {
     awbEnabled?: boolean;
-    temperature?: { value: number; view: string };
+    temperature?: { value: number; view: string; min?: number; max?: number; step?: number };
   };
 
   // 图像调节
@@ -35,6 +35,7 @@ export interface CameraState {
   };
 }
 
+
 function mergeCameraStates(current: CameraState, next: CameraState): CameraState {
   const merged: CameraState = { ...current };
   if (next.ptz) {
@@ -44,7 +45,16 @@ function mergeCameraStates(current: CameraState, next: CameraState): CameraState
     merged.exposure = { ...(current.exposure ?? {}), ...next.exposure };
   }
   if (next.whiteBalance) {
-    merged.whiteBalance = { ...(current.whiteBalance ?? {}), ...next.whiteBalance };
+    merged.whiteBalance = { ...merged.whiteBalance };
+    if (next.whiteBalance.awbEnabled !== undefined) {
+      merged.whiteBalance.awbEnabled = next.whiteBalance.awbEnabled;
+    }
+    if (next.whiteBalance.temperature) {
+      merged.whiteBalance.temperature = {
+        ...(merged.whiteBalance.temperature ?? {}),
+        ...next.whiteBalance.temperature,
+      };
+    }
   }
   if (next.image) {
     merged.image = { ...(current.image ?? {}), ...next.image };
@@ -60,6 +70,8 @@ export interface UiState {
   highlightMap: Record<string, 'none' | 'hover' | 'active' | 'error' | 'replay'>;
   activeNodePath?: string;
   layoutMode: LayoutMode; // 窗口 / 页面布局模式: 模式1~4
+  ptzSpeed?: number; // PTZ 速度控制 (0-100), 默认 50, 用于本地 UI 控制步进大小
+  ptzBusy?: boolean; // PTZ 操作是否正在进行中 (防止命令风暴)
 }
 
 export interface ViewState {
@@ -135,6 +147,7 @@ export class PageStore {
   private readonly operations: OperationRegistry;
   private readonly cli: CliChannel;
   private readonly listeners: Set<() => void> = new Set();
+  private ptzBusyTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(opts: {
     path: string;
@@ -151,6 +164,8 @@ export class PageStore {
         debugMode: 'normal',
         highlightMap: {},
         layoutMode: 'full',
+        ptzBusy: false,
+        ptzSpeed: 50,
       } as UiState);
     this.viewSnapshot = {
       camera: this.cameraState,
@@ -240,6 +255,28 @@ export class PageStore {
 
   applyCameraState(partial: CameraState): void {
     this.cameraState = mergeCameraStates(this.cameraState, partial);
+
+    // 如果收到了 PTZ 更新, 则清除忙碌状态
+    if (partial.ptz && this.uiState.ptzBusy) {
+      if (this.ptzBusyTimeout) {
+        clearTimeout(this.ptzBusyTimeout);
+        this.ptzBusyTimeout = null;
+      }
+      this.uiState = { ...this.uiState, ptzBusy: false };
+    }
+
+    this.updateViewSnapshot();
+    this.notify();
+  }
+
+  /**
+   * 更新 UI 状态 (Generic)
+   */
+  updateUiState(partial: Partial<UiState>): void {
+    this.uiState = {
+      ...this.uiState,
+      ...partial,
+    };
     this.updateViewSnapshot();
     this.notify();
   }
@@ -247,7 +284,9 @@ export class PageStore {
   /**
    * 运行一个写操作: 调用 OperationRegistry -> 可选 CLI -> 更新 cameraState
    */
-  async runOperation(nodePath: string, kind: string, operationId: string, payload: OperationPayload): Promise<void> {
+  async runOperation(nodePath: string, kind: string, operationId: string | undefined, payload: OperationPayload): Promise<void> {
+    if (!operationId) return;
+
     const ctx: OperationContext = {
       pagePath: this.path,
       nodePath,
@@ -278,6 +317,25 @@ export class PageStore {
         if (req) cliRequests.push(req);
       }
     }
+    // 处理 PTZ 忙碌状态
+    if (operationId.startsWith('ptz.')) {
+      if (this.ptzBusyTimeout) {
+        clearTimeout(this.ptzBusyTimeout);
+      }
+      this.uiState = { ...this.uiState, ptzBusy: true };
+      this.updateViewSnapshot();
+      this.notify();
+
+      this.ptzBusyTimeout = setTimeout(() => {
+        if (this.uiState.ptzBusy) {
+          this.uiState = { ...this.uiState, ptzBusy: false };
+          this.updateViewSnapshot();
+          this.notify();
+        }
+        this.ptzBusyTimeout = null;
+      }, 2000); // 2秒安全超时间
+    }
+
     for (const request of cliRequests) {
       await this.cli.send(request);
     }

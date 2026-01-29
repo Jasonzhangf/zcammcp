@@ -10,8 +10,13 @@ export const whiteBalanceOperations: OperationDefinition[] = [
     cliCommand: 'wb.awb',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const enabled = Boolean(payload.value);
+      const mode = enabled ? 'auto' : 'manual';
       return {
-        cliRequest: buildUvcCliRequest('whitebalance', undefined, { auto: enabled, meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `uvc-wb-mode-${Date.now()}`,
+          command: `image whitebalance mode ${mode}`,
+          args: ['image', 'whitebalance', 'mode', mode],
+        }
       };
     },
   },
@@ -22,7 +27,11 @@ export const whiteBalanceOperations: OperationDefinition[] = [
       const value = Number(payload.value ?? 3200);
       const clamped = Number.isFinite(value) ? Math.max(2000, Math.min(10000, value)) : 5600;
       return {
-        cliRequest: buildUvcCliRequest('whitebalance', clamped, { meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `uvc-wb-kelvin-${Date.now()}`,
+          command: `image whitebalance manual kelvin ${clamped}`,
+          args: ['image', 'whitebalance', 'manual', 'kelvin', String(clamped)],
+        }
       };
     },
   },

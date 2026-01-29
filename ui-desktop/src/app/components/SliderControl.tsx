@@ -31,7 +31,7 @@ interface SliderOperationMeta {
 export function SliderControl({ config, disabled = false }: SliderControlProps) {
   const store = usePageStore();
   const view = useViewState();
-  const actualValue = config.readValue(view);
+  const actualValue = config.readValue ? config.readValue(view) : config.valueRange.min;
   const [isFocused, setIsFocused] = useState(false);
   const profile = useMemo(() => {
     try {
@@ -41,25 +41,39 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       return getSliderProfile('default'); // 出错时使用默认profile
     }
   }, [config.profileKey]);
-  const min = config.valueRange.min;
-  const max = config.valueRange.max;
-  const baseStep = config.valueRange.step ?? 1;
+  const dynamicRange = config.readValueRange ? config.readValueRange(view) : undefined;
+  const min = dynamicRange?.min ?? config.valueRange.min;
+  const max = dynamicRange?.max ?? config.valueRange.max;
+  const baseStep = dynamicRange?.step ?? config.valueRange.step ?? 1;
   const minHoldStep = config.minHoldStep ?? baseStep;
   const transform = useMemo(() => config.valueMapper ?? identityTransform(), [config.valueMapper]);
   const pointerInteractive = config.enablePointerDrag === true && !disabled;
   const rawValueRef = useRef(actualValue);
   const lastCommittedRef = useRef(actualValue);
-  const pendingTargetRef = useRef<number | null>(null);
+
+  // Optimistic UI state: overrides actualValue when user has pending changes
+  const [pendingValue, setPendingValue] = useState<number | null>(null);
+  const pendingValueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // NEW: Synchronous lock to prevent rawValueRef from being clobbered by actualValue 
+  // during the gap between interaction start and React state update.
+  const isLockedRef = useRef(false);
+  // NEW: Throttle timer to prevent command storms
+  const lastCmdTimeRef = useRef(0);
+
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdTickRef = useRef(0);
   const holdDirectionRef = useRef<1 | -1 | null>(null);
   const holdStepScaleRef = useRef(1);
   const keyboardHoldKeyRef = useRef<string | null>(null);
-  const trackValue = clamp(actualValue, min, max);
-  const displaySource = actualValue; // 直接使用实际值，支持浮点
+
+  // Determine effective value for display
+  const effectiveValue = pendingValue ?? actualValue;
+
+  const trackValue = clamp(effectiveValue, min, max);
+  const displaySource = effectiveValue; // 直接使用实际值，支持浮点
   const displayValueNumber = transform.toDisplay ? transform.toDisplay(displaySource) : displaySource;
   const displayValue = config.formatValue
-    ? config.formatValue(displayValueNumber)
+    ? config.formatValue(displayValueNumber, { min, max, step: baseStep })
     : String(displayValueNumber);
   const displayMin = transform.toDisplay ? transform.toDisplay(min) : min;
   const displayMax = transform.toDisplay ? transform.toDisplay(max) : max;
@@ -77,13 +91,17 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     : { width: `${sliderPercent * 100}%` };
   const centerCovered = sliderPercent >= 0.5;
   const sliderLabelClass = centerCovered ? 'zcam-slider-track-label-filled' : 'zcam-slider-track-label-empty';
+
+  // Sync refs and check for optimistic confirmation
   useEffect(() => {
-    rawValueRef.current = actualValue;
-    lastCommittedRef.current = actualValue;
-    if (pendingTargetRef.current !== null && Math.abs(actualValue - pendingTargetRef.current) < Number.EPSILON) {
-      pendingTargetRef.current = null;
+    // Only sync refs to actualValue if we are not in a pending state.
+    // This blocks backend updates from affecting the UI while a pending value exists (10s lock).
+    // The isLockedRef check covers the gap before pendingValue state update commits.
+    if (pendingValue === null && !isLockedRef.current) {
+      rawValueRef.current = actualValue;
+      lastCommittedRef.current = actualValue;
     }
-  }, [actualValue]);
+  }, [actualValue, pendingValue]);
 
   useEffect(() => {
     if (disabled && isFocused) {
@@ -91,15 +109,45 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     }
   }, [disabled, isFocused]);
 
+  const clearPendingTimeout = useCallback(() => {
+    if (pendingValueTimeoutRef.current) {
+      clearTimeout(pendingValueTimeoutRef.current);
+      pendingValueTimeoutRef.current = null;
+    }
+    // Lock immediately on interaction
+    isLockedRef.current = true;
+  }, []);
+
+  const startPendingTimeout = useCallback(() => {
+    clearPendingTimeout();
+    // Keep locked (isLockedRef is already true from clearPendingTimeout or previous interaction)
+
+    pendingValueTimeoutRef.current = setTimeout(() => {
+      isLockedRef.current = false; // Unlock only after timeout
+      setPendingValue(null);
+      pendingValueTimeoutRef.current = null;
+    }, 10000);
+  }, [clearPendingTimeout]);
+
   const commitValue = useCallback(
     (next: number, meta?: SliderOperationMeta) => {
       if (disabled) return;
+
+      if (config.onValueChange) {
+        config.onValueChange(next, store);
+        return;
+      }
+
       const payload: OperationPayload = { value: next };
       if (meta) {
         payload.params = {
           sliderMeta: meta,
         };
       }
+
+      // Update command timestamp
+      lastCmdTimeRef.current = Date.now();
+
       void store.runOperation(config.nodePath, config.kind, config.operationId, payload).catch(() => undefined);
     },
     [config, disabled, store],
@@ -108,10 +156,18 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const commitQuantizedValue = useCallback(
     (rawValue: number, meta?: SliderOperationMeta) => {
       // 直接使用实际值，支持浮点精度
-      const clampedValue = clamp(rawValue, min, max);     
+      // 对齐到 step
+      const steppedValue = min + Math.round((rawValue - min) / baseStep) * baseStep;
+      const clampedValue = clamp(steppedValue, min, max);
       if (Math.abs(clampedValue - lastCommittedRef.current) < Number.EPSILON) return;
       lastCommittedRef.current = clampedValue;
-      pendingTargetRef.current = clampedValue;
+
+      // Update optimistic state (UI Always Updates)
+      setPendingValue(clampedValue);
+
+      // We do NOT set timeout here anymore. 
+      // Timer is managed by startHold/stopHold and Pointer events to ensure "Hold = Infinite Lock".
+
       logInteraction({
         source: 'slider',
         path: config.nodePath,
@@ -119,21 +175,27 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         data: {
           value: clampedValue,
           meta,
-          operationId: config.operationId,
+          operationId: config.operationId ?? '',
           kind: config.kind,
         },
       });
-      commitValue(clampedValue, meta);
+
+      // THROTTLE: Only send to backend if 100ms passed
+      const now = Date.now();
+      if (now - lastCmdTimeRef.current > 100) {
+        commitValue(clampedValue, meta);
+      }
+      // Else: skip backend send, but UI is already updated via setPendingValue
     },
-    [commitValue, config.nodePath, max, min],
+    [commitValue, config.nodePath, max, min, baseStep, config.operationId, config.kind],
   );
 
   // 获取speed乘数的函数
   const getSpeedMultiplier = useCallback(() => {
     try {
       // 如果是zoom滑块，从view中获取speed值
-      if (config.kind === 'ptz.zoom' && view?.camera?.ptz?.speed?.value !== undefined) {
-        const speedValue = view.camera.ptz.speed.value;
+      if (config.kind === 'ptz.zoom' && view.ui.ptzSpeed !== undefined) {
+        const speedValue = view.ui.ptzSpeed;
         // speed范围0-100，映射为归一化乘数
         // speed满值(100) = 1.0 (满速)
         // speed 50 = 0.5 (半速)
@@ -150,31 +212,31 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const applyStep = useCallback(
     (direction: 1 | -1, tick: number = 0, stepScale?: number) => {
       if (disabled) return;
-      
+
       const scale = typeof stepScale === 'number' ? stepScale : holdStepScaleRef.current ?? 1;
       const speedMultiplier = getSpeedMultiplier();
-      
+
       // 计算归一化速度
       if (!profile) {
         console.warn('Profile is undefined, using default speed');
         return;
       }
       const normalizedSpeed = computeNormalizedStep(profile, tick, speedMultiplier) * scale;
-      
+
       // 计算当前归一化位置
       const currentNormalized = max === min ? 0 : (rawValueRef.current - min) / (max - min);
-      
+
       // 归一化速度转换为百分比变化 (0-1范围)
       const normalizedChange = normalizedSpeed / 100;
-      
+
       // 应用归一化速度
       const nextNormalized = clamp(currentNormalized + direction * normalizedChange, 0, 1);
-      
+
       // 转换回实际值
       const nextRaw = nextNormalized * (max - min) + min;
       rawValueRef.current = nextRaw;
-      pendingTargetRef.current = nextRaw;
-      
+      // pendingTargetRef is removed, commitQuantizedValue handles state update
+
       commitQuantizedValue(nextRaw, {
         normalizedSpeed,
         speedMultiplier,
@@ -196,13 +258,22 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     holdTickRef.current = 0;
     holdStepScaleRef.current = 1;
     keyboardHoldKeyRef.current = null;
+
+    // Always start timeout on stopHold (release), ensuring 10s wait
+    startPendingTimeout();
+
     if (!hadHold) return;
     const targetSource =
-      pendingTargetRef.current ?? rawValueRef.current ?? lastCommittedRef.current ?? actualValue;
-    const currentValue = clamp(targetSource, min, max);
+      pendingValue ?? rawValueRef.current ?? lastCommittedRef.current ?? actualValue;
+    // 使用与 commitQuantizedValue 相同的对齐逻辑
+    const steppedValue = min + Math.round((targetSource - min) / baseStep) * baseStep;
+    const currentValue = clamp(steppedValue, min, max);
+
     if (!Number.isFinite(currentValue)) return;
     rawValueRef.current = currentValue;
-    pendingTargetRef.current = currentValue;
+
+    setPendingValue(currentValue);
+
     lastCommittedRef.current = currentValue;
     logInteraction({
       source: 'slider',
@@ -213,12 +284,18 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       },
     });
     commitValue(currentValue, { stop: true });
-  }, [actualValue, baseStep, commitValue, config.nodePath, max, min]);
+  }, [actualValue, baseStep, commitValue, config.nodePath, max, min, startPendingTimeout, pendingValue]);
 
   const startHold = useCallback(
     (direction: 1 | -1, stepScale = 1, options?: { key?: string }) => {
       if (disabled) return;
-      stopHold();
+
+      // Clear legacy hold state
+      if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+
+      // Clear timeout -> Infinite Lock while holding
+      clearPendingTimeout();
+
       holdDirectionRef.current = direction;
       holdStepScaleRef.current = stepScale;
       holdTickRef.current = 0;
@@ -241,14 +318,16 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         applyStep(direction, holdTickRef.current);
       }, getProfileInterval(profile));
     },
-    [applyStep, disabled, profile, stopHold],
+    [applyStep, disabled, profile, clearPendingTimeout],
   );
 
   useEffect(() => {
     return () => {
-      stopHold();
+      // Cleanup on unmount
+      if (holdTimerRef.current) clearInterval(holdTimerRef.current);
+      if (pendingValueTimeoutRef.current) clearTimeout(pendingValueTimeoutRef.current);
     };
-  }, [stopHold]);
+  }, []);
 
   const orientationClass =
     orientation === 'horizontal' ? 'zcam-slider-orientation-horizontal' : 'zcam-slider-orientation-vertical';
@@ -315,18 +394,22 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         return true;
       }
       if (key === 'Home') {
+        clearPendingTimeout();
         rawValueRef.current = min;
         commitQuantizedValue(min);
+        startPendingTimeout();
         return true;
       }
       if (key === 'End') {
+        clearPendingTimeout();
         rawValueRef.current = max;
         commitQuantizedValue(max);
+        startPendingTimeout();
         return true;
       }
       return false;
     },
-    [commitQuantizedValue, disabled, max, min, moveFocus, orientation, startHold, stopHold],
+    [commitQuantizedValue, disabled, max, min, moveFocus, orientation, startHold, stopHold, clearPendingTimeout, startPendingTimeout],
   );
 
   useKeyboardBinding({
@@ -354,24 +437,25 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       if (!pointerInteractive) return;
       const rawValue = Number(event.currentTarget.value);
       if (!Number.isFinite(rawValue)) return;
-      stopHold();
+      // Note: stopHold not called here to avoid killing drag state? 
+      // Actually stopHold clears interval, but we are dragging.
       const actual = transform.toActual ? transform.toActual(rawValue) : rawValue;
       const next = clamp(actual, min, max);
       rawValueRef.current = next;
       commitQuantizedValue(next);
     },
-    [commitQuantizedValue, max, min, pointerInteractive, stopHold, transform],
+    [commitQuantizedValue, max, min, pointerInteractive, transform],
   );
 
   const rangeProps = pointerInteractive
     ? {
-        readOnly: false,
-        disabled: false,
-      }
+      readOnly: false,
+      disabled: false,
+    }
     : {
-        readOnly: true,
-        disabled: true,
-      };
+      readOnly: true,
+      disabled: true,
+    };
 
   const increaseButton = (
     <button
@@ -520,7 +604,13 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
             onPointerDown={(e) => {
               if (!pointerInteractive) return;
               e.stopPropagation();
-              stopHold();
+              // Prevent StopHold from button interactions? No, this is input drag.
+              stopHold(); // Stop any button animation
+              clearPendingTimeout(); // LOCK: Drag started
+            }}
+            onPointerUp={(e) => {
+              // Drag ended
+              startPendingTimeout(); // 10s Unlock
             }}
             style={{ pointerEvents: pointerInteractive ? 'auto' : 'none', cursor: pointerInteractive ? 'pointer' : 'default' }}
           />

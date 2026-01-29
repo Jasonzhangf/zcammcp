@@ -142,6 +142,8 @@ function createMainWindow() {
     if (!mainWindow) return;
     mainWindow.show();
     mainWindow.focus();
+    // 强制打开调试工具方便查看日志
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
   });
 
   mainWindow.on('closed', () => {

@@ -133,6 +133,54 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
     assignImageValue('gamma');
   }
 
+  if (camera.exposure) {
+    next.exposure = { ...(next.exposure ?? {}) };
+    if (typeof camera.exposure.aeEnabled !== 'undefined') {
+      next.exposure.aeEnabled = Boolean(camera.exposure.aeEnabled);
+    }
+    const mapShutter = (entry: any) => {
+      const value = entry?.value ?? entry;
+      const view = entry?.view ?? String(value);
+      const options = Array.isArray(entry?.w?.opts ?? entry?.opts) ? (entry?.w?.opts ?? entry?.opts).map(String) : undefined;
+
+      const isValid = (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && value.length > 0);
+      return isValid ? { value, view, options } : undefined;
+    };
+    if (camera.exposure.shutter) {
+      const shutter = mapShutter(camera.exposure.shutter);
+      if (shutter) next.exposure.shutter = shutter;
+    }
+    const mapIso = (entry: any) => {
+      // ISO can be string (e.g. "Auto", "Native") or number
+      if (!entry) return undefined;
+      const value = String(entry.value ?? entry);
+      const view = entry.view ?? value;
+      const options = Array.isArray(entry.opts) ? entry.opts.map(String) : undefined;
+      return { value, view, options };
+    };
+    if (camera.exposure.iso) {
+      const iso = mapIso(camera.exposure.iso);
+      if (iso) next.exposure.iso = iso;
+    }
+  }
+
+  if (camera.whiteBalance) {
+    const wb = camera.whiteBalance;
+    const rawValue = typeof wb.value !== 'undefined' ? wb.value : wb;
+    const numeric = Number(rawValue);
+    if (Number.isFinite(numeric)) {
+      next.whiteBalance = {
+        temperature: {
+          value: numeric,
+          view: wb.view ?? `${numeric}K`,
+          min: typeof wb.min === 'number' ? wb.min : undefined,
+          max: typeof wb.max === 'number' ? wb.max : undefined,
+          step: typeof wb.step === 'number' ? wb.step : undefined,
+        },
+      };
+    }
+  }
+
   return Object.keys(next).length > 0 ? next : null;
 }
 
@@ -170,4 +218,3 @@ if (rootEl) {
     </React.StrictMode>,
   );
 }
-

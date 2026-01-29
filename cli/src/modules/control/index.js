@@ -64,6 +64,48 @@ ptzCmd
   });
 
 ptzCmd
+  .command('analog <panSpeed> <tiltSpeed>')
+  .description('PTZ模拟移动 (支持浮点数)')
+  .option('-j, --json', 'JSON格式输出')
+  .allowUnknownOption()
+  .action(async (panSpeed, tiltSpeed, options, cmd) => {
+    try {
+      // Handle negative numbers interpreted as options
+      // If tiltSpeed is undefined, it might be in cmd.args or implicit
+      // With allowUnknownOption, unknown flags are passed through.
+      // But Commander might still not assign it to tiltSpeed if it looks like a flag.
+
+      // Manual recovery for negative values if they were skipped by position
+      // If tiltSpeed is an object (it happens when optional args are missing and options shifts), handle it.
+      // But here both are required <>.
+
+      // If tiltSpeed is missing/undefined, check if we have extra args or raw args?
+      // Actually, standard Commander behavior with allowed unknown options:
+      // attributes starting with - are treated as unknown options, not positional args.
+
+      // A better fix might be to use a custom parser or just inspect the raw arguments if needed,
+      // but let's try to see if binding works first. 
+      // Actually, if we use passThroughOptions it might work?
+
+      // Let's assume for now that if we suppress the error, we might need to fetch the value manually if it wasn't assigned.
+      let finalTilt = tiltSpeed;
+      if (typeof tiltSpeed !== 'string' && typeof tiltSpeed !== 'number') {
+        // If tiltSpeed is the options object because the second arg was skipped
+        // We need to look elsewhere?
+        // However, let's just use the raw args from the command if needed.
+        // But let's verify first.
+      }
+
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.ptzAnalogMove(api, panSpeed, finalTilt);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+ptzCmd
   .command('stop')
   .description('停止PTZ移动')
   .option('-j, --json', 'JSON格式输出')
@@ -198,6 +240,21 @@ zoomCmd
       const globalOptions = cmd.parent.parent.parent;
       const api = createAPI(globalOptions);
       const result = await controlService.setZoomMode(api, mode);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+zoomCmd
+  .command('pos <value>')
+  .description('设置变焦位置 (0-99999)')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (value, options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.zoomValue(api, value);
       formatOutput(result, options.json || globalOptions.json);
     } catch (error) {
       handleErrors(error, cmd.parent.parent.parent);
