@@ -32,6 +32,7 @@ const zoomSliderConfig: SliderControlConfig = {
   size: 'small',
   orientation: 'vertical',
   valueRange: { min: PTZ_ZOOM_RANGE.min, max: PTZ_ZOOM_RANGE.max, step: 10 },
+  // Read lens_zoom_pos value
   readValue: (view) => view.camera.ptz?.zoom?.value ?? PTZ_ZOOM_RANGE.min,
   formatValue: (value) => String(Math.round(value)),
   operationId: 'ptz.setZoom',
@@ -39,6 +40,18 @@ const zoomSliderConfig: SliderControlConfig = {
   hideHeaderValue: true,
   focusGroupId: 'zcam.camera.pages.main.ptz',
   keyAcceptWhenBlurred: true,
+  // Configure +/- buttons for continuous zoom with fzSpeed
+  incrementOperation: {
+    onPress: 'lens.zoomIn',
+    onRelease: 'lens.zoomStop',
+  },
+  decrementOperation: {
+    onPress: 'lens.zoomOut',
+    onRelease: 'lens.zoomStop',
+  },
+  // Enable immediate sync for button operations
+  // Buttons will show real-time backend values instead of optimistic UI
+  buttonOperationsDisableOptimistic: true,
 };
 
 // PT Speed (Pan/Tilt) - 用于圆盘右侧的小滑块

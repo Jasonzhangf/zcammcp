@@ -41,6 +41,11 @@ export interface SliderControlConfig {
     onPress: string;
     onRelease: string;
   };
+
+  // New: disable optimistic UI for button operations
+  // When true, button operations will immediately sync with backend values
+  // instead of using optimistic UI + 10s timeout
+  buttonOperationsDisableOptimistic?: boolean;
 }
 
 export interface ToggleControlConfig {

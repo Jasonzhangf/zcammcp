@@ -189,12 +189,26 @@ class ControlService {
       throw new Error(`无效的变焦方向: ${direction}。支持的方向: ${validDirections.join(', ')}`);
     }
 
-    const speedNum = parseInt(speed);
-    if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
-      throw new Error('变焦速度必须是1-9之间的数字');
+    // Support both integer (1-9) and float (0-1) speed values
+    let speedValue;
+    if (typeof speed === 'number') {
+      speedValue = speed;
+    } else {
+      const speedNum = parseFloat(speed);
+      if (isNaN(speedNum)) {
+        throw new Error('变焦速度必须是数字');
+      }
+      speedValue = speedNum;
     }
 
-    return await api.get(`/ctrl/lens?action=zoom${direction.toLowerCase()}&fspeed=${speedNum}`);
+    // Validate range: either 1-9 (integer) or 0-1 (float)
+    if ((speedValue >= 1 && speedValue <= 9) || (speedValue >= 0 && speedValue <= 1)) {
+      // Valid range
+    } else {
+      throw new Error('变焦速度必须是1-9之间的整数或0-1之间的浮点数');
+    }
+
+    return await api.get(`/ctrl/lens?action=zoom${direction.toLowerCase()}&fspeed=${speedValue}`);
   }
 
   /**

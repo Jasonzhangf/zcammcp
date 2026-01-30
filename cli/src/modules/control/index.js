@@ -165,6 +165,96 @@ ptzCmd
     }
   });
 
+ptzCmd
+  .command('zoomin [speed]')
+  .description('放大 (速度0-1浮点数或1-9整数)')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (speed = '0.5', options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.zoomIn(api, speed);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+ptzCmd
+  .command('zoomout [speed]')
+  .description('缩小 (速度0-1浮点数或1-9整数)')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (speed = '0.5', options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.zoomOut(api, speed);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+ptzCmd
+  .command('zoomstop')
+  .description('停止变焦')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.zoomStop(api);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+ptzCmd
+  .command('focusnear [speed]')
+  .description('近焦 (速度0-1浮点数或1-9整数)')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (speed = '0.5', options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.focusNear(api, speed);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+ptzCmd
+  .command('focusfar [speed]')
+  .description('远焦 (速度0-1浮点数或1-9整数)')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (speed = '0.5', options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.focusFar(api, speed);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+ptzCmd
+  .command('focusstop')
+  .description('停止对焦')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await controlService.focusStop(api);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
 controlCmd.addCommand(ptzCmd);
 
 // ===== 变焦控制子命令 =====

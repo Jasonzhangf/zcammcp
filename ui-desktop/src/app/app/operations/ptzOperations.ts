@@ -134,7 +134,7 @@ export const ptzOperations: OperationDefinition[] = [
   },
   {
     id: 'ptz.focusNear',
-    cliCommand: 'control.lens.focusnear',
+    cliCommand: 'control.ptz.focusnear',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       // Get fzSpeed from UI state (0-100) and normalize to 0.0-1.0
       const fzSpeed = ctx.uiState.fzSpeed ?? 50;
@@ -144,14 +144,14 @@ export const ptzOperations: OperationDefinition[] = [
         cliRequest: {
           id: `ptz.focusNear.${Date.now()}`,
           command: 'control',
-          args: ['control', 'lens', 'focusnear', String(normalizedSpeed.toFixed(2))],
+          args: ['control', 'ptz', 'focusnear', String(normalizedSpeed.toFixed(2))],
         }
       };
     },
   },
   {
     id: 'ptz.focusFar',
-    cliCommand: 'control.lens.focusfar',
+    cliCommand: 'control.ptz.focusfar',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       // Get fzSpeed from UI state (0-100) and normalize to 0.0-1.0
       const fzSpeed = ctx.uiState.fzSpeed ?? 50;
@@ -161,20 +161,67 @@ export const ptzOperations: OperationDefinition[] = [
         cliRequest: {
           id: `ptz.focusFar.${Date.now()}`,
           command: 'control',
-          args: ['control', 'lens', 'focusfar', String(normalizedSpeed.toFixed(2))],
+          args: ['control', 'ptz', 'focusfar', String(normalizedSpeed.toFixed(2))],
         }
       };
     },
   },
   {
     id: 'ptz.focusStop',
-    cliCommand: 'control.lens.focusstop',
+    cliCommand: 'control.ptz.focusstop',
     async handler(ctx: OperationContext): Promise<OperationResult> {
       return {
         cliRequest: {
           id: `ptz.focusStop.${Date.now()}`,
           command: 'control',
-          args: ['control', 'lens', 'focusstop'],
+          args: ['control', 'ptz', 'focusstop'],
+        }
+      };
+    },
+  },
+  {
+    id: 'lens.zoomIn',
+    cliCommand: 'control.ptz.zoomin',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      // Get fzSpeed from UI state and normalize to 0-1
+      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
+      const normalizedSpeed = fzSpeed / 100;
+
+      return {
+        cliRequest: {
+          id: `lens.zoomIn.${Date.now()}`,
+          command: 'control',
+          args: ['control', 'ptz', 'zoomin', normalizedSpeed.toString()],
+        }
+      };
+    },
+  },
+  {
+    id: 'lens.zoomOut',
+    cliCommand: 'control.ptz.zoomout',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      // Get fzSpeed from UI state and normalize to 0-1
+      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
+      const normalizedSpeed = fzSpeed / 100;
+
+      return {
+        cliRequest: {
+          id: `lens.zoomOut.${Date.now()}`,
+          command: 'control',
+          args: ['control', 'ptz', 'zoomout', normalizedSpeed.toString()],
+        }
+      };
+    },
+  },
+  {
+    id: 'lens.zoomStop',
+    cliCommand: 'control.ptz.zoomstop',
+    async handler(ctx: OperationContext): Promise<OperationResult> {
+      return {
+        cliRequest: {
+          id: `lens.zoomStop.${Date.now()}`,
+          command: 'control',
+          args: ['control', 'ptz', 'zoomstop'],
         }
       };
     },

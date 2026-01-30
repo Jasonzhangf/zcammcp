@@ -72,17 +72,30 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
     const isDraggingRef = useRef(false);
     const trackRef = useRef<HTMLDivElement | null>(null);
 
+    // Track button press state for operation-based controls
+    const incrementPressedRef = useRef(false);
+    const decrementPressedRef = useRef(false);
+
     // Display Value Calculation
     const effectiveValue = pendingValue ?? actualValue;
     const trackValue = clamp(effectiveValue, min, max);
 
     // Sync Logic: Only update if not locked and not pending
     useEffect(() => {
+        // If button operations disable optimistic UI and button is pressed,
+        // immediately sync backend values
+        if (config.buttonOperationsDisableOptimistic &&
+            (incrementPressedRef.current || decrementPressedRef.current)) {
+            rawValueRef.current = actualValue;
+            lastCommittedRef.current = actualValue;
+            return;
+        }
+
         if (pendingValue === null && !isLockedRef.current) {
             rawValueRef.current = actualValue;
             lastCommittedRef.current = actualValue;
         }
-    }, [actualValue, pendingValue]);
+    }, [actualValue, pendingValue, config.buttonOperationsDisableOptimistic]);
 
     // Lock Helpers
     const clearPendingTimeout = useCallback(() => {
@@ -110,11 +123,16 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 config.onValueChange(next, store);
                 return;
             }
+
+            console.log('[TBarControl] commitValue:', { nodePath: config.nodePath, next, operationId: config.operationId, meta });
+
             const payload: OperationPayload = { value: next };
             if (meta) payload.params = { sliderMeta: meta };
 
             lastCmdTimeRef.current = Date.now();
-            void store.runOperation(config.nodePath, config.kind, config.operationId, payload).catch(() => undefined);
+            void store.runOperation(config.nodePath, config.kind, config.operationId, payload).catch((e) => {
+                console.error('[TBarControl] runOperation failed:', e);
+            });
         },
         [config, disabled, store],
     );
@@ -234,6 +252,79 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         }, 100); // 10Hz repeat
     }, [applyStep, clearPendingTimeout, disabled]);
 
+    // Handlers for increment/decrement operations (e.g., zoom/focus buttons)
+    const handleIncrementPress = useCallback(() => {
+        if (config.incrementOperation?.onPress) {
+            incrementPressedRef.current = true;
+
+            if (config.buttonOperationsDisableOptimistic) {
+                setPendingValue(null);
+            } else {
+                clearPendingTimeout();
+            }
+
+            void store.runOperation(
+                config.nodePath,
+                config.kind,
+                config.incrementOperation.onPress,
+                {}
+            );
+        }
+    }, [config, store, clearPendingTimeout]);
+
+    const handleIncrementRelease = useCallback(() => {
+        if (config.incrementOperation?.onRelease && incrementPressedRef.current) {
+            incrementPressedRef.current = false;
+
+            void store.runOperation(
+                config.nodePath,
+                config.kind,
+                config.incrementOperation.onRelease,
+                {}
+            );
+
+            if (!config.buttonOperationsDisableOptimistic) {
+                startPendingTimeout();
+            }
+        }
+    }, [config, store, startPendingTimeout]);
+
+    const handleDecrementPress = useCallback(() => {
+        if (config.decrementOperation?.onPress) {
+            decrementPressedRef.current = true;
+
+            if (config.buttonOperationsDisableOptimistic) {
+                setPendingValue(null);
+            } else {
+                clearPendingTimeout();
+            }
+
+            void store.runOperation(
+                config.nodePath,
+                config.kind,
+                config.decrementOperation.onPress,
+                {}
+            );
+        }
+    }, [config, store, clearPendingTimeout]);
+
+    const handleDecrementRelease = useCallback(() => {
+        if (config.decrementOperation?.onRelease && decrementPressedRef.current) {
+            decrementPressedRef.current = false;
+
+            void store.runOperation(
+                config.nodePath,
+                config.kind,
+                config.decrementOperation.onRelease,
+                {}
+            );
+
+            if (!config.buttonOperationsDisableOptimistic) {
+                startPendingTimeout();
+            }
+        }
+    }, [config, store, startPendingTimeout]);
+
     // ----------- Render Stats -----------
     const percentage = max === min ? 0 : (trackValue - min) / (max - min);
     // percentage 0 = bottom, 1 = top.
@@ -268,9 +359,27 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 <div className="zcam-tbar-buttons">
                     <button
                         className="zcam-tbar-btn"
-                        onPointerDown={() => startHold(1)}
-                        onPointerUp={stopHold}
-                        onPointerLeave={stopHold}
+                        onPointerDown={() => {
+                            if (config.incrementOperation) {
+                                handleIncrementPress();
+                            } else {
+                                startHold(1);
+                            }
+                        }}
+                        onPointerUp={() => {
+                            if (config.incrementOperation) {
+                                handleIncrementRelease();
+                            } else {
+                                stopHold();
+                            }
+                        }}
+                        onPointerLeave={() => {
+                            if (config.incrementOperation) {
+                                handleIncrementRelease();
+                            } else {
+                                stopHold();
+                            }
+                        }}
                         disabled={disabled}
                     >
                         +
@@ -312,9 +421,27 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 <div className="zcam-tbar-buttons">
                     <button
                         className="zcam-tbar-btn"
-                        onPointerDown={() => startHold(-1)}
-                        onPointerUp={stopHold}
-                        onPointerLeave={stopHold}
+                        onPointerDown={() => {
+                            if (config.decrementOperation) {
+                                handleDecrementPress();
+                            } else {
+                                startHold(-1);
+                            }
+                        }}
+                        onPointerUp={() => {
+                            if (config.decrementOperation) {
+                                handleDecrementRelease();
+                            } else {
+                                stopHold();
+                            }
+                        }}
+                        onPointerLeave={() => {
+                            if (config.decrementOperation) {
+                                handleDecrementRelease();
+                            } else {
+                                stopHold();
+                            }
+                        }}
                         disabled={disabled}
                     >
                         -

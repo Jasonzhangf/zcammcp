@@ -98,6 +98,15 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
 
   // Sync refs and check for optimistic confirmation
   useEffect(() => {
+    // If button operations disable optimistic UI and button is pressed,
+    // immediately sync backend values
+    if (config.buttonOperationsDisableOptimistic &&
+      (incrementPressedRef.current || decrementPressedRef.current)) {
+      rawValueRef.current = actualValue;
+      lastCommittedRef.current = actualValue;
+      return;
+    }
+
     // Only sync refs to actualValue if we are not in a pending state.
     // This blocks backend updates from affecting the UI while a pending value exists (10s lock).
     // The isLockedRef check covers the gap before pendingValue state update commits.
@@ -105,7 +114,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       rawValueRef.current = actualValue;
       lastCommittedRef.current = actualValue;
     }
-  }, [actualValue, pendingValue]);
+  }, [actualValue, pendingValue, config.buttonOperationsDisableOptimistic]);
 
   useEffect(() => {
     if (disabled && isFocused) {
@@ -281,6 +290,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     setPendingValue(currentValue);
 
     lastCommittedRef.current = currentValue;
+
     logInteraction({
       source: 'slider',
       path: config.nodePath,
@@ -442,6 +452,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     (event: React.ChangeEvent<HTMLInputElement>) => {
       if (!pointerInteractive) return;
       const rawValue = Number(event.currentTarget.value);
+
       if (!Number.isFinite(rawValue)) return;
       // Note: stopHold not called here to avoid killing drag state? 
       // Actually stopHold clears interval, but we are dragging.
@@ -467,6 +478,16 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const handleIncrementPress = useCallback(() => {
     if (config.incrementOperation?.onPress) {
       incrementPressedRef.current = true;  // Mark as pressed
+
+      // If button operations disable optimistic UI, clear pendingValue
+      // to allow immediate sync with backend
+      if (config.buttonOperationsDisableOptimistic) {
+        setPendingValue(null);
+        // Don't lock - let backend values update immediately
+      } else {
+        clearPendingTimeout(); // Lock during operation
+      }
+
       void store.runOperation(
         config.nodePath,
         config.kind,
@@ -474,24 +495,41 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         {}
       );
     }
-  }, [config, store]);
+  }, [config, store, clearPendingTimeout]);
 
   const handleIncrementRelease = useCallback(() => {
     // Only send release command if button was actually pressed
     if (config.incrementOperation?.onRelease && incrementPressedRef.current) {
       incrementPressedRef.current = false;  // Reset state
+
       void store.runOperation(
         config.nodePath,
         config.kind,
         config.incrementOperation.onRelease,
         {}
       );
+
+      // If not using optimistic UI, don't start timeout
+      // Let backend values continue to update
+      if (!config.buttonOperationsDisableOptimistic) {
+        startPendingTimeout(); // Unlock after release
+      }
     }
-  }, [config, store]);
+  }, [config, store, startPendingTimeout]);
 
   const handleDecrementPress = useCallback(() => {
     if (config.decrementOperation?.onPress) {
       decrementPressedRef.current = true;  // Mark as pressed
+
+      // If button operations disable optimistic UI, clear pendingValue
+      // to allow immediate sync with backend
+      if (config.buttonOperationsDisableOptimistic) {
+        setPendingValue(null);
+        // Don't lock - let backend values update immediately
+      } else {
+        clearPendingTimeout(); // Lock during operation
+      }
+
       void store.runOperation(
         config.nodePath,
         config.kind,
@@ -499,20 +537,27 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         {}
       );
     }
-  }, [config, store]);
+  }, [config, store, clearPendingTimeout]);
 
   const handleDecrementRelease = useCallback(() => {
     // Only send release command if button was actually pressed
     if (config.decrementOperation?.onRelease && decrementPressedRef.current) {
       decrementPressedRef.current = false;  // Reset state
+
       void store.runOperation(
         config.nodePath,
         config.kind,
         config.decrementOperation.onRelease,
         {}
       );
+
+      // If not using optimistic UI, don't start timeout
+      // Let backend values continue to update
+      if (!config.buttonOperationsDisableOptimistic) {
+        startPendingTimeout(); // Unlock after release
+      }
     }
-  }, [config, store]);
+  }, [config, store, startPendingTimeout]);
 
   const increaseButton = (
     <button
@@ -732,9 +777,22 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
             onChange={handlePointerInputChange}
             onPointerDown={(e) => {
               if (!pointerInteractive) return;
+
               e.stopPropagation();
-              // Prevent StopHold from button interactions? No, this is input drag.
-              stopHold(); // Stop any button animation
+              e.preventDefault();  // 阻止默认的点击跳转行为，只允许拖动
+
+              // Don't call stopHold() - it causes two problems:
+              // 1. Sends unwanted commands on click
+              // 2. Sets pendingValue to incorrect values (possibly 0)
+              // Instead, only clear necessary state:
+
+              // Clear any button hold timer
+              if (holdTimerRef.current) {
+                clearInterval(holdTimerRef.current);
+                holdTimerRef.current = null;
+              }
+
+              // Clear pending timeout to lock during drag
               clearPendingTimeout(); // LOCK: Drag started
             }}
             onPointerUp={(e) => {

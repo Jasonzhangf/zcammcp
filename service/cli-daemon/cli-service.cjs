@@ -174,15 +174,20 @@ function deriveCameraKeys(args) {
     }
     // control ptz move/stop/home -> pan, tilt
     if (args[1] === 'ptz') {
+      // control ptz zoomstop/focusstop -> no refresh needed
+      if (args[2] === 'zoomstop' || args[2] === 'focusstop') {
+        return []; // Stop commands don't change position
+      }
+      // control ptz focusnear/focusfar -> lens_focus_pos
+      if (args[2] === 'focusnear' || args[2] === 'focusfar') {
+        return ['lens_focus_pos'];
+      }
+      // control ptz zoomin/zoomout -> lens_zoom_pos
+      if (args[2] === 'zoomin' || args[2] === 'zoomout') {
+        return ['lens_zoom_pos'];
+      }
+      // Other ptz commands (move, stop, home) -> pan, tilt
       return ['pan', 'tilt'];
-    }
-    // control lens zoomstop/focusstop -> no refresh needed
-    if (args[1] === 'lens' && (args[2] === 'zoomstop' || args[2] === 'focusstop')) {
-      return []; // Stop commands don't change position
-    }
-    // control lens focusnear/focusfar -> lens_focus_pos
-    if (args[1] === 'lens' && (args[2] === 'focusnear' || args[2] === 'focusfar')) {
-      return ['lens_focus_pos'];
     }
   }
 
