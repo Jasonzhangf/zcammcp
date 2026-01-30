@@ -41,17 +41,37 @@ const zoomSliderConfig: SliderControlConfig = {
   keyAcceptWhenBlurred: true,
 };
 
-const speedSliderConfig: SliderControlConfig = {
-  nodePath: 'zcam.camera.pages.main.ptz.speed',
-  kind: 'ptz.speed',
+// PT Speed (Pan/Tilt) - 用于圆盘右侧的小滑块
+const ptSpeedSliderConfig: SliderControlConfig = {
+  nodePath: 'zcam.camera.pages.main.ptz.ptSpeed',
+  kind: 'ptz.ptSpeed',
+  label: 'SPEED',
+  size: 'small',
+  orientation: 'vertical',
+  valueRange: { min: 0, max: 100, step: 1 },
+  readValue: (view) => view.ui.ptSpeed ?? 50,
+  formatValue: (value) => String(Math.round(value)),
+  onValueChange: (value, store) => {
+    store.updateUiState({ ptSpeed: value });
+  },
+  profileKey: 'default',
+  hideHeaderValue: true,
+  focusGroupId: 'zcam.camera.pages.main.ptz',
+  keyAcceptWhenBlurred: true,
+};
+
+// FZ Speed (Focus/Zoom) - 用于右侧列的大滑块
+const fzSpeedSliderConfig: SliderControlConfig = {
+  nodePath: 'zcam.camera.pages.main.ptz.fzSpeed',
+  kind: 'ptz.fzSpeed',
   label: 'Speed',
   size: 'small',
   orientation: 'vertical',
   valueRange: { min: 0, max: 100, step: 1 },
-  readValue: (view) => view.ui.ptzSpeed ?? 50,
+  readValue: (view) => view.ui.fzSpeed ?? 50,
   formatValue: (value) => String(Math.round(value)),
   onValueChange: (value, store) => {
-    store.updateUiState({ ptzSpeed: value });
+    store.updateUiState({ fzSpeed: value });
   },
   profileKey: 'default',
   hideHeaderValue: true,
@@ -164,11 +184,12 @@ export function PtzCard() {
     tiltTargetRef.current = tiltVal;
   }, [tiltVal]);
 
-  const speedValue = view.ui.ptzSpeed ?? 50;
+  const ptSpeedValue = view.ui.ptSpeed ?? 50;
+  const fzSpeedValue = view.ui.fzSpeed ?? 50;
   const baseStep = useMemo(() => {
-    // 直接使用 speedValue 作为步长 (1-100)
-    return Math.max(1, speedValue);
-  }, [speedValue]);
+    // 直接使用 ptSpeedValue 作为 Pan/Tilt 步长 (1-100)
+    return Math.max(1, ptSpeedValue);
+  }, [ptSpeedValue]);
 
   const containerData = useMemo(
     () => ({
@@ -176,9 +197,10 @@ export function PtzCard() {
       tilt: tiltDisplay,
       zoom: zoomDisplay,
       focus: focusDisplay,
-      speed: Math.round(speedValue),
+      ptSpeed: Math.round(ptSpeedValue),
+      fzSpeed: Math.round(fzSpeedValue),
     }),
-    [focusDisplay, panDisplay, speedValue, tiltDisplay, zoomDisplay],
+    [focusDisplay, panDisplay, ptSpeedValue, fzSpeedValue, tiltDisplay, zoomDisplay],
   );
   useContainerData('group.ptz', containerData);
   const dpadProfile = useMemo(() => getSliderProfile(DPAD_PROFILE_KEY), []);
@@ -411,41 +433,51 @@ export function PtzCard() {
               ref={padFocusRef}
               style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
             >
-              <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 0 }}>
-                <PtzCircularControl
-                  onStartMove={handleCircularMove}
-                  onStopMove={stopHold}
-                  onJoystickMove={handleJoystickMove}
-                  disabled={isInteractionDisabled}
-                  style={{ width: '220px', height: '220px' }}
-                />
-              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'stretch', minHeight: 0 }}>
+                {/* Pad Center */}
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <PtzCircularControl
+                    onStartMove={handleCircularMove}
+                    onStopMove={stopHold}
+                    onJoystickMove={handleJoystickMove}
+                    disabled={isInteractionDisabled}
+                    style={{ width: '220px', height: '220px' }}
+                  />
+                </div>
 
-              {/* Home Button */}
-              <div
-                className="zcam-ptz-home-btn"
-                onClick={() => void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {})}
-                style={{
-                  position: 'absolute',
-                  bottom: '80px', // Adjust to sit in corner of the pad area
-                  right: '10px',
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '6px',
-                  backgroundColor: '#333',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: isInteractionDisabled ? 'default' : 'pointer',
-                  opacity: isInteractionDisabled ? 0.5 : 1,
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                  border: '1px solid #444',
-                }}
-                title="Home"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="#ccc">
-                  <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                </svg>
+                {/* Right Side Controls: Home + Speed Slider */}
+                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', marginLeft: 'auto', gap: '8px' }}>
+                  {/* Home Button */}
+                  <div
+                    className="zcam-ptz-home-btn"
+                    onClick={() => void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {})}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '6px',
+                      backgroundColor: '#333',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: isInteractionDisabled ? 'default' : 'pointer',
+                      opacity: isInteractionDisabled ? 0.5 : 1,
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                      border: '1px solid #444',
+                    }}
+                    title="Home"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#ccc">
+                      <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                    </svg>
+                  </div>
+
+                  {/* Speed Slider - Tall Vertical */}
+                  <div style={{ height: '140px', display: 'flex', flexDirection: 'column', alignItems: 'center', transform: 'translateY(-120px)' }}>
+                    <div style={{ flex: 1, display: 'flex' }}>
+                      <SliderControl config={ptSpeedSliderConfig} disabled={isInteractionDisabled} />
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="zcam-ptz-status-grid" data-path="zcam.camera.pages.main.ptz.statusGrid" style={{ marginTop: 'auto' }}>
@@ -473,7 +505,7 @@ export function PtzCard() {
               <TBarControl config={zoomSliderConfig} disabled={isInteractionDisabled} styleVariant="skeuomorphic" />
             </div>
             <div className="zcam-ptz-slider-column" style={{ height: '374px' }}>
-              <SliderControl config={speedSliderConfig} disabled={isInteractionDisabled} />
+              <SliderControl config={fzSpeedSliderConfig} disabled={isInteractionDisabled} />
             </div>
           </div>
         </div>

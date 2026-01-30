@@ -17,14 +17,35 @@ const focusSliderConfig: SliderControlConfig = {
   nodePath: 'zcam.camera.pages.main.ptz.focus',
   kind: 'ptz.focus',
   label: 'Focus',
-  operationId: 'ptz.setFocus',
+  operationId: 'ptz.setFocus', // For slider drag
   orientation: 'horizontal',
   size: 'medium',
-  valueRange: { min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 5 },
+  valueRange: { min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 1 },
+
+  // Read dynamic range from camera state
+  readValueRange: (view) => {
+    const focus = view.camera.ptz?.focus;
+    return {
+      min: focus?.min ?? PTZ_FOCUS_RANGE.min,
+      max: focus?.max ?? PTZ_FOCUS_RANGE.max,
+      step: focus?.step ?? 1,
+    };
+  },
+
   readValue: (view) => view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min,
   formatValue: (value) => String(value),
   enablePointerDrag: true,
   profileKey: 'gentle',
+
+  // New: +/- button operations for continuous control
+  incrementOperation: {
+    onPress: 'ptz.focusNear',
+    onRelease: 'ptz.focusStop',
+  },
+  decrementOperation: {
+    onPress: 'ptz.focusFar',
+    onRelease: 'ptz.focusStop',
+  },
 };
 
 interface FocusGroupProps {

@@ -66,6 +66,10 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const holdStepScaleRef = useRef(1);
   const keyboardHoldKeyRef = useRef<string | null>(null);
 
+  // Track button press state for operation-based controls
+  const incrementPressedRef = useRef(false);
+  const decrementPressedRef = useRef(false);
+
   // Determine effective value for display
   const effectiveValue = pendingValue ?? actualValue;
 
@@ -259,10 +263,12 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     holdStepScaleRef.current = 1;
     keyboardHoldKeyRef.current = null;
 
+    // Only execute the following if button was actually held
+    if (!hadHold) return;
+
     // Always start timeout on stopHold (release), ensuring 10s wait
     startPendingTimeout();
 
-    if (!hadHold) return;
     const targetSource =
       pendingValue ?? rawValueRef.current ?? lastCommittedRef.current ?? actualValue;
     // 使用与 commitQuantizedValue 相同的对齐逻辑
@@ -457,49 +463,136 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       disabled: true,
     };
 
+  // Handlers for operation-based button control
+  const handleIncrementPress = useCallback(() => {
+    if (config.incrementOperation?.onPress) {
+      incrementPressedRef.current = true;  // Mark as pressed
+      void store.runOperation(
+        config.nodePath,
+        config.kind,
+        config.incrementOperation.onPress,
+        {}
+      );
+    }
+  }, [config, store]);
+
+  const handleIncrementRelease = useCallback(() => {
+    // Only send release command if button was actually pressed
+    if (config.incrementOperation?.onRelease && incrementPressedRef.current) {
+      incrementPressedRef.current = false;  // Reset state
+      void store.runOperation(
+        config.nodePath,
+        config.kind,
+        config.incrementOperation.onRelease,
+        {}
+      );
+    }
+  }, [config, store]);
+
+  const handleDecrementPress = useCallback(() => {
+    if (config.decrementOperation?.onPress) {
+      decrementPressedRef.current = true;  // Mark as pressed
+      void store.runOperation(
+        config.nodePath,
+        config.kind,
+        config.decrementOperation.onPress,
+        {}
+      );
+    }
+  }, [config, store]);
+
+  const handleDecrementRelease = useCallback(() => {
+    // Only send release command if button was actually pressed
+    if (config.decrementOperation?.onRelease && decrementPressedRef.current) {
+      decrementPressedRef.current = false;  // Reset state
+      void store.runOperation(
+        config.nodePath,
+        config.kind,
+        config.decrementOperation.onRelease,
+        {}
+      );
+    }
+  }, [config, store]);
+
   const increaseButton = (
     <button
       type="button"
       className="zcam-slider-step-btn zcam-slider-step-increase"
       onPointerDown={(e) => {
         e.preventDefault();
-        if (e.currentTarget.setPointerCapture) {
-          try {
-            e.currentTarget.setPointerCapture(e.pointerId);
-          } catch {
-            // ignore if capture fails
+        if (config.incrementOperation) {
+          handleIncrementPress();
+        } else {
+          if (e.currentTarget.setPointerCapture) {
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              // ignore if capture fails
+            }
           }
+          startHold(1, resolveModifierScale(e));
         }
-        startHold(1, resolveModifierScale(e));
       }}
       onPointerUp={(e) => {
         e.preventDefault();
-        if (e.currentTarget.releasePointerCapture) {
-          try {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          } catch {
-            // ignore release errors
+        if (config.incrementOperation) {
+          handleIncrementRelease();
+        } else {
+          if (e.currentTarget.releasePointerCapture) {
+            try {
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            } catch {
+              // ignore release errors
+            }
           }
+          stopHold();
         }
-        stopHold();
       }}
-      onPointerLeave={stopHold}
-      onPointerCancel={stopHold}
+      onPointerLeave={() => {
+        if (config.incrementOperation) {
+          handleIncrementRelease();
+        } else {
+          stopHold();
+        }
+      }}
+      onPointerCancel={() => {
+        if (config.incrementOperation) {
+          handleIncrementRelease();
+        } else {
+          stopHold();
+        }
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
-        stopHold();
+        if (config.incrementOperation) {
+          handleIncrementRelease();
+        } else {
+          stopHold();
+        }
       }}
       onTouchStart={(e) => {
         e.preventDefault();
-        startHold(1);
+        if (config.incrementOperation) {
+          handleIncrementPress();
+        } else {
+          startHold(1);
+        }
       }}
       onTouchEnd={(e) => {
         e.preventDefault();
-        stopHold();
+        if (config.incrementOperation) {
+          handleIncrementRelease();
+        } else {
+          stopHold();
+        }
       }}
       onTouchCancel={(e) => {
         e.preventDefault();
-        stopHold();
+        if (config.incrementOperation) {
+          handleIncrementRelease();
+        } else {
+          stopHold();
+        }
       }}
       disabled={disabled}
     >
@@ -513,43 +606,79 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       className="zcam-slider-step-btn zcam-slider-step-decrease"
       onPointerDown={(e) => {
         e.preventDefault();
-        if (e.currentTarget.setPointerCapture) {
-          try {
-            e.currentTarget.setPointerCapture(e.pointerId);
-          } catch {
-            // ignore
+        if (config.decrementOperation) {
+          handleDecrementPress();
+        } else {
+          if (e.currentTarget.setPointerCapture) {
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              // ignore
+            }
           }
+          startHold(-1, resolveModifierScale(e));
         }
-        startHold(-1, resolveModifierScale(e));
       }}
       onPointerUp={(e) => {
         e.preventDefault();
-        if (e.currentTarget.releasePointerCapture) {
-          try {
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          } catch {
-            // ignore
+        if (config.decrementOperation) {
+          handleDecrementRelease();
+        } else {
+          if (e.currentTarget.releasePointerCapture) {
+            try {
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            } catch {
+              // ignore
+            }
           }
+          stopHold();
         }
-        stopHold();
       }}
-      onPointerLeave={stopHold}
-      onPointerCancel={stopHold}
+      onPointerLeave={() => {
+        if (config.decrementOperation) {
+          handleDecrementRelease();
+        } else {
+          stopHold();
+        }
+      }}
+      onPointerCancel={() => {
+        if (config.decrementOperation) {
+          handleDecrementRelease();
+        } else {
+          stopHold();
+        }
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
-        stopHold();
+        if (config.decrementOperation) {
+          handleDecrementRelease();
+        } else {
+          stopHold();
+        }
       }}
       onTouchStart={(e) => {
         e.preventDefault();
-        startHold(-1);
+        if (config.decrementOperation) {
+          handleDecrementPress();
+        } else {
+          startHold(-1);
+        }
       }}
       onTouchEnd={(e) => {
         e.preventDefault();
-        stopHold();
+        if (config.decrementOperation) {
+          handleDecrementRelease();
+        } else {
+          stopHold();
+        }
       }}
       onTouchCancel={(e) => {
         e.preventDefault();
-        stopHold();
+        if (config.decrementOperation) {
+          handleDecrementRelease();
+        } else {
+          stopHold();
+        }
       }}
       disabled={disabled}
     >

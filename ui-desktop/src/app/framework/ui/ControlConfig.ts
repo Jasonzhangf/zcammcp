@@ -31,6 +31,16 @@ export interface SliderControlConfig {
   };
   profileKey?: string;
   onValueChange?: (value: number, store: any) => void;
+
+  // New: +/- button operation configs
+  incrementOperation?: {
+    onPress: string;    // operation ID on button press
+    onRelease: string;  // operation ID on button release
+  };
+  decrementOperation?: {
+    onPress: string;
+    onRelease: string;
+  };
 }
 
 export interface ToggleControlConfig {

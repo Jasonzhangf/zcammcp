@@ -144,23 +144,48 @@ function updateLastResult(patch) {
 
 function deriveCameraKeys(args) {
   if (!Array.isArray(args) || args.length === 0) return [];
+
+  // UVC commands: uvc set <key>
   if (args[0] === 'uvc' && args[1] === 'set' && typeof args[2] === 'string') {
     return [args[2]];
   }
+
+  // Image adjust commands: image adjust <key>
   if (args[0] === 'image' && args[1] === 'adjust' && typeof args[2] === 'string') {
     if (args[2] === 'iso') return ['iso'];
     if (args[2] === 'shutter_time') return ['exposure'];
     return [args[2]];
   }
+
+  // Control set commands: ctrl set <key>
   if (args[0] === 'ctrl' && args[1] === 'set' && typeof args[2] === 'string') {
-    // Map 'ctrl set iso ...' to ['iso'] or ['exposure']?
-    // User requested usage of 'iso' key in other contexts.
-    // If the state service expects 'gain' for ISO (legacy uvc), we might need to map it.
-    // But 'iso' is likely supported if camera-state uses it.
-    // Let's assume 'iso' -> 'iso' is correct for the new generic ctrl command.
-    // OR if we preserve legacy behavior: args[2] is 'iso'.
     return [args[2]];
   }
+
+  // Control commands: control <subsystem> <action> [...]
+  if (args[0] === 'control') {
+    // control zoom pos <value> -> lens_zoom_pos
+    if (args[1] === 'zoom' && args[2] === 'pos') {
+      return ['lens_zoom_pos'];
+    }
+    // control focus pos <value> -> lens_focus_pos
+    if (args[1] === 'focus' && args[2] === 'pos') {
+      return ['lens_focus_pos'];
+    }
+    // control ptz move/stop/home -> pan, tilt
+    if (args[1] === 'ptz') {
+      return ['pan', 'tilt'];
+    }
+    // control lens zoomstop/focusstop -> no refresh needed
+    if (args[1] === 'lens' && (args[2] === 'zoomstop' || args[2] === 'focusstop')) {
+      return []; // Stop commands don't change position
+    }
+    // control lens focusnear/focusfar -> lens_focus_pos
+    if (args[1] === 'lens' && (args[2] === 'focusnear' || args[2] === 'focusfar')) {
+      return ['lens_focus_pos'];
+    }
+  }
+
   return [];
 }
 

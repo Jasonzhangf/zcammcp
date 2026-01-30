@@ -70,7 +70,8 @@ export interface UiState {
   highlightMap: Record<string, 'none' | 'hover' | 'active' | 'error' | 'replay'>;
   activeNodePath?: string;
   layoutMode: LayoutMode; // 窗口 / 页面布局模式: 模式1~4
-  ptzSpeed?: number; // PTZ 速度控制 (0-100), 默认 50, 用于本地 UI 控制步进大小
+  fzSpeed?: number; // Focus/Zoom 速度控制 (0-100), 默认 50, 用于本地 UI 控制步进大小
+  ptSpeed?: number; // Pan/Tilt 速度控制 (0-100), 默认 50, 用于本地 UI 控制步进大小
   ptzBusy?: boolean; // PTZ 操作是否正在进行中 (防止命令风暴)
 }
 
@@ -165,7 +166,8 @@ export class PageStore {
         highlightMap: {},
         layoutMode: 'full',
         ptzBusy: false,
-        ptzSpeed: 50,
+        fzSpeed: 50,
+        ptSpeed: 50,
       } as UiState);
     this.viewSnapshot = {
       camera: this.cameraState,

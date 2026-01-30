@@ -223,7 +223,7 @@ class ControlService {
 
   /**
    * 精确变焦值控制
-   * API: /ctrl/lens?action=zoom&value={value}
+   * API: /ctrl/lens?action=zoomstop 然后 /ctrl/set?lens_zoom_pos={value}
    */
   static async zoomValue(api, value) {
     const valueNum = parseInt(value);
@@ -231,6 +231,15 @@ class ControlService {
       throw new Error('变焦值必须是0-99999之间的数字');
     }
 
+    // 先停止 zoom 电机
+    try {
+      await this.zoomStop(api);
+    } catch (stopErr) {
+      // 如果 zoomstop 失败，记录警告但继续执行
+      console.warn('[Control Service] zoomstop failed:', stopErr.message);
+    }
+
+    // 然后设置 zoom 位置
     return await api.get(`/ctrl/set?lens_zoom_pos=${valueNum}`);
   }
 
@@ -291,19 +300,27 @@ class ControlService {
   }
 
   /**
-   * 近焦
+   * 近焦（支持浮点速度）
    * API: /ctrl/lens?action=focusnear&fspeed={speed}
    */
-  static async focusNear(api, speed = '5') {
-    return await this.focus(api, 'near', speed);
+  static async focusNear(api, speed = '0.5') {
+    const speedNum = parseFloat(speed);
+    if (isNaN(speedNum) || speedNum <= 0 || speedNum > 1.0) {
+      throw new Error('对焦速度必须是0-1.0之间的浮点数');
+    }
+    return await api.get(`/ctrl/lens?action=focusnear&fspeed=${speedNum.toFixed(2)}`);
   }
 
   /**
-   * 远焦
+   * 远焦（支持浮点速度）
    * API: /ctrl/lens?action=focusfar&fspeed={speed}
    */
-  static async focusFar(api, speed = '5') {
-    return await this.focus(api, 'far', speed);
+  static async focusFar(api, speed = '0.5') {
+    const speedNum = parseFloat(speed);
+    if (isNaN(speedNum) || speedNum <= 0 || speedNum > 1.0) {
+      throw new Error('对焦速度必须是0-1.0之间的浮点数');
+    }
+    return await api.get(`/ctrl/lens?action=focusfar&fspeed=${speedNum.toFixed(2)}`);
   }
 
   /**

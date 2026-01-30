@@ -68,7 +68,7 @@ const ptzManager = new PtzRequestManager();
 export const PTZ_PAN_RANGE = { min: -17500, max: 17500 };
 export const PTZ_TILT_RANGE = { min: -3000, max: 21000 };
 export const PTZ_ZOOM_RANGE = { min: 0, max: 4528 };
-export const PTZ_FOCUS_RANGE = { min: 0, max: 1000 };
+export const PTZ_FOCUS_RANGE = { min: -5040, max: -1196 };
 
 const PTZ_DIRECTION_DELTAS: Record<PtzDirection, { pan?: number; tilt?: number }> = {
   up: { tilt: 1 },
@@ -91,7 +91,7 @@ function deriveStep(ctx: OperationContext, payload: OperationPayload): number {
   if (Number.isFinite(explicit) && explicit > 0) {
     return explicit;
   }
-  const speed = ctx.uiState.ptzSpeed ?? 50;
+  const speed = ctx.uiState.ptSpeed ?? 50;
   const normalized = clamp(speed, 1, 100);
   return Math.max(1, Math.round((normalized / 100) * 20));
 }
@@ -129,6 +129,53 @@ export const ptzOperations: OperationDefinition[] = [
 
       return {
         cliRequest: buildUvcCliRequest('focus', clamped, { meta: extractSliderMeta(payload) }),
+      };
+    },
+  },
+  {
+    id: 'ptz.focusNear',
+    cliCommand: 'control.lens.focusnear',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      // Get fzSpeed from UI state (0-100) and normalize to 0.0-1.0
+      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
+      const normalizedSpeed = Math.max(0.01, Math.min(1.0, fzSpeed / 100.0));
+
+      return {
+        cliRequest: {
+          id: `ptz.focusNear.${Date.now()}`,
+          command: 'control',
+          args: ['control', 'lens', 'focusnear', String(normalizedSpeed.toFixed(2))],
+        }
+      };
+    },
+  },
+  {
+    id: 'ptz.focusFar',
+    cliCommand: 'control.lens.focusfar',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      // Get fzSpeed from UI state (0-100) and normalize to 0.0-1.0
+      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
+      const normalizedSpeed = Math.max(0.01, Math.min(1.0, fzSpeed / 100.0));
+
+      return {
+        cliRequest: {
+          id: `ptz.focusFar.${Date.now()}`,
+          command: 'control',
+          args: ['control', 'lens', 'focusfar', String(normalizedSpeed.toFixed(2))],
+        }
+      };
+    },
+  },
+  {
+    id: 'ptz.focusStop',
+    cliCommand: 'control.lens.focusstop',
+    async handler(ctx: OperationContext): Promise<OperationResult> {
+      return {
+        cliRequest: {
+          id: `ptz.focusStop.${Date.now()}`,
+          command: 'control',
+          args: ['control', 'lens', 'focusstop'],
+        }
       };
     },
   },

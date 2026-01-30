@@ -30,9 +30,9 @@ export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBu
     ptz: {
       pan: { value: 0, view: '0' },
       tilt: { value: 0, view: '0' },
-      zoom: { value: PTZ_ZOOM_RANGE.min, view: String(PTZ_ZOOM_RANGE.min) },    
+      zoom: { value: PTZ_ZOOM_RANGE.min, view: String(PTZ_ZOOM_RANGE.min) },
       speed: { value: 50, view: '50' },
-      focus: { value: PTZ_FOCUS_RANGE.min, view: String(PTZ_FOCUS_RANGE.min) }, 
+      focus: { value: PTZ_FOCUS_RANGE.min, view: String(PTZ_FOCUS_RANGE.min) },
     },
     exposure: {
       aeEnabled: true,
