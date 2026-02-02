@@ -11,7 +11,7 @@ import { useContainerData, useContainerState } from '../../../hooks/useContainer
 
 const TEMPERATURE_MIN_DEFAULT = 3200;
 const TEMPERATURE_MAX_DEFAULT = 6500;
-const TEMPERATURE_STEP_DEFAULT = 50;
+const TEMPERATURE_STEP_DEFAULT = 100;
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
@@ -70,7 +70,7 @@ const temperatureSliderConfig: SliderControlConfig = {
   operationId: 'whiteBalance.setTemperature',
   orientation: 'horizontal',
   size: 'medium',
-  valueRange: { min: 2000, max: 10000, step: 50 },
+  valueRange: { min: 2000, max: 10000, step: 100 },
   readValue: (view) => view.camera.whiteBalance?.temperature?.value ?? 5600,
   readValueRange: (view) => {
     const t = view.camera.whiteBalance?.temperature;
@@ -82,7 +82,7 @@ const temperatureSliderConfig: SliderControlConfig = {
   },
   formatValue: (value, range) => formatTemperature(value, range),
   enablePointerDrag: true,
-  minHoldStep: 50,
+  minHoldStep: 100,
   profileKey: 'gentle',
 };
 

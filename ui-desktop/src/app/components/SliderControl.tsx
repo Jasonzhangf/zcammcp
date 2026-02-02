@@ -88,8 +88,9 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     if (!Number.isFinite(trackValue) || max === min) {
       return 0;
     }
-    return Math.max(0, Math.min(1, (trackValue - min) / (max - min)));
-  }, [max, min, trackValue]);
+    const ratio = Math.max(0, Math.min(1, (trackValue - min) / (max - min)));
+    return config.displayInverted ? 1 - ratio : ratio;
+  }, [max, min, trackValue, config.displayInverted]);
   const sliderFillStyle = orientation === 'vertical'
     ? { height: `${sliderPercent * 100}%` }
     : { width: `${sliderPercent * 100}%` };

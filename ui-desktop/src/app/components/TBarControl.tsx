@@ -183,14 +183,35 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         isDraggingRef.current = false;
         startPendingTimeout(); // UNLOCK timer
 
-        // Force final commit
-        const finalVal = lastCommittedRef.current; // The last UI value
-        commitValue(finalVal, { stop: true });
+        // Force final commit with latest pointer position
+        if (trackRef.current) {
+            const rect = trackRef.current.getBoundingClientRect();
+            const relativeY = e.clientY - rect.top;
+            const height = rect.height;
+            const ratio = clamp(1 - (relativeY / height), 0, 1);
+            const nextRaw = min + ratio * (max - min);
+            
+            // Quantize
+            const steppedValue = min + Math.round((nextRaw - min) / baseStep) * baseStep;
+            const clampedValue = clamp(steppedValue, min, max);
+
+            // Update refs
+            rawValueRef.current = nextRaw;
+            lastCommittedRef.current = clampedValue;
+            setPendingValue(clampedValue);
+
+            // Force commit immediately (bypass throttle)
+            commitValue(clampedValue, { stop: true });
+        } else {
+            // Fallback if trackRef is missing (unlikely)
+            const finalVal = lastCommittedRef.current;
+            commitValue(finalVal, { stop: true });
+        }
 
         if (trackRef.current) {
             trackRef.current.releasePointerCapture(e.pointerId);
         }
-    }, [commitValue, startPendingTimeout]);
+    }, [commitValue, startPendingTimeout, min, max, baseStep]);
 
     // Calculate value based on Y position in track
     const updateValueFromPointer = (e: React.PointerEvent) => {
@@ -325,8 +346,12 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         }
     }, [config, store, startPendingTimeout]);
 
-    // ----------- Render Stats -----------
-    const percentage = max === min ? 0 : (trackValue - min) / (max - min);
+    // Calculate percentage for display
+    const percentage = useMemo(() => {
+        if (max === min) return 0;
+        const ratio = (trackValue - min) / (max - min);
+        return config.displayInverted ? 1 - ratio : ratio;
+    }, [max, min, trackValue, config.displayInverted]);
     // percentage 0 = bottom, 1 = top.
     // We need to position handle via CSS 'top' or 'bottom'.
     // Using 'bottom' % is easier if 0 is bottom.

@@ -95,12 +95,18 @@ function runCliCommand(payload = {}) {
         ? payload.timeoutMs
         : DEFAULT_TIMEOUT;
 
+    console.log('[CLI Service] Spawning zcam CLI process...');
+    console.log('[CLI Service] Command:', NODE_BIN, [CLI_ENTRY, ...args].join(' '));
+    console.log('[CLI Service] CWD:', CLI_ROOT);
+
     const child = spawn(NODE_BIN, [CLI_ENTRY, ...args], {
       cwd: CLI_ROOT,
       env: { ...process.env, ...payload.env },
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+
+    console.log('[CLI Service] zcam CLI process spawned, PID:', child.pid);
 
     let stdout = '';
     let stderr = '';
@@ -122,11 +128,14 @@ function runCliCommand(payload = {}) {
 
     child.on('error', (err) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      console.error('[CLI Service] zcam CLI process error:', err);
       reject(err);
     });
 
     child.on('close', (code) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      console.log('[CLI Service] zcam CLI process exited with code:', code);
+      console.log('[CLI Service] stdout length:', stdout.length, 'stderr length:', stderr.length);
       resolve({
         ok: code === 0,
         code,
@@ -235,10 +244,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && req.url === '/run') {
+      console.log('[CLI Service] Received POST /run request');
       const body = await parseBody(req);
+      console.log('[CLI Service] Parsed body, args:', body.args);
       const startedAt = Date.now();
       try {
+        console.log('[CLI Service] Calling runCliCommand...');
         const result = await runCliCommand(body);
+        console.log('[CLI Service] runCliCommand completed, ok:', result.ok);
         updateLastResult({ ...result, startedAt });
         const keys = deriveCameraKeys(body.args);
         notifyCameraState(keys).catch((err) => {
@@ -246,6 +259,7 @@ const server = http.createServer(async (req, res) => {
         });
         return respondJson(res, { ok: true, result });
       } catch (err) {
+        console.error('[CLI Service] runCliCommand error:', err);
         updateLastResult({ ok: false, error: err.message, startedAt });
         return respondJson(res, { ok: false, error: err.message }, 500);
       }
@@ -259,12 +273,22 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`[CLI Service] listening on http://${HOST}:${PORT}`);
+  console.log(`[CLI Service] PID: ${process.pid}`);
+  console.log(`[CLI Service] CLI_ROOT: ${CLI_ROOT}`);
+  console.log(`[CLI Service] CLI_ENTRY: ${CLI_ENTRY}`);
+});
+
+server.on('error', (err) => {
+  console.error('[CLI Service] Server error:', err);
+  process.exit(1);
 });
 
 process.on('SIGTERM', () => {
+  console.log('[CLI Service] Received SIGTERM, shutting down...');
   server.close(() => process.exit(0));
 });
 
 process.on('SIGINT', () => {
+  console.log('[CLI Service] Received SIGINT, shutting down...');
   server.close(() => process.exit(0));
 });

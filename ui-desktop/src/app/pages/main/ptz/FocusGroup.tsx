@@ -24,7 +24,7 @@ const focusSliderConfig: SliderControlConfig = {
 
   // Read dynamic range from camera state
   readValueRange: (view) => {
-    const focus = view.camera.ptz?.focus;
+    const focus = view.camera.ptz?.focus as any;
     return {
       min: focus?.min ?? PTZ_FOCUS_RANGE.min,
       max: focus?.max ?? PTZ_FOCUS_RANGE.max,
@@ -46,6 +46,7 @@ const focusSliderConfig: SliderControlConfig = {
     onPress: 'ptz.focusFar',
     onRelease: 'ptz.focusStop',
   },
+  displayInverted: true,
 };
 
 interface FocusGroupProps {

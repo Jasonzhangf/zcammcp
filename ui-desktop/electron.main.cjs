@@ -22,6 +22,9 @@ const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292',
 const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERVAL || '1500', 10);
 const CAMERA_STATE_SCRIPT =
   process.env.ZCAM_CAMERA_STATE_SCRIPT || path.resolve(__dirname, '..', 'service', 'camera-state', 'camera-state.cjs');
+const UVC_SERVICE_HOST = process.env.ZCAM_UVC_HOST || '127.0.0.1';
+const UVC_SERVICE_PORT = parseInt(process.env.ZCAM_UVC_PORT || '17988', 10);
+
 
 const TEST_COMMAND_TIMEOUT_MS = parseInt(process.env.ZCAM_TEST_COMMAND_TIMEOUT || '8000', 10);
 
@@ -291,14 +294,25 @@ function startCliService() {
     throw new Error(`CLI service script not found at ${CLI_SERVICE_SCRIPT}`);
   }
 
+  console.log('[Electron] Starting CLI Service process...');
+  console.log('[Electron] CLI_NODE_BIN:', CLI_NODE_BIN);
+  console.log('[Electron] CLI_SERVICE_SCRIPT:', CLI_SERVICE_SCRIPT);
+
   cliServiceProcess = spawn(CLI_NODE_BIN, [CLI_SERVICE_SCRIPT], {
     cwd: path.dirname(CLI_SERVICE_SCRIPT),
     windowsHide: true,
-    stdio: 'ignore',
+    stdio: 'inherit',  // ✅ 改为 'inherit' 让日志输出到父进程
   });
 
-  cliServiceProcess.on('exit', () => {
+  console.log('[Electron] CLI Service process spawned, PID:', cliServiceProcess.pid);
+
+  cliServiceProcess.on('exit', (code, signal) => {
+    console.log('[Electron] CLI Service process exited, code:', code, 'signal:', signal);
     cliServiceProcess = null;
+  });
+
+  cliServiceProcess.on('error', (err) => {
+    console.error('[Electron] CLI Service process error:', err);
   });
 
   return cliServiceProcess;
@@ -342,16 +356,77 @@ function requestCliService(pathname, method = 'GET', payload) {
 }
 
 async function runCliBridge(payload = {}) {
+  console.log('[Electron] runCliBridge called with args:', payload.args);
   await ensureCliService();
+
+  console.log('[Electron] Sending POST to http://127.0.0.1:6291/run');
+  console.log('[Electron] Payload:', JSON.stringify(payload, null, 2));
+
   const response = await requestCliService('/run', 'POST', {
     ...payload,
     timeoutMs: payload.timeoutMs ?? CLI_DEFAULT_TIMEOUT,
   });
+
+  console.log('[Electron] Received response from CLI Service:', response.ok ? 'OK' : 'FAILED');
+
   if (!response.ok) {
     throw new Error(response.error || 'CLI service error');
   }
   return response.result || { ok: true };
 }
+
+/**
+ * Send direct HTTP request to UsbCameraService (17988)
+ * Bypasses CLI Service for better performance
+ */
+async function sendUvcRequest(uvcRequest) {
+  const { url, method = 'GET', body } = uvcRequest;
+
+  console.log('[UVC] Sending', method, 'to', `http://${UVC_SERVICE_HOST}:${UVC_SERVICE_PORT}${url}`);
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      hostname: UVC_SERVICE_HOST,
+      port: UVC_SERVICE_PORT,
+      path: url,
+      method,
+      headers: {},
+    };
+
+    let requestBody = null;
+    if (body) {
+      requestBody = JSON.stringify(body);
+      options.headers['Content-Type'] = 'application/json';
+      options.headers['Content-Length'] = Buffer.byteLength(requestBody);
+    }
+
+    const req = http.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () => {
+        try {
+          const result = data ? JSON.parse(data) : {};
+          console.log('[UVC] Response:', result);
+          resolve(result);
+        } catch (err) {
+          console.error('[UVC] Failed to parse response:', err);
+          resolve({ ok: false, error: 'Invalid JSON response' });
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      console.error('[UVC] Request error:', err);
+      reject(err);
+    });
+
+    if (requestBody) req.write(requestBody);
+    req.end();
+  });
+}
+
 
 async function ensureCameraStateService() {
   if (!CAMERA_STATE_SCRIPT) return;
@@ -383,14 +458,24 @@ function startCameraStateService() {
     throw new Error(`Camera state script not found at ${CAMERA_STATE_SCRIPT}`);
   }
 
+  console.log('[Electron] Starting Camera State Service...');
+  console.log('[Electron] CAMERA_STATE_SCRIPT:', CAMERA_STATE_SCRIPT);
+
   cameraStateProcess = spawn(CLI_NODE_BIN, [CAMERA_STATE_SCRIPT], {
     cwd: path.dirname(CAMERA_STATE_SCRIPT),
     windowsHide: true,
-    stdio: 'ignore',
+    stdio: 'inherit',  // ✅ 改为 'inherit' 让日志输出到父进程
   });
 
-  cameraStateProcess.on('exit', () => {
+  console.log('[Electron] Camera State Service spawned, PID:', cameraStateProcess.pid);
+
+  cameraStateProcess.on('exit', (code, signal) => {
+    console.log('[Electron] Camera State Service exited, code:', code, 'signal:', signal);
     cameraStateProcess = null;
+  });
+
+  cameraStateProcess.on('error', (err) => {
+    console.error('[Electron] Camera State Service error:', err);
   });
 
   return cameraStateProcess;
@@ -514,6 +599,18 @@ ipcMain.handle('cli:run', async (_, payload) => {
   }
 });
 
+// Direct UVC request handler - bypasses CLI Service for better performance
+ipcMain.handle('uvc:request', async (_, uvcRequest) => {
+  try {
+    console.log('[UVC] Direct request:', uvcRequest);
+    return await sendUvcRequest(uvcRequest);
+  } catch (err) {
+    console.error('[UVC] request failed', err);
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
+
 ipcMain.on('test:response', (_event, message = {}) => {
   const { requestId } = message;
   if (!requestId) {
@@ -587,7 +684,7 @@ stateHost
           throw new Error(`unknown cli action: ${action}`);
       }
     });
-    stateHost.registerHandler('uiTest', async (action, payload = {}) => {       
+    stateHost.registerHandler('uiTest', async (action, payload = {}) => {
       switch (action) {
         case 'focus':
         case 'blur':

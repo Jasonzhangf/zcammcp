@@ -151,12 +151,6 @@ function projectCameraState(values) {
     const entry = values[key];
     if (!entry || typeof entry.value === 'undefined' || entry.value === null) return undefined;
 
-    // DEBUG LOGGING
-    if (key === 'iso' || key === 'shutter_time') {
-      const opts = entry.raw?.opts ?? entry.raw?.options;
-      console.log(`[CameraState] Projecting ${key}: val=${entry.value}, optsLen=${opts?.length ?? 0}`);
-    }
-
     return {
       value: entry.value,
       view: String(entry.value),
@@ -183,10 +177,25 @@ function projectCameraState(values) {
     whiteBalance: (() => {
       const wbEntry = projectValue('whitebalance');
       const mwbEntry = projectValue('mwb');
+
+      let min, max, step;
+      // Extract ranges if available in raw options
+      const rawOpts = mwbEntry?.w?.opts ?? mwbEntry?.w?.options;
+      if (rawOpts && typeof rawOpts === 'object' && !Array.isArray(rawOpts)) {
+        if (typeof rawOpts.min === 'number') min = rawOpts.min;
+        if (typeof rawOpts.max === 'number') max = rawOpts.max;
+        if (typeof rawOpts.step === 'number') step = rawOpts.step;
+      }
+
       return {
         ...wbEntry,
         awbEnabled: wbEntry?.value === 'auto',
-        temperature: mwbEntry,
+        temperature: {
+          ...mwbEntry,
+          min,
+          max,
+          step
+        },
       };
     })(),
     image: {

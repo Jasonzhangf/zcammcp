@@ -46,6 +46,10 @@ export interface SliderControlConfig {
   // When true, button operations will immediately sync with backend values
   // instead of using optimistic UI + 10s timeout
   buttonOperationsDisableOptimistic?: boolean;
+
+  // New: visually invert the slider progress bar (100% -> 0%)
+  // Useful when Min value corresponds to "Full" or "Far" conceptually, or vice versa
+  displayInverted?: boolean;
 }
 
 export interface ToggleControlConfig {
