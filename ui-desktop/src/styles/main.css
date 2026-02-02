@@ -184,15 +184,20 @@ body {
 
 .zcam-main-control-row {
   display: flex;
+  flex-direction: row;
   gap: var(--zcam-safe-gap);
   align-items: stretch;
   flex-wrap: nowrap;
   padding-right: var(--zcam-safe-gap);
+  flex: 1;
+  min-height: 0;
 }
 
 .zcam-main-control {
   display: flex;
   flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .zcam-main-control-row .zcam-card {
@@ -210,6 +215,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.zcam-main-control-ptz {
+  flex: 3 1 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.zcam-main-control-image {
+  flex: 2 1 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .zcam-studio-stack {
@@ -430,7 +447,8 @@ body {
   justify-content: center;
   margin-bottom: 4px;
   flex: 1;
-  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   padding-right: 8px;
   /* Right Drop = 4px(base) + 8px = 12px. Balance! */
 }
@@ -1550,8 +1568,9 @@ body {
 }
 
 .zcam-main-control-row>[data-container-id] {
-  flex: 0 0 calc(var(--container-width, 50) * 1%);
+  flex: 1 1 calc(var(--container-width, 50) * 1%);
   max-width: calc(var(--container-width, 50) * 1%);
+  min-width: 0;
 }
 
 .zcam-main-grid-status[data-container-id],
