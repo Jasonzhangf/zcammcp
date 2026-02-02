@@ -175,12 +175,106 @@ body {
   gap: var(--zcam-safe-gap);
 }
 
+.zcam-main-layout-wrapper {
+  display: flex;
+  flex-direction: row;
+  gap: var(--zcam-safe-gap);
+  flex: 1;
+  min-height: 0;
+}
+
+.zcam-device-list-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 150px;
+  max-width: 250px;
+}
+
+.zcam-device-list-sidebar .zcam-card {
+  height: 100%;
+}
+
+.zcam-device-list-sidebar .zcam-card-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.zcam-device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.zcam-device-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  cursor: pointer;
+  transition: all 0.15s ease-out;
+}
+
+.zcam-device-item:hover {
+  background: #202020;
+  border-color: #3a3a3a;
+}
+
+.zcam-device-item-active {
+  background: #262626;
+  border-color: #ff7a45;
+  box-shadow: 0 0 0 1px rgba(255, 122, 69, 0.3);
+}
+
+.zcam-device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.zcam-device-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: #f5f5f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zcam-device-status {
+  font-size: 9px;
+  color: #888;
+}
+
+.zcam-device-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.zcam-device-status-connected {
+  background: #52c41a;
+  box-shadow: 0 0 4px rgba(82, 196, 26, 0.5);
+}
+
+.zcam-device-status-disconnected {
+  background: #666;
+}
+
 .zcam-main-grid {
   display: flex;
   flex-direction: column;
   gap: var(--zcam-safe-gap);
   flex: 1;
+  height: 100%;
 }
+
 
 .zcam-main-control-row {
   display: flex;
@@ -189,8 +283,8 @@ body {
   align-items: stretch;
   flex-wrap: nowrap;
   padding-right: var(--zcam-safe-gap);
-  flex: 1;
-  min-height: 0;
+  height: 60%;
+  flex-shrink: 0;
 }
 
 .zcam-main-control {
