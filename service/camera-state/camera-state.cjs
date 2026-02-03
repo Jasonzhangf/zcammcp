@@ -426,6 +426,12 @@ function handleWebSocketMessage(msg) {
       state.updatedAt = Date.now();
 
       console.log(`[CameraState] WebSocket update: ${key} = ${nextValue}`);
+
+      // If Zoom changed, refresh Focus to update range (metadata)
+      if (key === 'lens_zoom_pos') {
+        console.log('[CameraState] Zoom changed, refreshing focus range...');
+        refreshKeys(['lens_focus_pos']).catch(err => console.error('[CameraState] Focus refresh failed', err));
+      }
     }
   } else {
     // Log unhandled message types that might be relevant

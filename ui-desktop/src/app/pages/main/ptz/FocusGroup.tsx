@@ -39,14 +39,13 @@ const focusSliderConfig: SliderControlConfig = {
 
   // New: +/- button operations for continuous control
   incrementOperation: {
-    onPress: 'ptz.focusNear',
-    onRelease: 'ptz.focusStop',
-  },
-  decrementOperation: {
     onPress: 'ptz.focusFar',
     onRelease: 'ptz.focusStop',
   },
-  displayInverted: true,
+  decrementOperation: {
+    onPress: 'ptz.focusNear',
+    onRelease: 'ptz.focusStop',
+  },
 };
 
 interface FocusGroupProps {

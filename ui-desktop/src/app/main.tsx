@@ -99,10 +99,29 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
       const rawValue = typeof entry.value !== 'undefined' ? entry.value : entry;
       const numeric = Number(rawValue);
       if (!Number.isFinite(numeric)) return undefined;
-      return {
+
+      const result: any = {
         value: numeric,
         view: entry.view ?? String(numeric),
       };
+
+      const extract = (key: string) => {
+        // Priority: entry[key] -> entry.raw[key] -> entry.w[key]
+        if (typeof entry[key] === 'number') return entry[key];
+        if (entry.raw && typeof entry.raw[key] === 'number') return entry.raw[key];
+        if (entry.w && typeof entry.w[key] === 'number') return entry.w[key];
+        return undefined;
+      };
+
+      const min = extract('min');
+      const max = extract('max');
+      const step = extract('step');
+
+      if (min !== undefined) result.min = min;
+      if (max !== undefined) result.max = max;
+      if (step !== undefined) result.step = step;
+
+      return result;
     };
     const pan = mapEntry(camera.ptz.pan);
     if (pan) next.ptz.pan = pan;
@@ -110,7 +129,10 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
     if (tilt) next.ptz.tilt = tilt;
     const zoom = mapEntry(camera.ptz.zoom);
     if (zoom) next.ptz.zoom = zoom;
-    const focus = mapEntry(camera.ptz.focus);
+
+    // Check both standard ptz.focus and raw lens_focus_pos
+    const rawFocus = camera.ptz.focus ?? camera['lens_focus_pos'];
+    const focus = mapEntry(rawFocus);
     if (focus) next.ptz.focus = focus;
   }
 

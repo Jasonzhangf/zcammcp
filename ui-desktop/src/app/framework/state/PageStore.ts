@@ -4,11 +4,11 @@
 export interface CameraState {
   // PTZ 区: 后续可扩展 pan/tilt 等字段
   ptz?: {
-    pan?: { value: number; view: string };
-    tilt?: { value: number; view: string };
-    zoom?: { value: number; view: string };
-    speed?: { value: number; view: string };
-    focus?: { value: number; view: string };
+    pan?: { value: number; view: string; min?: number; max?: number; step?: number };
+    tilt?: { value: number; view: string; min?: number; max?: number; step?: number };
+    zoom?: { value: number; view: string; min?: number; max?: number; step?: number };
+    speed?: { value: number; view: string; min?: number; max?: number; step?: number };
+    focus?: { value: number; view: string; min?: number; max?: number; step?: number };
   };
 
   // 曝光设置
@@ -49,7 +49,14 @@ export interface CameraState {
 function mergeCameraStates(current: CameraState, next: CameraState): CameraState {
   const merged: CameraState = { ...current };
   if (next.ptz) {
-    merged.ptz = { ...(current.ptz ?? {}), ...next.ptz };
+    merged.ptz = { ...(current.ptz ?? {}) };
+    // Deep merge each axis to preserve min/max/step if missing in update
+    const keys = Object.keys(next.ptz) as Array<keyof typeof next.ptz>;
+    for (const key of keys) {
+      if (next.ptz[key]) {
+        merged.ptz[key] = { ...(merged.ptz[key] ?? {}), ...next.ptz[key] };
+      }
+    }
   }
   if (next.exposure) {
     merged.exposure = { ...(current.exposure ?? {}), ...next.exposure };
