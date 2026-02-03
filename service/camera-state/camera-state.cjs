@@ -28,6 +28,11 @@ const DEFAULT_KEYS = (
 const state = {
   values: {},
   updatedAt: null,
+  devices: {
+    activeDeviceId: null,
+    list: [],
+    updatedAt: null,
+  },
 };
 
 let pollingTimer = null;
@@ -82,6 +87,26 @@ async function fetchProperty(key) {
     data = { raw: text };
   }
   return normalizeValue(key, data);
+}
+
+async function fetchDeviceList() {
+  try {
+    const url = new URL('/usbvideoctrl', UVC_BASE_URL);
+    url.searchParams.set('action', 'devices');
+    const res = await fetchImpl(url.toString(), { method: 'GET' });
+    const data = await res.json();
+
+    if (data.success) {
+      state.devices = {
+        activeDeviceId: data.activeDeviceId,
+        list: data.devices || [],
+        updatedAt: Date.now(),
+      };
+      console.log('[CameraState] Device list updated:', state.devices.list.length, 'devices');
+    }
+  } catch (err) {
+    console.error('[CameraState] Failed to fetch device list:', err.message);
+  }
 }
 
 function normalizeValue(key, payload) {
@@ -143,6 +168,7 @@ function getStateSnapshot() {
     updatedAt: state.updatedAt,
     values: state.values,
     camera: projectCameraState(state.values),
+    devices: state.devices,
   };
 }
 
@@ -296,7 +322,10 @@ function startServer() {
 
 async function initialRefresh() {
   try {
-    await refreshKeys(DEFAULT_KEYS);
+    await Promise.all([
+      refreshKeys(DEFAULT_KEYS),
+      fetchDeviceList(),
+    ]);
     console.log('[CameraState] initial refresh completed');
   } catch (err) {
     console.error('[CameraState] initial refresh failed', err);
@@ -403,6 +432,14 @@ function handleWebSocketMessage(msg) {
     if (msg.key === 'speed' || msg.what?.includes('Speed')) {
       console.log('[CameraState] Potential speed message ignored:', JSON.stringify(msg));
     }
+  }
+
+  // Handle device list changes
+  if (msg.what === 'deviceListChanged') {
+    console.log('[CameraState] Device list changed, refreshing...');
+    fetchDeviceList().catch(err => {
+      console.error('[CameraState] Failed to refresh device list:', err);
+    });
   }
 }
 

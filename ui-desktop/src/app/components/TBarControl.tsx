@@ -118,7 +118,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
     // Backend Commit Logic
     const commitValue = useCallback(
         (next: number, meta?: SliderOperationMeta) => {
-            if (disabled) return;
+            if (disabled && !isDraggingRef.current && !meta?.stop) return;
             if (config.onValueChange) {
                 config.onValueChange(next, store);
                 return;
@@ -130,6 +130,16 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             if (meta) payload.params = { sliderMeta: meta };
 
             lastCmdTimeRef.current = Date.now();
+
+            // Special handling for Zoom: Send Stop before Set
+            // This ensures that any continuous movement is halted before applying a new absolute position,
+            // which can help with command stability on some cameras.
+            if (config.kind === 'ptz.zoom') {
+                void store.runOperation(config.nodePath, config.kind, 'lens.zoomStop', {}).catch(e => {
+                    console.error('[TBarControl] zoomStop failed:', e);
+                });
+            }
+
             void store.runOperation(config.nodePath, config.kind, config.operationId, payload).catch((e) => {
                 console.error('[TBarControl] runOperation failed:', e);
             });
@@ -181,37 +191,25 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         if (!isDraggingRef.current) return;
         e.preventDefault();
         isDraggingRef.current = false;
-        startPendingTimeout(); // UNLOCK timer
 
-        // Force final commit with latest pointer position
-        if (trackRef.current) {
-            const rect = trackRef.current.getBoundingClientRect();
-            const relativeY = e.clientY - rect.top;
-            const height = rect.height;
-            const ratio = clamp(1 - (relativeY / height), 0, 1);
-            const nextRaw = min + ratio * (max - min);
-            
-            // Quantize
-            const steppedValue = min + Math.round((nextRaw - min) / baseStep) * baseStep;
-            const clampedValue = clamp(steppedValue, min, max);
+        // Simplified Logic: Directly use the last committed value
+        const finalVal = lastCommittedRef.current;
+        console.log('[TBarControl] handlePointerUp releasing:', { finalVal, disabled });
 
-            // Update refs
-            rawValueRef.current = nextRaw;
-            lastCommittedRef.current = clampedValue;
-            setPendingValue(clampedValue);
+        // 1. Send command immediately
+        commitValue(finalVal, { stop: true });
 
-            // Force commit immediately (bypass throttle)
-            commitValue(clampedValue, { stop: true });
-        } else {
-            // Fallback if trackRef is missing (unlikely)
-            const finalVal = lastCommittedRef.current;
-            commitValue(finalVal, { stop: true });
-        }
+        // 2. Start 10s cooldown for UI sync
+        startPendingTimeout();
 
         if (trackRef.current) {
-            trackRef.current.releasePointerCapture(e.pointerId);
+            try {
+                trackRef.current.releasePointerCapture(e.pointerId);
+            } catch (err) {
+                // Ignore capture release errors
+            }
         }
-    }, [commitValue, startPendingTimeout, min, max, baseStep]);
+    }, [commitValue, startPendingTimeout, disabled]);
 
     // Calculate value based on Y position in track
     const updateValueFromPointer = (e: React.PointerEvent) => {
@@ -432,6 +430,21 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                                 style={{ bottom: `${m}%` }}
                             />
                         ))}
+
+                        {/* Value Display (Centered in Track) using standard slider styles */}
+                        <div style={{
+                            position: 'absolute',
+                            inset: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            pointerEvents: 'none',
+                            zIndex: 1
+                        }}>
+                            <span className="zcam-slider-track-label-value zcam-slider-track-label-empty">
+                                {Math.round(trackValue)}
+                            </span>
+                        </div>
 
                         {/* Handle Pivot Container positioned by percentage */}
                         <div

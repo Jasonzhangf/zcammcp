@@ -181,6 +181,10 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
     }
   }
 
+  if (snapshot.devices) {
+    next.devices = snapshot.devices;
+  }
+
   return Object.keys(next).length > 0 ? next : null;
 }
 

@@ -33,6 +33,16 @@ export interface CameraState {
     hue?: number;
     gamma?: number;
   };
+  // 设备列表
+  devices?: {
+    activeDeviceId: string | null;
+    list: Array<{
+      id: string;
+      name: string;
+      serialPort: string;
+      active: boolean;
+    }>;
+  };
 }
 
 
@@ -58,6 +68,9 @@ function mergeCameraStates(current: CameraState, next: CameraState): CameraState
   }
   if (next.image) {
     merged.image = { ...(current.image ?? {}), ...next.image };
+  }
+  if (next.devices) {
+    merged.devices = next.devices;
   }
   return merged;
 }
