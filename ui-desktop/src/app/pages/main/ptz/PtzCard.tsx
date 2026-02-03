@@ -284,9 +284,7 @@ export function PtzCard() {
   );
 
   const stopHold = useCallback(() => {
-    if (holdDirectionRef.current) {
-      void store.runOperation(holdPathRef.current || 'zcam.camera.pages.main.ptz', 'ptz.stop', 'ptz.stop', {});
-    }
+    void store.runOperation(holdPathRef.current || 'zcam.camera.pages.main.ptz', 'ptz.stop', 'ptz.stop', {});
     holdDirectionRef.current = null;
     holdPathRef.current = null;
     holdTickRef.current = 0;

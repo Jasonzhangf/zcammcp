@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 export type PtzDirection8 =
     | 'up'
@@ -43,6 +43,20 @@ export function PtzCircularControl({ onStartMove, onStopMove, onJoystickMove, di
     const [activeDirection, setActiveDirection] = useState<PtzDirection8 | 'center' | null>(null);
     const [joystickOffset, setJoystickOffset] = useState({ x: 0, y: 0 });
     const svgRef = useRef<SVGSVGElement>(null);
+    const joystickStopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const clearJoystickStopTimeout = useCallback(() => {
+        if (joystickStopTimeoutRef.current != null) {
+            clearTimeout(joystickStopTimeoutRef.current);
+            joystickStopTimeoutRef.current = null;
+        }
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            clearJoystickStopTimeout();
+        };
+    }, [clearJoystickStopTimeout]);
 
     // Helpers to create annular sectors
     const createSectorPath = (startAngle: number, endAngle: number, innerRadius: number, outerRadius: number) => {
@@ -118,8 +132,9 @@ export function PtzCircularControl({ onStartMove, onStopMove, onJoystickMove, di
     }, [activeDirection, onJoystickMove]);
 
     const handlePointerDown = useCallback((dir: PtzDirection8 | 'center', e: React.PointerEvent) => {
-        if (disabled) return;
+        // if (disabled) return;
         e.preventDefault();
+        clearJoystickStopTimeout();
         try {
             e.currentTarget.setPointerCapture(e.pointerId);
         } catch (err) {
@@ -128,12 +143,11 @@ export function PtzCircularControl({ onStartMove, onStopMove, onJoystickMove, di
         setActiveDirection(dir);
         if (dir === 'center') {
             // Start Joystick mode
-            // We do NOT call onStopMove immediately here, we might want to start sending 0,0 or just wait for move
-            if (onJoystickMove) onJoystickMove(0, 0);
+            // Do not send any stop/joystick command on press; only act on move/up
         } else {
             onStartMove(dir);
         }
-    }, [disabled, onStartMove, onJoystickMove]);
+    }, [clearJoystickStopTimeout, disabled, onStartMove, onJoystickMove]);
 
     const handlePointerUp = useCallback((e: React.PointerEvent) => {
         e.preventDefault();
@@ -148,12 +162,17 @@ export function PtzCircularControl({ onStartMove, onStopMove, onJoystickMove, di
         if (activeDirection === 'center') {
             // End Joystick mode
             setJoystickOffset({ x: 0, y: 0 });
-            if (onJoystickMove) onJoystickMove(0, 0);
+            clearJoystickStopTimeout();
+            onStopMove();
+            joystickStopTimeoutRef.current = setTimeout(() => {
+                onStopMove();
+            }, 1200);
         } else {
+            clearJoystickStopTimeout();
             onStopMove();
         }
         setActiveDirection(null);
-    }, [activeDirection, onStopMove, onJoystickMove]);
+    }, [activeDirection, clearJoystickStopTimeout, onStopMove, onJoystickMove]);
 
     return (
         <div className={`zcam-ptz-circular-control ${className}`} style={{
