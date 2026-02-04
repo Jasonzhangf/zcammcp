@@ -612,16 +612,16 @@ body {
   justify-content: center;
   min-height: 0;
   max-width: 60px;
-  /* Match thickness of horizontal sliders (e.g. Brightness ~32px) */
-  --zcam-slider-vertical-width: 32px;
+  /* Match PT Speed slider width (size: small = 44px) */
+  --zcam-slider-vertical-width: 48px;
 }
 
 /* Force vertical sliders within PTZ column to fill available height and match width */
 .zcam-ptz-slider-column .zcam-slider-wrap,
 .zcam-ptz-slider-column .zcam-tbar-wrap {
   height: 100%;
-  /* Force override width here because .zcam-slider-wrap resets it */
-  --zcam-slider-vertical-width: 40px;
+  /* Match PT Speed slider width (size: small = 44px) */
+  --zcam-slider-vertical-width: 48px;
 }
 
 
