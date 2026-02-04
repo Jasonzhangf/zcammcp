@@ -13,13 +13,13 @@ export const focusGroupNode: ContainerNode = {
   children: [],
 };
 
-const focusSliderConfig: SliderControlConfig = {
+export const focusSliderConfig: SliderControlConfig = {
   nodePath: 'zcam.camera.pages.main.ptz.focus',
   kind: 'ptz.focus',
   label: 'Focus',
   operationId: 'ptz.setFocus', // For slider drag
-  orientation: 'horizontal',
-  size: 'medium',
+  orientation: 'vertical',
+  size: 'small',
   valueRange: { min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 1 },
 
   // Read dynamic range from camera state
@@ -36,6 +36,9 @@ const focusSliderConfig: SliderControlConfig = {
   formatValue: (value) => String(value),
   enablePointerDrag: true,
   profileKey: 'gentle',
+  hideHeaderValue: true,
+  focusGroupId: 'zcam.camera.pages.main.ptz',
+  keyAcceptWhenBlurred: true,
 
   // New: +/- button operations for continuous control
   incrementOperation: {
@@ -46,6 +49,7 @@ const focusSliderConfig: SliderControlConfig = {
     onPress: 'ptz.focusNear',
     onRelease: 'ptz.focusStop',
   },
+  buttonOperationsDisableOptimistic: true,
 };
 
 interface FocusGroupProps {

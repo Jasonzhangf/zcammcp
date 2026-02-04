@@ -7,7 +7,7 @@ import { PtzCircularControl, PtzDirection8 } from '../../../components/PtzCircul
 import type { SliderControlConfig } from '../../../framework/ui/ControlConfig.js';
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
-import { focusGroupNode, FocusGroup } from './FocusGroup.js';
+import { focusGroupNode, FocusGroup, focusSliderConfig } from './FocusGroup.js';
 import { PTZ_FOCUS_RANGE, PTZ_PAN_RANGE, PTZ_TILT_RANGE, PTZ_ZOOM_RANGE } from '../../../app/operations/ptzOperations.js';
 import {
   Direction,
@@ -58,7 +58,7 @@ const zoomSliderConfig: SliderControlConfig = {
 const ptSpeedSliderConfig: SliderControlConfig = {
   nodePath: 'zcam.camera.pages.main.ptz.ptSpeed',
   kind: 'ptz.ptSpeed',
-  label: 'SPEED',
+  label: 'PT SPEED',
   size: 'small',
   orientation: 'vertical',
   valueRange: { min: 0, max: 100, step: 1 },
@@ -77,7 +77,7 @@ const ptSpeedSliderConfig: SliderControlConfig = {
 const fzSpeedSliderConfig: SliderControlConfig = {
   nodePath: 'zcam.camera.pages.main.ptz.fzSpeed',
   kind: 'ptz.fzSpeed',
-  label: 'Speed',
+  label: 'FZ SPEED',
   size: 'small',
   orientation: 'vertical',
   valueRange: { min: 0, max: 100, step: 1 },
@@ -179,8 +179,7 @@ export function PtzCard() {
   const tiltTargetRef = useRef<number>(tiltVal);
   const padFocusRef = useRef<HTMLDivElement | null>(null);
   const focusManager = useFocusManager();
-  const ptzBusy = Boolean(view.ui.ptzBusy);
-  const isInteractionDisabled = controlsLocked || ptzBusy;
+  const isInteractionDisabled = controlsLocked;
 
   useFocusableControl(padFocusRef, {
     nodeId: 'zcam.camera.pages.main.ptz.controlPad',
@@ -433,65 +432,53 @@ export function PtzCard() {
       </div>
       <div className="zcam-card-body">
         <div className="zcam-ptz-layout" data-path="zcam.camera.pages.main.ptz.layout">
-          <div className="zcam-ptz-pad-wrapper" data-path="zcam.camera.pages.main.ptz.controlPad">
-            <div
-              className="zcam-ptz-pad zcam-focusable-control"
-              tabIndex={controlsLocked ? -1 : 0}
-              data-focus-group="zcam.camera.pages.main.ptz"
-              onKeyDown={handlePadKeyDown}
-              onKeyUp={handlePadKeyUp}
-              onBlur={stopHold}
-              ref={padFocusRef}
-              style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}
-            >
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'stretch', minHeight: 0 }}>
-                {/* Pad Center */}
-                <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <PtzCircularControl
-                    onStartMove={handleCircularMove}
-                    onStopMove={stopHold}
-                    onJoystickMove={handleJoystickMove}
-                    disabled={isInteractionDisabled}
-                    style={{ width: '220px', height: '220px' }}
-                  />
-                </div>
+          {/* PT Area */}
+          <div className="zcam-card zcam-ptz-area" data-path="zcam.camera.pages.main.ptz.ptArea">
+            <div className="zcam-card-header zcam-ptz-area-header">
+              <span className="zcam-card-title">PT</span>
+            </div>
+            <div className="zcam-card-body zcam-ptz-area-body">
+              {/* PT Control Area */}
+              <div
+                className="zcam-ptz-control-area zcam-focusable-control"
+                tabIndex={controlsLocked ? -1 : 0}
+                data-focus-group="zcam.camera.pages.main.ptz"
+                onKeyDown={handlePadKeyDown}
+                onKeyUp={handlePadKeyUp}
+                onBlur={stopHold}
+                ref={padFocusRef}
+              >
+                {/* Center: Circular Control + Home Button */}
+                <div className="zcam-ptz-center-column">
+                  <div className="zcam-ptz-circular-wrapper">
+                    <PtzCircularControl
+                      onStartMove={handleCircularMove}
+                      onStopMove={stopHold}
+                      onJoystickMove={handleJoystickMove}
+                      disabled={isInteractionDisabled}
+                      style={{ width: '220px', height: '220px' }}
+                    />
+                  </div>
 
-                {/* Right Side Controls: Home + Speed Slider */}
-                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-end', marginLeft: 'auto', gap: '8px' }}>
-                  {/* Home Button */}
                   <div
                     className="zcam-ptz-home-btn"
                     onClick={() => void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {})}
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '6px',
-                      backgroundColor: '#333',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: isInteractionDisabled ? 'default' : 'pointer',
-                      opacity: isInteractionDisabled ? 0.5 : 1,
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                      border: '1px solid #444',
-                    }}
                     title="Home"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="#ccc">
                       <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                     </svg>
                   </div>
+                </div>
 
-                  {/* Speed Slider - Tall Vertical */}
-                  <div style={{ height: '140px', display: 'flex', flexDirection: 'column', alignItems: 'center', transform: 'translateY(-120px)' }}>
-                    <div style={{ flex: 1, display: 'flex' }}>
-                      <SliderControl config={ptSpeedSliderConfig} disabled={isInteractionDisabled} />
-                    </div>
-                  </div>
+                {/* Right: PT Speed Slider */}
+                <div className="zcam-ptz-speed-slider">
+                  <SliderControl config={ptSpeedSliderConfig} disabled={isInteractionDisabled} />
                 </div>
               </div>
 
-              <div className="zcam-ptz-status-grid" data-path="zcam.camera.pages.main.ptz.statusGrid" style={{ marginTop: 'auto' }}>
+              {/* PT Status Grid */}
+              <div className="zcam-ptz-status-grid">
                 <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Pan</span>
                   <span className="zcam-ptz-status-value">{panDisplay}</span>
@@ -500,28 +487,43 @@ export function PtzCard() {
                   <span className="zcam-ptz-status-label">Tilt</span>
                   <span className="zcam-ptz-status-value">{tiltDisplay}</span>
                 </div>
-                <div className="zcam-ptz-status-cell">
-                  <span className="zcam-ptz-status-label">Zoom</span>
-                  <span className="zcam-ptz-status-value">{zoomDisplay}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* FZ Area */}
+          <div className="zcam-card zcam-ptz-area" data-path="zcam.camera.pages.main.ptz.fzArea">
+            <div className="zcam-card-header zcam-ptz-area-header">
+              <span className="zcam-card-title">FZ</span>
+            </div>
+            <div className="zcam-card-body zcam-ptz-area-body">
+              {/* FZ Sliders */}
+              <div className="zcam-ptz-sliders">
+                <div className="zcam-ptz-slider-column">
+                  <SliderControl config={focusSliderConfig} disabled={isInteractionDisabled} />
                 </div>
+                <div className="zcam-ptz-slider-column">
+                  <TBarControl config={zoomSliderConfig} disabled={isInteractionDisabled} styleVariant="skeuomorphic" />
+                </div>
+                <div className="zcam-ptz-slider-column">
+                  <SliderControl config={fzSpeedSliderConfig} disabled={isInteractionDisabled} />
+                </div>
+              </div>
+
+              {/* FZ Status Grid */}
+              <div className="zcam-ptz-status-grid">
                 <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Focus</span>
                   <span className="zcam-ptz-status-value">{focusDisplay}</span>
                 </div>
+                <div className="zcam-ptz-status-cell">
+                  <span className="zcam-ptz-status-label">Zoom</span>
+                  <span className="zcam-ptz-status-value">{zoomDisplay}</span>
+                </div>
               </div>
             </div>
           </div>
-          <div className="zcam-ptz-sliders" data-path="zcam.camera.pages.main.ptz.sliders" style={{ gap: '12px' }}>
-            <div className="zcam-ptz-slider-column" style={{ height: '374px' }}>
-              <TBarControl config={zoomSliderConfig} disabled={isInteractionDisabled} styleVariant="skeuomorphic" />
-            </div>
-            <div className="zcam-ptz-slider-column" style={{ height: '374px' }}>
-              <SliderControl config={fzSpeedSliderConfig} disabled={isInteractionDisabled} />
-            </div>
-          </div>
         </div>
-
-        <FocusGroup disabled={isInteractionDisabled} />
       </div>
     </div>
   );

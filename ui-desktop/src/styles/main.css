@@ -533,8 +533,8 @@ body {
 
 .zcam-ptz-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  /* Auto width for sliders column */
+  grid-template-columns: 6fr 4fr;
+  /* 6:4 ratio for PT:FZ */
   column-gap: 12px;
   /* Left Drop = 12px */
   align-items: stretch;
@@ -595,22 +595,23 @@ body {
 }
 
 .zcam-ptz-sliders {
+  flex: 1;
   display: flex;
   flex-direction: row;
   align-items: stretch;
-  justify-content: center;
-  gap: 8px;
-  height: 100%;
-  min-width: 0;
+  justify-content: space-evenly;
+  min-height: 0;
+  padding: 0 8px;
 }
 
 .zcam-ptz-slider-column {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1 1 0;
-  height: 100%;
+  min-height: 0;
+  max-width: 60px;
   /* Match thickness of horizontal sliders (e.g. Brightness ~32px) */
   --zcam-slider-vertical-width: 32px;
 }
@@ -887,30 +888,105 @@ body {
   display: none;
 }
 
-.zcam-ptz-pad-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: stretch;
+
+
+
+
+.zcam-ptz-area-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #ff7a45;
+  margin-bottom: 8px;
+  text-align: center;
 }
 
-.zcam-ptz-pad {
+/* PTZ Area Card Structure */
+.zcam-ptz-area {
+  padding: 8px;
+  gap: 6px;
+}
+
+.zcam-ptz-area-header {
+  padding: 0;
+  border: none;
+  margin-bottom: 8px;
+}
+
+.zcam-ptz-area-header .zcam-card-title {
+  font-size: 10px;
+  width: 100%;
+  display: block;
+}
+
+.zcam-ptz-area-body {
+  gap: 8px;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid #2f2f2f;
-  background: #111;
-  min-width: 0;
-  width: 100%;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
-  outline: none;
-  transition: border-color 0.15s ease-out, box-shadow 0.15s ease-out;
 }
 
-.zcam-ptz-pad:focus-visible {
-  border-color: #ff6b35;
-  box-shadow: 0 0 0 1px rgba(255, 107, 53, 0.8), 0 0 12px rgba(255, 107, 53, 0.4);
+/* PT Control Area */
+.zcam-ptz-control-area {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 0;
+}
+
+.zcam-ptz-circular-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.zcam-ptz-center-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 48px;
+  justify-content: flex-end;
+  padding-bottom: 36px;
+}
+
+.zcam-ptz-home-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background-color: #333;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  border: 1px solid #444;
+}
+
+.zcam-ptz-home-btn:hover {
+  background-color: #444;
+  border-color: #ff7a45;
+}
+
+.zcam-ptz-home-btn[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.zcam-ptz-speed-slider {
+  height: 400px;
+  display: flex;
+  align-items: center;
+  max-width: 60px;
+  margin-top: 20px;
+}
+
+/* Override default 180px height for PT Speed slider track */
+.zcam-ptz-speed-slider .zcam-slider-orientation-vertical .zcam-slider-track {
+  height: 260px;
 }
 
 .zcam-ptz-status-grid {
@@ -936,7 +1012,7 @@ body {
 }
 
 .zcam-ptz-status-value {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #f0f0f0;
 }
