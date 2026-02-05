@@ -22,7 +22,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      -webkit-app-region: drag;
+      /* 禁用原生拖拽，使用自定义 JS 拖拽 */
+      -webkit-app-region: no-drag;
       user-select: none;
     }
 
@@ -45,6 +46,8 @@
       justify-content: center;
       box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
       cursor: pointer;
+      /* 确保没有拖拽区域 */
+      -webkit-app-region: no-drag;
     }
 
     .ball-box img {
@@ -58,22 +61,104 @@
 
 <body>
   <div id="ball-root">
-    <div class="ball-box" ondblclick="window.electronAPI?.restoreFromBall?.()">
+    <div class="ball-box">
       <img src="../logo.png" alt="ZCAM" draggable="false" />
     </div>
   </div>
   <script>
-    // 仅负责双击恢复，不做 Dev 上报，保持实现简单
+    // 支持自定义拖拽和双击恢复
     (function () {
       if (!window.electronAPI) {
         console.error('[Ball] electronAPI not injected');
         return;
       }
       var box = document.querySelector('.ball-box');
-      if (!box) return;
-      box.addEventListener('dblclick', function () {
-        window.electronAPI.restoreFromBall && window.electronAPI.restoreFromBall();
+      if (!box) {
+        console.error('[Ball] .ball-box not found');
+        return;
+      }
+
+      var lastClickTime = 0;
+      var isDragging = false;
+      var dragStartX = 0;
+      var dragStartY = 0;
+      var DRAG_THRESHOLD = 3;
+      var DOUBLE_CLICK_DELAY = 400; // ms
+
+      box.addEventListener('mousedown', function (e) {
+        // console.log('[Ball] mousedown');
+        // 只有左键触发拖拽
+        if (e.button !== 0) return;
+
+        isDragging = false;
+        dragStartX = e.screenX; // 使用 screenX/Y 计算绝对移动
+        dragStartY = e.screenY;
       });
+
+      document.addEventListener('mousemove', function (e) {
+        // 只有左键按下时处理
+        if (e.buttons === 1) {
+          var deltaXScreen = e.screenX - dragStartX;
+          var deltaYScreen = e.screenY - dragStartY;
+          var movement = Math.abs(deltaXScreen) + Math.abs(deltaYScreen);
+
+          if (!isDragging && movement > DRAG_THRESHOLD) {
+            isDragging = true;
+            // console.log('[Ball] drag started');
+          }
+
+          if (isDragging) {
+            // 使用 movementX/Y (在新浏览器中支持) 
+            // 注意：electron 的 movementX 是这一帧相对于上一帧的位移
+            var moveX = e.movementX;
+            var moveY = e.movementY;
+
+            if (moveX !== 0 || moveY !== 0) {
+              if (window.electronAPI.moveBall) {
+                window.electronAPI.moveBall({ x: moveX, y: moveY });
+              }
+            }
+          }
+        }
+      });
+
+      // 添加 mouseup 处理拖拽结束状态，防止拖拽后释放变为点击
+      document.addEventListener('mouseup', function (e) {
+        // 在 mouseup 时不做重置，让 click 事件先判断
+        // 实际上 click 事件会在 mouseup 后触发，所以这里不需要做太多
+        // 可以在 click 后重置
+        setTimeout(function () {
+          isDragging = false;
+        }, 50);
+      });
+
+      box.addEventListener('click', function (e) {
+        // console.log('[Ball] click, isDragging:', isDragging);
+
+        if (isDragging) {
+          // console.log('[Ball] click ignored (was dragging)');
+          isDragging = false;
+          return;
+        }
+
+        var now = Date.now();
+        var timeSince = now - lastClickTime;
+
+        if (timeSince < DOUBLE_CLICK_DELAY && timeSince > 0) {
+          console.log('[Ball] DOUBLE CLICK - RESTORE UI');
+          e.preventDefault();
+          e.stopPropagation();
+          lastClickTime = 0;
+
+          if (window.electronAPI.restoreFromBall) {
+            window.electronAPI.restoreFromBall();
+          }
+        } else {
+          lastClickTime = now;
+        }
+      });
+
+      console.log('[Ball] Custom drag & dblclick handler loaded');
     })();
   </script>
 </body>

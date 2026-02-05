@@ -243,6 +243,13 @@ function restoreFromBall() {
   return { ok: true, state };
 }
 
+function moveBall(payload) {
+  if (!ballWindow) return;
+  const { x, y } = payload;
+  const [currentX, currentY] = ballWindow.getPosition();
+  ballWindow.setPosition(currentX + x, currentY + y);
+}
+
 function toggleWindowSize() {
   const current = windowState.layoutSize || 'normal';
   const nextLayout = current === 'normal' ? 'studio' : 'normal';
@@ -559,6 +566,7 @@ ipcMain.handle('window:close', () => app.quit());
 ipcMain.handle('window:shrinkToBall', () => shrinkToBall());
 
 ipcMain.handle('window:restoreFromBall', () => restoreFromBall());
+ipcMain.handle('window:moveBall', (_, payload) => moveBall(payload));
 
 ipcMain.handle('window:toggleSize', () => toggleWindowSize());
 
@@ -727,6 +735,15 @@ app.on('before-quit', () => {
       // ignore
     }
     cliServiceProcess = null;
+  }
+
+  // Shutdown UVC Service
+  if (UVC_SERVICE_PORT) {
+    console.log('[App] Requesting UVC Service shutdown...');
+    // Use the comprehensive request helper
+    sendUvcRequest({ url: '/usbvideoctrl?action=shutdown', method: 'GET' })
+      .then(() => console.log('[App] UVC Service shutdown signal sent'))
+      .catch(err => console.log('[App] UVC shutdown warning (expected if down):', err.message));
   }
 });
 
