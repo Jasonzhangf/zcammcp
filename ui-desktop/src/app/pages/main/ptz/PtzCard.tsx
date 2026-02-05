@@ -435,7 +435,7 @@ export function PtzCard() {
           {/* PT Area */}
           <div className="zcam-card zcam-ptz-area" data-path="zcam.camera.pages.main.ptz.ptArea">
             <div className="zcam-card-header zcam-ptz-area-header">
-              <span className="zcam-card-title">PT</span>
+              <span className="zcam-card-title">Pan/Tilt</span>
             </div>
             <div className="zcam-card-body zcam-ptz-area-body">
               {/* PT Control Area */}
@@ -494,7 +494,7 @@ export function PtzCard() {
           {/* FZ Area */}
           <div className="zcam-card zcam-ptz-area" data-path="zcam.camera.pages.main.ptz.fzArea">
             <div className="zcam-card-header zcam-ptz-area-header">
-              <span className="zcam-card-title">FZ</span>
+              <span className="zcam-card-title">Focus/Zoom</span>
             </div>
             <div className="zcam-card-body zcam-ptz-area-body">
               {/* FZ Sliders */}

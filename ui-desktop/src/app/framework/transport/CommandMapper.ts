@@ -183,7 +183,7 @@ export class CommandMapper {
 
             if (mode === 'manual' && type === 'kelvin') {
                 return {
-                    url: `/ctrl/set?whitebalance=manual&mwb=${value}`,
+                    url: `/ctrl/set?mwb=${value}`,
                     method: 'GET',
                 };
             }
