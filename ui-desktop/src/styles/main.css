@@ -977,16 +977,15 @@ body {
 }
 
 .zcam-ptz-speed-slider {
-  height: 400px;
   display: flex;
   align-items: center;
-  max-width: 60px;
-  margin-top: 20px;
+  justify-content: center;
+  width: 100%;
+  padding: 0 8px;
 }
 
-/* Override default 180px height for PT Speed slider track */
-.zcam-ptz-speed-slider .zcam-slider-orientation-vertical .zcam-slider-track {
-  height: 260px;
+.zcam-ptz-speed-slider .zcam-slider-wrap {
+  max-width: 260px;
 }
 
 .zcam-ptz-status-grid {

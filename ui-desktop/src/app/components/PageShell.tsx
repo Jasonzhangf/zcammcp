@@ -20,7 +20,7 @@ export function PageShell({ scene }: { scene: SceneConfig }) {
       <div className="zcam-header" data-path="ui.window.header">
         <div className="zcam-header-left">
           <div className="zcam-badge">Z</div>
-          <div className="zcam-title">ZCAM 閻╁憡婧€閹貉冨煑</div>
+          <div className="zcam-title">ZCAM 相机控制</div>
         </div>
         <div className="zcam-header-right">
           <DebugControls />

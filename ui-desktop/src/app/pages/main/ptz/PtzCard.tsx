@@ -60,7 +60,7 @@ const ptSpeedSliderConfig: SliderControlConfig = {
   kind: 'ptz.ptSpeed',
   label: 'PT SPEED',
   size: 'small',
-  orientation: 'vertical',
+  orientation: 'horizontal',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.ui.ptSpeed ?? 50,
   formatValue: (value) => String(Math.round(value)),
@@ -79,7 +79,7 @@ const fzSpeedSliderConfig: SliderControlConfig = {
   kind: 'ptz.fzSpeed',
   label: 'FZ SPEED',
   size: 'small',
-  orientation: 'vertical',
+  orientation: 'horizontal',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.ui.fzSpeed ?? 50,
   formatValue: (value) => String(Math.round(value)),
@@ -586,11 +586,6 @@ export function PtzCard() {
                     </svg>
                   </div>
                 </div>
-
-                {/* Right: PT Speed Slider */}
-                <div className="zcam-ptz-speed-slider">
-                  <SliderControl config={ptSpeedSliderConfig} disabled={isInteractionDisabled} />
-                </div>
               </div>
 
               {/* PT Status Grid */}
@@ -603,6 +598,10 @@ export function PtzCard() {
                   <span className="zcam-ptz-status-label">Tilt</span>
                   <span className="zcam-ptz-status-value">{tiltDisplay}</span>
                 </div>
+              </div>
+
+              <div className="zcam-ptz-speed-slider">
+                <SliderControl config={ptSpeedSliderConfig} disabled={isInteractionDisabled} />
               </div>
             </div>
           </div>
@@ -637,9 +636,6 @@ export function PtzCard() {
                     }, [])}
                   />
                 </div>
-                <div className="zcam-ptz-slider-column">
-                  <SliderControl config={fzSpeedSliderConfig} disabled={isInteractionDisabled} />
-                </div>
               </div>
 
               {/* FZ Status Grid */}
@@ -652,6 +648,10 @@ export function PtzCard() {
                   <span className="zcam-ptz-status-label">Zoom</span>
                   <span className="zcam-ptz-status-value">{zoomDisplay}</span>
                 </div>
+              </div>
+
+              <div className="zcam-ptz-speed-slider">
+                <SliderControl config={fzSpeedSliderConfig} disabled={isInteractionDisabled} />
               </div>
             </div>
           </div>
