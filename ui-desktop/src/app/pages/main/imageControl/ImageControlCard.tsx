@@ -186,11 +186,11 @@ export function ImageControlCard() {
       <div className="zcam-card-body">
         {!hideExposure && (
           <div className="zcam-subsection" data-path="zcam.camera.pages.main.exposure">
-            <div className="zcam-subsection-header">
+            {/* <div className="zcam-subsection-header">
               <div className="zcam-subsection-title">Exposure</div>
               <span className="zcam-control-select" data-path="zcam.camera.pages.main.exposure.shortcutSelect" />
-            </div>
-            <ToggleControl config={aeToggleConfig} />
+            </div> 
+            <ToggleControl config={aeToggleConfig} /> */}
 
             <div className="zcam-field-row zcam-field-row-dual" data-path="zcam.camera.pages.main.exposure.shutterIso">
               <label>Shutter / ISO</label>
@@ -210,7 +210,10 @@ export function ImageControlCard() {
             </div>
             <ToggleControl config={awbToggleConfig} />
             <div className="zcam-slider-row" data-path="zcam.camera.pages.main.whiteBalance.temperature">
-              <SliderControl config={temperatureSliderConfig} />
+              <SliderControl
+                config={temperatureSliderConfig}
+                disabled={view.camera.whiteBalance?.awbEnabled === true}
+              />
             </div>
           </div>
         )}

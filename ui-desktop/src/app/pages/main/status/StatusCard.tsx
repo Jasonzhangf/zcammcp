@@ -23,7 +23,7 @@ export function StatusCard() {
   const cameraIp = (containerState?.data?.['cameraIp'] as string) ?? '192.168.0.10';
 
   const exposureText = cam.exposure
-    ? `ISO ${cam.exposure.iso?.view ?? '-' } · ${cam.exposure.shutter?.view ?? '-'}`
+    ? `ISO ${cam.exposure.iso?.view ?? '-'} · ${cam.exposure.shutter?.view ?? '-'}`
     : 'ISO - · -';
 
   const wbText = cam.whiteBalance?.temperature?.view ?? '---';
@@ -31,6 +31,52 @@ export function StatusCard() {
   const zoomVal = cam.ptz?.zoom?.view ?? '-';
   const panView = cam.ptz?.pan?.view ?? '--';
   const tiltView = cam.ptz?.tilt?.view ?? '--';
+  /* 
+    Recording Status Logic
+    remain.raw is expected to be { code: number, desc: string, msg: string }
+    desc: recording duration (s). If "0", not recording.
+    msg: remaining time (s).
+  */
+  const recordingState = useMemo(() => {
+    const remainRaw = cam.recording?.remain?.raw;
+    const streamStatus = cam.recording?.streamStatus?.value;
+
+    // Use pre-parsed values from PageStore/main.tsx
+    const durationSec = cam.recording?.remain?.duration;
+    const remainingSec = cam.recording?.remain?.remaining;
+
+    let isRecording = false;
+    let durationText = '--:--:--';
+    let remainingText = '--:--:--';
+
+    // 1. Check Duration from `remain` property (Primary: pre-parsed)
+    if (typeof durationSec === 'number' && durationSec > 0) {
+      isRecording = true;
+      durationText = formatDuration(durationSec);
+    }
+    // Fallback to raw parsing if pre-parsed missing (safety net)
+    else if (remainRaw?.desc && Number(remainRaw.desc) > 0) {
+      isRecording = true;
+      durationText = formatDuration(Number(remainRaw.desc));
+    }
+
+    // 2. Format Remaining Time (Primary: pre-parsed)
+    if (typeof remainingSec === 'number') {
+      remainingText = formatDuration(remainingSec);
+    }
+    // Fallback to raw parsing
+    else if (remainRaw?.msg && Number(remainRaw.msg) > 0) {
+      remainingText = formatDuration(Number(remainRaw.msg));
+    }
+
+    // 3. Fallback / Additional Check: If `streamStatus` says streaming, we are recording/streaming
+    if (streamStatus === 'streaming') {
+      isRecording = true;
+    }
+
+    return { isRecording, durationText, remainingText };
+  }, [cam.recording?.remain?.raw, cam.recording?.streamStatus?.value, cam.recording?.remain?.duration, cam.recording?.remain?.remaining]);
+
   const containerData = useMemo(
     () => ({
       exposureText,
@@ -43,8 +89,13 @@ export function StatusCard() {
         tilt: cam.ptz?.tilt?.value ?? null,
         zoom: cam.ptz?.zoom?.value ?? null,
       },
+      recording: {
+        isRecording: recordingState.isRecording,
+        duration: recordingState.durationText,
+        remaining: recordingState.remainingText
+      }
     }),
-    [awbMode, cam.ptz?.pan?.value, cam.ptz?.tilt?.value, cam.ptz?.zoom?.value, exposureText, wbText],
+    [awbMode, cam.ptz?.pan?.value, cam.ptz?.tilt?.value, cam.ptz?.zoom?.value, exposureText, wbText, recordingState],
   );
   useContainerData('group.status', containerData);
 
@@ -136,8 +187,10 @@ export function StatusCard() {
               className="zcam-status-chip-group"
               data-path="zcam.camera.pages.main.status.recording"
             >
-              <span className="zcam-chip zcam-chip-active">REC ● 00:12:34</span>
-              <span className="zcam-chip">剩余 2h 15m</span>
+              <span className={`zcam-chip ${recordingState.isRecording ? 'zcam-chip-active' : ''}`}>
+                REC ● {recordingState.isRecording ? recordingState.durationText : '--:--:--'}
+              </span>
+              <span className="zcam-chip" style={{ opacity: 1 }}>剩余 {recordingState.remainingText}</span>
             </div>
             <div
               className="zcam-status-chip-group zcam-status-chip-group-right"
@@ -151,5 +204,13 @@ export function StatusCard() {
       </div>
     </div>
   );
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 

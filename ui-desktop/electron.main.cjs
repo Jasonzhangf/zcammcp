@@ -7,7 +7,7 @@ const windowStateKeeper = require('electron-window-state');
 const { StateHost } = require('./state-host/state-host.cjs');
 
 const INITIAL_WIDTH = 1200;
-const INITIAL_HEIGHT = 720;
+const INITIAL_HEIGHT = 960;
 const LAYOUT_VARIANTS = ['normal', 'studio'];
 
 const CLI_ROOT = process.env.ZCAM_CLI_ROOT || path.resolve(__dirname, '..', 'cli');
@@ -116,8 +116,10 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     x: mainWindowState.x,
     y: mainWindowState.y,
-    width: mainWindowState.width,
-    height: mainWindowState.height,
+    // width: mainWindowState.width,
+    // height: mainWindowState.height,
+    width: INITIAL_WIDTH,
+    height: INITIAL_HEIGHT,
     show: false,
     frame: false,
     skipTaskbar: false,
@@ -130,7 +132,7 @@ function createMainWindow() {
     },
   });
 
-  mainWindowState.manage(mainWindow);
+  // mainWindowState.manage(mainWindow);
 
   const env = process.env.NODE_ENV || 'production';
   if (env === 'development') {

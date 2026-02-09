@@ -43,6 +43,18 @@ export interface CameraState {
       active: boolean;
     }>;
   };
+
+  // 录制状态
+  recording?: {
+    remain?: {
+      value: string;
+      view: string;
+      raw?: any;
+      duration?: number; // Parsed from desc
+      remaining?: number; // Parsed from msg
+    };
+    streamStatus?: { value: string; view: string; raw?: any }; // raw from backend
+  };
 }
 
 

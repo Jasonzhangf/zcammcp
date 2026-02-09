@@ -11,6 +11,8 @@ import { ptzOperations, PTZ_FOCUS_RANGE, PTZ_ZOOM_RANGE } from '../app/operation
 import { exposureOperations } from '../app/operations/exposureOperations.js';
 import { whiteBalanceOperations } from '../app/operations/whiteBalanceOperations.js';
 import { imageOperations } from '../app/operations/imageOperations.js';
+import { deviceOperations } from '../app/operations/deviceOperations.js';
+
 import { MockCameraDevice } from './mock/MockCameraDevice.js';
 import { loadMockCameraState } from './mock/MockCameraPersistence.js';
 
@@ -23,7 +25,7 @@ export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBu
   const useMock = options?.useMockApi ?? shouldUseMockApi();
   const ops = new OperationRegistry();
 
-  for (const def of [...ptzOperations, ...exposureOperations, ...whiteBalanceOperations, ...imageOperations]) {
+  for (const def of [...ptzOperations, ...exposureOperations, ...whiteBalanceOperations, ...imageOperations, ...deviceOperations]) {
     ops.register(def);
   }
 

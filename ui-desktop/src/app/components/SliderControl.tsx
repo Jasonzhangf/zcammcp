@@ -72,13 +72,13 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
 
   // Determine effective value for display
   const effectiveValue = pendingValue ?? actualValue;
-
   const trackValue = clamp(effectiveValue, min, max);
   const displaySource = effectiveValue; // 直接使用实际值，支持浮点
   const displayValueNumber = transform.toDisplay ? transform.toDisplay(displaySource) : displaySource;
   const displayValue = config.formatValue
     ? config.formatValue(displayValueNumber, { min, max, step: baseStep })
     : String(displayValueNumber);
+
   const displayMin = transform.toDisplay ? transform.toDisplay(min) : min;
   const displayMax = transform.toDisplay ? transform.toDisplay(max) : max;
   const orientation = config.orientation ?? 'horizontal';

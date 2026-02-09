@@ -163,13 +163,15 @@ export function PtzCard() {
   const focusVal = view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min;
   const panVal = view.camera.ptz?.pan?.value ?? 0;
   const tiltVal = view.camera.ptz?.tilt?.value ?? 0;
-  const panDisplay = Math.round(panVal);
-  const tiltDisplay = Math.round(tiltVal);
-  const zoomDisplay = Math.round(zoomVal);
-  const focusDisplay = Math.round(focusVal);
-
   const [activeDirection, setActiveDirection] = useState<DpadDirection | null>(null);
   const [viewMode, setViewMode] = useState<'pad' | 'wheel'>('wheel');
+  // Local state for simulation display to ensuring ABSOLUTE isolation from backend updates
+  const [simState, setSimState] = useState<{ pan?: number; tilt?: number; zoom?: number } | null>(null);
+
+  const panDisplay = (simState?.pan !== undefined) ? Math.round(simState.pan) : Math.round(panVal);
+  const tiltDisplay = (simState?.tilt !== undefined) ? Math.round(simState.tilt) : Math.round(tiltVal);
+  const zoomDisplay = (simState?.zoom !== undefined) ? Math.round(simState.zoom) : Math.round(zoomVal);
+  const focusDisplay = Math.round(focusVal);
 
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdDirectionRef = useRef<DpadDirection | null>(null);
@@ -177,6 +179,97 @@ export function PtzCard() {
   const holdTickRef = useRef(0);
   const panTargetRef = useRef<number>(panVal);
   const tiltTargetRef = useRef<number>(tiltVal);
+
+  // PTZ Simulation Refs (Req: Simulate PT, Lock 10s)
+  const simPanRef = useRef(panVal);
+  const simTiltRef = useRef(tiltVal);
+  const simIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const keeperIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const keeperTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const targetVelocityRef = useRef({ pan: 0, tilt: 0 });
+
+  const stopKeeper = useCallback(() => {
+    if (keeperIntervalRef.current) { clearInterval(keeperIntervalRef.current); keeperIntervalRef.current = null; }
+    if (keeperTimeoutRef.current) { clearTimeout(keeperTimeoutRef.current); keeperTimeoutRef.current = null; }
+    setSimState(prev => {
+      if (!prev) return null;
+      // Retain Zoom if active, clear Pan/Tilt
+      const { zoom } = prev;
+      return zoom !== undefined ? { zoom } : null;
+    });
+  }, []);
+
+  const syncStore = useCallback((p: number, t: number) => {
+    // 1. Update Local Display IMMEDIATELY (Simulated)
+    setSimState(prev => ({ ...(prev || {}), pan: p, tilt: t }));
+
+    // 2. Push to Store (Optional/Backup)
+    store.applyCameraState({
+      ptz: {
+        pan: { value: Math.round(p), view: 'manual' },
+        tilt: { value: Math.round(t), view: 'manual' }
+      }
+    });
+  }, [store]);
+
+  const startKeeper = useCallback(() => {
+    stopKeeper();
+    // Keeper Loop: Force Store to match Simulation for 10s
+    const keep = () => syncStore(simPanRef.current, simTiltRef.current);
+    keep();
+    keeperIntervalRef.current = setInterval(keep, 100);
+    keeperTimeoutRef.current = setTimeout(stopKeeper, 10000); // 10s Lock
+  }, [stopKeeper, syncStore]);
+
+  const stopSimulation = useCallback(() => {
+    if (simIntervalRef.current) { clearInterval(simIntervalRef.current); simIntervalRef.current = null; }
+  }, []);
+
+  const startSimulation = useCallback(() => {
+    if (simIntervalRef.current) return;
+
+    // Init from current (or target/store if idle)
+    if (!keeperIntervalRef.current) {
+      simPanRef.current = panTargetRef.current;
+      simTiltRef.current = tiltTargetRef.current;
+    }
+    stopKeeper(); // Stop any active lock
+    // Immediate update to prevent fallback to backend during interval gap
+    setSimState(prev => ({
+      ...(prev || {}),
+      pan: simPanRef.current,
+      tilt: simTiltRef.current
+    }));
+
+    simIntervalRef.current = setInterval(() => {
+      const v = targetVelocityRef.current;
+      if (v.pan === 0 && v.tilt === 0) return;
+
+      // Speed Curve Fit: Rate = 0.92 * 60.4^Speed
+      const getRate = (s: number) => 0.92 * Math.pow(60.4, Math.abs(s));
+      const pRate = getRate(v.pan);
+      const tRate = getRate(v.tilt);
+
+      // Update (dt = 50ms)
+      simPanRef.current += pRate * 0.05 * Math.sign(v.pan);
+      simTiltRef.current += tRate * 0.05 * Math.sign(v.tilt);
+
+      // Clamp
+      simPanRef.current = Math.max(PTZ_PAN_RANGE.min, Math.min(PTZ_PAN_RANGE.max, simPanRef.current));
+      simTiltRef.current = Math.max(PTZ_TILT_RANGE.min, Math.min(PTZ_TILT_RANGE.max, simTiltRef.current));
+
+      syncStore(simPanRef.current, simTiltRef.current);
+    }, 50);
+  }, [stopKeeper, syncStore]);
+
+  // Sync refs when idle
+  useEffect(() => {
+    if (!simIntervalRef.current && !keeperIntervalRef.current) simPanRef.current = panVal;
+  }, [panVal]);
+  useEffect(() => {
+    if (!simIntervalRef.current && !keeperIntervalRef.current) simTiltRef.current = tiltVal;
+  }, [tiltVal]);
+
   const padFocusRef = useRef<HTMLDivElement | null>(null);
   const focusManager = useFocusManager();
   const isInteractionDisabled = controlsLocked;
@@ -238,14 +331,23 @@ export function PtzCard() {
   const lastJoystickTimeRef = useRef<number>(0);
   const handleJoystickMove = useCallback(
     (panSpeed: number, tiltSpeed: number) => {
+      // Simulation Update
+      targetVelocityRef.current = { pan: panSpeed, tilt: tiltSpeed };
+
       const now = Date.now();
       // Throttle: only send every 50ms, unless stopping (0,0) which sends immediately
       const isStop = panSpeed === 0 && tiltSpeed === 0;
       if (isStop) {
+        // Stop Simulation + Lock
+        stopSimulation();
+        startKeeper();
+
         // Send explicit STOP command on release
         void store.runOperation('zcam.camera.pages.main.ptz', 'ptz.stop', 'ptz.stop', {});
         return;
       }
+
+      startSimulation();
 
       if (now - lastJoystickTimeRef.current < 50) {
         return;
@@ -262,7 +364,7 @@ export function PtzCard() {
 
       lastJoystickTimeRef.current = now;
     },
-    []
+    [store, startSimulation, stopSimulation, startKeeper]
   );
 
   const applyDirection = useCallback(
@@ -272,6 +374,16 @@ export function PtzCard() {
       const rawSpeed = Math.max(1, baseStep); // baseStep is from slider (0-100)
       const speed = parseFloat((rawSpeed / 100.0).toFixed(2));
 
+      // Simulation Trigger
+      const vec = DPAD_VECTOR[direction];
+      if (vec) {
+        targetVelocityRef.current = {
+          pan: (vec.pan || 0) * speed,
+          tilt: (vec.tilt || 0) * speed
+        };
+        startSimulation();
+      }
+
       void store.runOperation(nodePath, 'ptz.move', 'ptz.move', {
         params: {
           direction: direction,
@@ -279,10 +391,14 @@ export function PtzCard() {
         }
       });
     },
-    [baseStep, store],
+    [baseStep, store, startSimulation],
   );
 
   const stopHold = useCallback(() => {
+    stopSimulation();
+    targetVelocityRef.current = { pan: 0, tilt: 0 };
+    startKeeper(); // Req: Lock 10s after op
+
     void store.runOperation(holdPathRef.current || 'zcam.camera.pages.main.ptz', 'ptz.stop', 'ptz.stop', {});
     holdDirectionRef.current = null;
     holdPathRef.current = null;
@@ -293,7 +409,7 @@ export function PtzCard() {
       holdTimerRef.current = null;
     }
     keyboardHoldKeyRef.current = null;
-  }, [store]);
+  }, [store, stopSimulation, startKeeper]);
 
   const startHold = useCallback(
     (direction: DpadDirection, nodePath: string) => {
@@ -503,7 +619,23 @@ export function PtzCard() {
                   <SliderControl config={focusSliderConfig} disabled={isInteractionDisabled} />
                 </div>
                 <div className="zcam-ptz-slider-column">
-                  <TBarControl config={zoomSliderConfig} disabled={isInteractionDisabled} styleVariant="skeuomorphic" />
+                  <TBarControl
+                    config={zoomSliderConfig}
+                    disabled={isInteractionDisabled}
+                    styleVariant="skeuomorphic"
+                    onSimulation={useCallback((val: number | null) => {
+                      setSimState(prev => {
+                        if (val === null) {
+                          if (!prev) return null;
+                          const { zoom, ...rest } = prev;
+                          // If pan/tilt are also undefined/missing, return null
+                          if (rest.pan === undefined && rest.tilt === undefined) return null;
+                          return rest;
+                        }
+                        return { ...(prev || {}), zoom: val };
+                      });
+                    }, [])}
+                  />
                 </div>
                 <div className="zcam-ptz-slider-column">
                   <SliderControl config={fzSpeedSliderConfig} disabled={isInteractionDisabled} />

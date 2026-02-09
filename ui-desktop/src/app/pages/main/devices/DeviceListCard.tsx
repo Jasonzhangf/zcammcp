@@ -1,11 +1,16 @@
-import React from 'react';
-import { useViewState } from '../../../hooks/usePageStore.js';
+import { useViewState, usePageStore } from '../../../hooks/usePageStore.js';
 
 export function DeviceListCard() {
+    const store = usePageStore();
     const view = useViewState();
     const devicesData = view.camera.devices;
     const devices = devicesData?.list || [];
     const activeDeviceId = devicesData?.activeDeviceId;
+
+    const handleDeviceClick = (deviceId: string) => {
+        if (!deviceId) return;
+        store.runOperation('zcam.camera.pages.main.devices', 'device-interaction', 'device.switch', { value: deviceId });
+    };
 
     return (
         <div className="zcam-card" data-path="zcam.camera.pages.main.devices">
@@ -20,6 +25,7 @@ export function DeviceListCard() {
                             <div
                                 key={device.id}
                                 className={`zcam-device-item ${isActive ? 'zcam-device-item-active' : ''}`}
+                                onClick={() => handleDeviceClick(device.id)}
                             >
                                 <div className="zcam-device-info">
                                     <div className="zcam-device-name">{device.name}</div>

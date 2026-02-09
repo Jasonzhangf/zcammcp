@@ -64,6 +64,16 @@ export class DirectUvcChannel implements CliChannelInterface {
     private translateToUvcRequest(request: CliRequest): UvcRequest {
         const args = request.args || [];
 
+        // If args is empty but command starts with /ctrl/, treat it as direct HTTP URL
+        if (args.length === 0 && request.command.startsWith('/ctrl/')) {
+            // Extract URL and method from command
+            // Format: /ctrl/set?wb=Auto
+            return {
+                url: request.command,
+                method: 'GET',
+            };
+        }
+
         if (args.length === 0) {
             throw new Error('Request args are required');
         }

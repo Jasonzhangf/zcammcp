@@ -10,13 +10,16 @@ export const whiteBalanceOperations: OperationDefinition[] = [
     cliCommand: 'wb.awb',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const enabled = Boolean(payload.value);
-      const mode = enabled ? 'auto' : 'manual';
+      // When AWB is enabled, set wb=Auto; when disabled, set wb=Manual
+      const wbValue = enabled ? 'Auto' : 'Manual';
+
+      // Use direct HTTP request format
       return {
         cliRequest: {
-          id: `uvc-wb-mode-${Date.now()}`,
-          command: `image whitebalance mode ${mode}`,
-          args: ['image', 'whitebalance', 'mode', mode],
-        }
+          id: `wb-mode-${Date.now()}`,
+          command: `/ctrl/set?wb=${wbValue}`,
+          args: [],
+        },
       };
     },
   },

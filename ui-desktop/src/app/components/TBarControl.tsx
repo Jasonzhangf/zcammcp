@@ -18,6 +18,7 @@ export interface TBarControlProps {
     config: SliderControlConfig;
     disabled?: boolean;
     styleVariant?: 'skeuomorphic' | 'flat';
+    onSimulation?: (value: number | null) => void;
 }
 
 interface SliderOperationMeta {
@@ -34,7 +35,7 @@ interface SliderOperationMeta {
  * A specialized vertical slider designed to mimic video switcher T-Bars.
  * Reuses the robust Debounce/Throttle logic from SliderControl to prevent Jitter.
  */
-export function TBarControl({ config, disabled = false, styleVariant = 'skeuomorphic' }: TBarControlProps) {
+export function TBarControl({ config, disabled = false, styleVariant = 'skeuomorphic', onSimulation }: TBarControlProps) {
     const store = usePageStore();
     const view = useViewState();
     // Ensure we read a valid default
@@ -57,6 +58,11 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
     // Optimistic UI state
     const [pendingValue, setPendingValue] = useState<number | null>(null);
     const pendingValueTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastSentValueRef = useRef<number>(actualValue);
+
+    // Calculate effective values early for use in callbacks
+    const effectiveValue = pendingValue ?? actualValue;
+    const trackValue = clamp(effectiveValue, min, max);
 
     // LOGIC: Synchronous Lock & Throttle (Same as SliderControl)
     const isLockedRef = useRef(false);
@@ -72,13 +78,54 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
     const isDraggingRef = useRef(false);
     const trackRef = useRef<HTMLDivElement | null>(null);
 
+    // Zoom Simulation Logic (Replaces Polling)
+    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const fzSpeed = (view.ui as any)?.fzSpeed ?? 50;
+    // Use ref to avoid re-creating loop callback on speed change
+    const fzSpeedRef = useRef(fzSpeed);
+    fzSpeedRef.current = fzSpeed;
+
+    const stopSimulatingZoom = useCallback(() => {
+        if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+        }
+    }, []);
+
+    const startSimulatingZoom = useCallback((direction: 1 | -1) => {
+        if (config.kind !== 'ptz.zoom') return;
+        stopSimulatingZoom();
+
+        // 1. Initial Start Sync (Best effort)
+        let currentVal = effectiveValue;
+
+        // 2. Simulation Loop
+        pollIntervalRef.current = setInterval(() => {
+            // Speed logic: Range 4528. Speed 100 => 2750ms. Step ≈ 1.6465 * speed.
+            const stepSize = 1.6465 * fzSpeedRef.current;
+            currentVal += direction * stepSize;
+            currentVal = Math.max(min, Math.min(max, currentVal));
+
+            setPendingValue(Math.round(currentVal));
+
+            // Re-adding (Req 1+3): Push simulated value to Store so other controls update continuously
+            // This is critical for keeping "Bottom Zoom Control" in sync during drag/hold.
+            store.applyCameraState({
+                ptz: {
+                    zoom: { value: Math.round(currentVal), view: 'manual' }
+                }
+            });
+            onSimulation?.(Math.round(currentVal));
+
+            rawValueRef.current = currentVal;
+            lastCommittedRef.current = currentVal;
+        }, 100);
+
+    }, [config.kind, stopSimulatingZoom, effectiveValue, min, max, store]);
+
     // Track button press state for operation-based controls
     const incrementPressedRef = useRef(false);
     const decrementPressedRef = useRef(false);
-
-    // Display Value Calculation
-    const effectiveValue = pendingValue ?? actualValue;
-    const trackValue = clamp(effectiveValue, min, max);
 
     // Sync Logic: Only update if not locked and not pending
     useEffect(() => {
@@ -103,17 +150,44 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             clearTimeout(pendingValueTimeoutRef.current);
             pendingValueTimeoutRef.current = null;
         }
+        // Also clear any pending sync interval
+        if (pendingSyncIntervalRef.current) {
+            clearInterval(pendingSyncIntervalRef.current);
+            pendingSyncIntervalRef.current = null;
+        }
         isLockedRef.current = true;
     }, []);
 
+    const pendingSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
     const startPendingTimeout = useCallback(() => {
         clearPendingTimeout();
+
+        // Start a keeper loop to ensure the store is updated with the pending value
+        // This is crucial for other controls (like the bottom zoom control) to reflect the T-Bar's state
+        const enforceStore = () => {
+            const val = pendingValue ?? actualValue;
+            if (config.kind === 'ptz.zoom') { // Only for Zoom as requested
+                store.applyCameraState({
+                    ptz: { zoom: { value: val, view: 'manual' } }
+                });
+                onSimulation?.(val);
+            }
+        };
+        enforceStore(); // Initial sync
+        pendingSyncIntervalRef.current = setInterval(enforceStore, 100);
+
         pendingValueTimeoutRef.current = setTimeout(() => {
+            if (pendingSyncIntervalRef.current) {
+                clearInterval(pendingSyncIntervalRef.current);
+                pendingSyncIntervalRef.current = null;
+            }
             isLockedRef.current = false;
             setPendingValue(null);
+            onSimulation?.(null);
             pendingValueTimeoutRef.current = null;
         }, 10000);
-    }, [clearPendingTimeout]);
+    }, [clearPendingTimeout, config.kind, store, onSimulation, pendingValue, actualValue]);
 
     // Backend Commit Logic
     const commitValue = useCallback(
@@ -130,6 +204,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             if (meta) payload.params = { sliderMeta: meta };
 
             lastCmdTimeRef.current = Date.now();
+            lastSentValueRef.current = next;
 
             // Special handling for Zoom: Send Stop before Set
             // This ensures that any continuous movement is halted before applying a new absolute position,
@@ -155,11 +230,18 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             if (Math.abs(clampedValue - lastCommittedRef.current) < Number.EPSILON) return;
             lastCommittedRef.current = clampedValue;
             setPendingValue(clampedValue);
+            onSimulation?.(clampedValue);
 
             // Throttle: Max 1Hz (Every 1000ms) for Zoom, 10Hz (100ms) for others
             const throttleMs = config.kind === 'ptz.zoom' ? 1000 : 100;
             const now = Date.now();
-            if (now - lastCmdTimeRef.current > throttleMs) {
+
+            // Optimization (Req): Trigger if Delta >= 50 (Zoom) OR Time > Interval
+            const lastSent = lastSentValueRef.current;
+            const delta = Math.abs(clampedValue - lastSent);
+            const deltaThreshold = config.kind === 'ptz.zoom' ? 50 : Infinity;
+
+            if ((now - lastCmdTimeRef.current > throttleMs)) {
                 commitValue(clampedValue, meta);
             }
         },
@@ -175,6 +257,10 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         if (trackRef.current) {
             trackRef.current.setPointerCapture(e.pointerId);
         }
+
+        // Sync last sent value to current position to ensures Delta is relative to Drag Start
+        lastSentValueRef.current = lastCommittedRef.current;
+
         clearPendingTimeout(); // LOCK
 
         // Calculate initial jump if clicked on track
@@ -288,8 +374,11 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 config.incrementOperation.onPress,
                 {}
             );
+
+            // Start simulation if this is a Zoom control
+            startSimulatingZoom(1);
         }
-    }, [config, store, clearPendingTimeout]);
+    }, [config, store, clearPendingTimeout, startSimulatingZoom]);
 
     const handleIncrementRelease = useCallback(() => {
         if (config.incrementOperation?.onRelease && incrementPressedRef.current) {
@@ -302,11 +391,17 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 {}
             );
 
-            if (!config.buttonOperationsDisableOptimistic) {
+            stopSimulatingZoom();
+
+            // Force timeout lock for Zoom to prevent jump (Req 2),
+            // OR use standard optimistic behavior
+            if (!config.buttonOperationsDisableOptimistic || config.kind === 'ptz.zoom') {
                 startPendingTimeout();
+            } else {
+                setPendingValue(null);
             }
         }
-    }, [config, store, startPendingTimeout]);
+    }, [config, store, startPendingTimeout, stopSimulatingZoom]);
 
     const handleDecrementPress = useCallback(() => {
         if (config.decrementOperation?.onPress) {
@@ -324,8 +419,11 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 config.decrementOperation.onPress,
                 {}
             );
+
+            // Start simulation if this is a Zoom control
+            startSimulatingZoom(-1);
         }
-    }, [config, store, clearPendingTimeout]);
+    }, [config, store, clearPendingTimeout, startSimulatingZoom]);
 
     const handleDecrementRelease = useCallback(() => {
         if (config.decrementOperation?.onRelease && decrementPressedRef.current) {
@@ -338,11 +436,17 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 {}
             );
 
-            if (!config.buttonOperationsDisableOptimistic) {
+            stopSimulatingZoom();
+
+            // Force timeout lock for Zoom to prevent jump (Req 2),
+            // OR use standard optimistic behavior
+            if (!config.buttonOperationsDisableOptimistic || config.kind === 'ptz.zoom') {
                 startPendingTimeout();
+            } else {
+                setPendingValue(null);
             }
         }
-    }, [config, store, startPendingTimeout]);
+    }, [config, store, startPendingTimeout, stopSimulatingZoom]);
 
     // Calculate percentage for display
     const percentage = useMemo(() => {

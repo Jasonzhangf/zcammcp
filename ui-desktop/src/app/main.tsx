@@ -187,24 +187,89 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
   }
 
   if (camera.whiteBalance) {
-    const wb = camera.whiteBalance;
-    const rawValue = typeof wb.value !== 'undefined' ? wb.value : wb;
-    const numeric = Number(rawValue);
-    if (Number.isFinite(numeric)) {
-      next.whiteBalance = {
-        temperature: {
+    next.whiteBalance = {};
+
+    // Map AWB enabled state
+    if (typeof camera.whiteBalance.awbEnabled !== 'undefined') {
+      next.whiteBalance.awbEnabled = Boolean(camera.whiteBalance.awbEnabled);
+    }
+
+    // Map temperature from camera.whiteBalance.temperature
+    const tempEntry = camera.whiteBalance.temperature;
+    if (tempEntry) {
+      const value = typeof tempEntry.value !== 'undefined' ? tempEntry.value : tempEntry;
+      const numeric = Number(value);
+
+      console.log('[WB Mapping] tempEntry:', tempEntry);
+      console.log('[WB Mapping] tempEntry.min:', tempEntry.min);
+      console.log('[WB Mapping] tempEntry.max:', tempEntry.max);
+      console.log('[WB Mapping] tempEntry.w:', tempEntry.w);
+
+      if (Number.isFinite(numeric)) {
+        // Extract min/max/step from tempEntry or tempEntry.w or tempEntry.raw
+        const extractNumber = (key: string) => {
+          if (typeof tempEntry[key] === 'number') return tempEntry[key];
+          if (tempEntry.w && typeof tempEntry.w[key] === 'number') return tempEntry.w[key];
+          if (tempEntry.raw && typeof tempEntry.raw[key] === 'number') return tempEntry.raw[key];
+          return undefined;
+        };
+
+        const min = extractNumber('min');
+        const max = extractNumber('max');
+        const step = extractNumber('step');
+
+        console.log('[WB Mapping] Extracted min/max/step:', min, max, step);
+
+        next.whiteBalance.temperature = {
           value: numeric,
-          view: wb.view ?? `${numeric}K`,
-          min: typeof wb.min === 'number' ? wb.min : undefined,
-          max: typeof wb.max === 'number' ? wb.max : undefined,
-          step: typeof wb.step === 'number' ? wb.step : undefined,
-        },
-      };
+          view: tempEntry.view ?? `${numeric}K`,
+          min,
+          max,
+          step,
+        };
+      }
     }
   }
 
   if (snapshot.devices) {
     next.devices = snapshot.devices;
+  }
+
+  if (camera.recording) {
+    next.recording = {};
+    if (camera.recording.remain) {
+      const entry = camera.recording.remain;
+      const rawValue = typeof entry.value !== 'undefined' ? entry.value : entry;
+      // rawValue is expected to be a JSON string like {"code":0,"desc":"77","msg":"3717"}
+      try {
+        const parsed = typeof rawValue === 'string' && rawValue.startsWith('{') ? JSON.parse(rawValue) : rawValue;
+
+        // Pass the raw parsed object to the view state
+        next.recording.remain = {
+          value: rawValue,
+          view: rawValue,
+          raw: parsed,
+          duration: entry.duration,
+          remaining: entry.remaining
+        };
+      } catch (e) {
+        console.warn('Failed to parse recording remain value:', rawValue);
+        next.recording.remain = {
+          value: rawValue,
+          view: rawValue
+        };
+      }
+    }
+
+    if (camera.recording.stream_status) {
+      const entry = camera.recording.stream_status;
+      const rawValue = typeof entry.value !== 'undefined' ? entry.value : entry;
+      next.recording.streamStatus = {
+        value: rawValue,
+        view: String(rawValue),
+        raw: entry.w
+      };
+    }
   }
 
   return Object.keys(next).length > 0 ? next : null;

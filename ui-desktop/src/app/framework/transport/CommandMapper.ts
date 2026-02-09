@@ -29,6 +29,8 @@ export class CommandMapper {
                 return this.mapUvcCommand(rest);
             case 'image':
                 return this.mapImageCommand(rest);
+            case 'device':
+                return this.mapDeviceCommand(rest);
             default:
                 throw new Error(`Unknown command: ${command}`);
         }
@@ -197,5 +199,29 @@ export class CommandMapper {
         }
 
         throw new Error(`Unknown image command: ${subcommand}`);
+    }
+
+    /**
+     * 映射 device 命令
+     * 例如: device switch <id>
+     * API: /usbvideoctrl?action=switch&deviceId=<id>
+     */
+    private static mapDeviceCommand(args: string[]): UvcRequest {
+        if (args.length === 0) {
+            throw new Error('Device command requires subcommand');
+        }
+
+        const [subcommand, ...params] = args;
+
+        if (subcommand === 'switch') {
+            const [deviceId] = params;
+            if (!deviceId) throw new Error('Device ID required');
+            return {
+                url: `/usbvideoctrl?action=switch&deviceId=${encodeURIComponent(deviceId)}`,
+                method: 'GET',
+            };
+        }
+
+        throw new Error(`Unknown device command: ${subcommand}`);
     }
 }

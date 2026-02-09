@@ -19,7 +19,7 @@ const WS_RECONNECT_INTERVAL = 3000;
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,lens_zoom_pos,lens_focus_pos,exposure,gain,iso,shutter_time,mwb,brightness,contrast,saturation'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain'
 )
   .split(',')
   .map((k) => k.trim())
@@ -172,9 +172,29 @@ function getStateSnapshot() {
   };
 }
 
+// Throttle map for auto-refreshes
+const refreshCooldowns = new Map();
+const REFRESH_COOLDOWN_MS = 2000;
+
+function triggerLazyRefresh(key) {
+  const now = Date.now();
+  const last = refreshCooldowns.get(key) || 0;
+  if (now - last > REFRESH_COOLDOWN_MS) {
+    refreshCooldowns.set(key, now);
+    console.log(`[CameraState] Auto-refreshing timeout key: ${key}`);
+    refreshKeys([key]).catch(err => console.error(`[CameraState] Auto-refresh for ${key} failed`, err));
+  }
+}
+
 function projectCameraState(values) {
   const projectValue = (key) => {
     const entry = values[key];
+
+    // [Request] If raw error is timeout, trigger refresh
+    if (entry?.raw?.error === 'Timeout') {
+      triggerLazyRefresh(key);
+    }
+
     if (!entry || typeof entry.value === 'undefined' || entry.value === null) return undefined;
 
     return {
@@ -201,8 +221,10 @@ function projectCameraState(values) {
       shutter: projectValue('shutter_time'),
     },
     whiteBalance: (() => {
-      const wbEntry = projectValue('whitebalance');
+      const wbEntry = projectValue('wb');
       const mwbEntry = projectValue('mwb');
+
+      const isAuto = wbEntry?.value !== 'Manual' && wbEntry?.value !== undefined;
 
       let min, max, step;
       // Extract ranges if available in raw options
@@ -214,8 +236,8 @@ function projectCameraState(values) {
       }
 
       return {
-        ...wbEntry,
-        awbEnabled: wbEntry?.value === 'auto',
+        mode: wbEntry,
+        awbEnabled: isAuto,
         temperature: {
           ...mwbEntry,
           min,
@@ -231,6 +253,32 @@ function projectCameraState(values) {
       sharpness: projectValue('sharpness'),
       hue: projectValue('hue'),
       gamma: projectValue('gamma'),
+    },
+    recording: {
+      remain: (() => {
+        const entry = projectValue('remain');
+        if (!entry) return undefined;
+        let duration = 0;
+        let remaining = 0;
+        try {
+          const raw = typeof entry.value === 'string' && entry.value.startsWith('{')
+            ? JSON.parse(entry.value)
+            : (typeof entry.value === 'object' ? entry.value : null);
+
+          if (raw) {
+            // desc: recording duration (s), msg: remaining duration (s)
+            duration = Number(raw.desc) || 0;
+            remaining = Number(raw.msg) || 0;
+          }
+        } catch (e) { }
+
+        return {
+          ...entry,
+          duration,
+          remaining
+        };
+      })(),
+      stream_status: projectValue('stream_status'),
     },
   };
 }
@@ -445,6 +493,28 @@ function handleWebSocketMessage(msg) {
     console.log('[CameraState] Device list changed, refreshing...');
     fetchDeviceList().catch(err => {
       console.error('[CameraState] Failed to refresh device list:', err);
+    });
+  }
+
+  // Handle active device switch
+  if (msg.what === 'deviceChanged') {
+    console.log('[CameraState] Active device changed:', msg.activeDeviceId);
+
+    // Update active device ID
+    if (msg.activeDeviceId) {
+      state.devices.activeDeviceId = msg.activeDeviceId;
+      state.devices.updatedAt = Date.now();
+    }
+
+    // Refresh all camera properties for the new device
+    console.log('[CameraState] Refreshing all properties for new device...');
+    refreshKeys(DEFAULT_KEYS).catch(err => {
+      console.error('[CameraState] Failed to refresh properties after device switch:', err);
+    });
+
+    // Also refresh device list to ensure consistency
+    fetchDeviceList().catch(err => {
+      console.error('[CameraState] Failed to refresh device list after switch:', err);
     });
   }
 }
