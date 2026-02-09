@@ -40,6 +40,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
     const view = useViewState();
     // Ensure we read a valid default
     const actualValue = config.readValue ? config.readValue(view) : config.valueRange.min;
+    const isZoom = config.kind === 'ptz.zoom';
 
     const [isFocused, setIsFocused] = useState(false);
     const profile = useMemo(() => {
@@ -77,6 +78,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
     const holdTickRef = useRef(0);
     const isDraggingRef = useRef(false);
     const trackRef = useRef<HTMLDivElement | null>(null);
+    const [visualPercentage, setVisualPercentage] = useState<number | null>(null);
 
     // Zoom Simulation Logic (Replaces Polling)
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -91,6 +93,177 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             pollIntervalRef.current = null;
         }
     }, []);
+
+    const zoomVelocityIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const zoomSimIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const zoomOriginValueRef = useRef<number>(actualValue);
+    const zoomTargetValueRef = useRef<number>(actualValue);
+    const zoomFullScaleValueRef = useRef<number>(1000);
+    const zoomReachedTargetRef = useRef<boolean>(false);
+    const zoomVelocityRef = useRef<number>(0);
+    const zoomLastSentVelocityRef = useRef<number>(0);
+    const zoomLastSendAtRef = useRef<number>(0);
+    const zoomSimValueRef = useRef<number>(actualValue);
+    const zoomSimLastTsRef = useRef<number>(0);
+
+    const computeTargetZoomFromPointer = useCallback((e: React.PointerEvent): number => {
+        if (!trackRef.current) return clamp(zoomTargetValueRef.current, min, max);
+        const rect = trackRef.current.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top;
+        const height = rect.height || 1;
+        
+        // Constrain handle within track (padding = half handle height = 12px)
+        const padding = 12;
+        const effectiveHeight = Math.max(1, height - padding * 2);
+        const effectiveY = clamp(relativeY - padding, 0, effectiveHeight);
+        
+        const ratio = clamp(1 - (effectiveY / effectiveHeight), 0, 1);
+        const visualRatio = config.displayInverted ? 1 - ratio : ratio;
+        const raw = min + visualRatio * (max - min);
+        const stepped = min + Math.round((raw - min) / baseStep) * baseStep;
+        return clamp(stepped, min, max);
+    }, [baseStep, config.displayInverted, max, min]);
+
+    const computeZoomVelocityFromTarget = useCallback((targetZoom: number): number => {
+        const deltaZoom = targetZoom - zoomOriginValueRef.current;
+        const raw = clamp(deltaZoom / zoomFullScaleValueRef.current, -1, 1);
+        const deadzone = 0.07;
+        const gamma = 1.6;
+        const abs = Math.abs(raw);
+        if (abs < deadzone) return 0;
+        const normalized = (abs - deadzone) / (1 - deadzone);
+        const curved = Math.pow(normalized, gamma);
+        return Math.sign(raw) * curved;
+    }, []);
+
+    const updateVisualFromPointer = useCallback((e: React.PointerEvent) => {
+        if (!trackRef.current) return;
+        const rect = trackRef.current.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top;
+        const height = rect.height || 1;
+
+        // Constrain handle within track
+        const padding = 12;
+        const effectiveHeight = Math.max(1, height - padding * 2);
+        const effectiveY = clamp(relativeY - padding, 0, effectiveHeight);
+
+        const ratio = clamp(1 - (effectiveY / effectiveHeight), 0, 1);
+        setVisualPercentage(config.displayInverted ? 1 - ratio : ratio);
+    }, [config.displayInverted]);
+
+    const stopZoomVelocityLoop = useCallback(() => {
+        if (zoomVelocityIntervalRef.current) {
+            clearInterval(zoomVelocityIntervalRef.current);
+            zoomVelocityIntervalRef.current = null;
+        }
+        if (zoomSimIntervalRef.current) {
+            clearInterval(zoomSimIntervalRef.current);
+            zoomSimIntervalRef.current = null;
+        }
+    }, []);
+
+    const sendZoomStop = useCallback(() => {
+        void store.runOperation(config.nodePath, config.kind, 'lens.zoomStop', {}).catch(() => {});
+    }, [config.kind, config.nodePath, store]);
+
+    const flushZoomVelocity = useCallback(() => {
+        if (!isDraggingRef.current) return;
+
+        const now = Date.now();
+        const desired = zoomVelocityRef.current;
+        const last = zoomLastSentVelocityRef.current;
+
+        if (desired !== 0 && last !== 0 && Math.sign(desired) !== Math.sign(last)) {
+            sendZoomStop();
+            zoomLastSentVelocityRef.current = 0;
+            zoomLastSendAtRef.current = now;
+            return;
+        }
+
+        const delta = Math.abs(desired - last);
+        const keepaliveMs = 300;
+        const minDelta = 0.04;
+
+        if (delta >= minDelta || now - zoomLastSendAtRef.current >= keepaliveMs) {
+            void store
+                .runOperation(config.nodePath, config.kind, 'lens.zoomVelocity', { params: { v: desired } })
+                .catch(() => {});
+            zoomLastSentVelocityRef.current = desired;
+            zoomLastSendAtRef.current = now;
+        }
+    }, [config.kind, config.nodePath, sendZoomStop, store]);
+
+    const startZoomVelocityMode = useCallback((e: React.PointerEvent) => {
+        stopSimulatingZoom();
+        stopZoomVelocityLoop();
+
+        zoomVelocityRef.current = 0;
+        zoomLastSentVelocityRef.current = 0;
+        zoomLastSendAtRef.current = 0;
+        zoomReachedTargetRef.current = false;
+
+        zoomOriginValueRef.current = pendingValue ?? actualValue;
+        zoomTargetValueRef.current = computeTargetZoomFromPointer(e);
+        zoomFullScaleValueRef.current = clamp((max - min) * 0.35, 250, 1600);
+        zoomVelocityRef.current = computeZoomVelocityFromTarget(zoomTargetValueRef.current);
+
+        zoomSimValueRef.current = pendingValue ?? actualValue;
+        zoomSimLastTsRef.current = Date.now();
+        setPendingValue(Math.round(zoomSimValueRef.current));
+        onSimulation?.(Math.round(zoomSimValueRef.current));
+        store.applyCameraState({ ptz: { zoom: { value: Math.round(zoomSimValueRef.current), view: 'manual' } } });
+
+        updateVisualFromPointer(e);
+
+        zoomVelocityIntervalRef.current = setInterval(flushZoomVelocity, 100);
+        zoomSimIntervalRef.current = setInterval(() => {
+            if (!isDraggingRef.current) return;
+            const now = Date.now();
+            const dt = (now - zoomSimLastTsRef.current) / 1000;
+            zoomSimLastTsRef.current = now;
+            if (dt <= 0) return;
+
+            const v = zoomVelocityRef.current;
+            if (v === 0) return;
+
+            const ratePerSecond = 16.465 * fzSpeedRef.current;
+            const delta = Math.sign(v) * ratePerSecond * Math.abs(v) * dt;
+            const target = zoomTargetValueRef.current;
+            let next = clamp(zoomSimValueRef.current + delta, min, max);
+
+            if (!zoomReachedTargetRef.current) {
+                if ((v > 0 && next >= target) || (v < 0 && next <= target)) {
+                    next = target;
+                    zoomReachedTargetRef.current = true;
+                    zoomOriginValueRef.current = target;
+                    zoomVelocityRef.current = 0;
+                    sendZoomStop();
+                    zoomLastSentVelocityRef.current = 0;
+                    zoomLastSendAtRef.current = now;
+                }
+            }
+
+            zoomSimValueRef.current = next;
+            const rounded = Math.round(next);
+            setPendingValue(rounded);
+            onSimulation?.(rounded);
+            store.applyCameraState({ ptz: { zoom: { value: rounded, view: 'manual' } } });
+        }, 50);
+    }, [
+        actualValue,
+        computeTargetZoomFromPointer,
+        computeZoomVelocityFromTarget,
+        flushZoomVelocity,
+        max,
+        min,
+        onSimulation,
+        pendingValue,
+        sendZoomStop,
+        stopSimulatingZoom,
+        stopZoomVelocityLoop,
+        store,
+        updateVisualFromPointer,
+    ]);
 
     const startSimulatingZoom = useCallback((direction: 1 | -1) => {
         if (config.kind !== 'ptz.zoom') return;
@@ -122,6 +295,13 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         }, 100);
 
     }, [config.kind, stopSimulatingZoom, effectiveValue, min, max, store]);
+
+    useEffect(() => {
+        return () => {
+            stopSimulatingZoom();
+            stopZoomVelocityLoop();
+        };
+    }, [stopSimulatingZoom, stopZoomVelocityLoop]);
 
     // Track button press state for operation-based controls
     const incrementPressedRef = useRef(false);
@@ -184,6 +364,9 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             }
             isLockedRef.current = false;
             setPendingValue(null);
+            if (config.kind === 'ptz.zoom') {
+                setVisualPercentage(null);
+            }
             onSimulation?.(null);
             pendingValueTimeoutRef.current = null;
         }, 10000);
@@ -197,8 +380,6 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 config.onValueChange(next, store);
                 return;
             }
-
-            console.log('[TBarControl] commitValue:', { nodePath: config.nodePath, next, operationId: config.operationId, meta });
 
             const payload: OperationPayload = { value: next };
             if (meta) payload.params = { sliderMeta: meta };
@@ -263,30 +444,49 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
 
         clearPendingTimeout(); // LOCK
 
-        // Calculate initial jump if clicked on track
-        updateValueFromPointer(e);
-    }, [clearPendingTimeout, disabled]); // Add updateValueFromPointer dependency below via refs if needed or defined early
+        if (isZoom) {
+            startZoomVelocityMode(e);
+        } else {
+            // Calculate initial jump if clicked on track
+            updateValueFromPointer(e);
+        }
+    }, [clearPendingTimeout, disabled, isZoom, startZoomVelocityMode]); // Add updateValueFromPointer dependency below via refs if needed or defined early
 
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
         if (!isDraggingRef.current) return;
         e.preventDefault();
-        updateValueFromPointer(e);
-    }, []);
+        if (isZoom) {
+            updateVisualFromPointer(e);
+            const target = computeTargetZoomFromPointer(e);
+            zoomTargetValueRef.current = target;
+            const v = computeZoomVelocityFromTarget(target);
+            zoomReachedTargetRef.current = v === 0;
+            zoomVelocityRef.current = v;
+        } else {
+            updateValueFromPointer(e);
+        }
+    }, [computeTargetZoomFromPointer, computeZoomVelocityFromTarget, isZoom, updateVisualFromPointer]);
 
     const handlePointerUp = useCallback((e: React.PointerEvent) => {
         if (!isDraggingRef.current) return;
         e.preventDefault();
         isDraggingRef.current = false;
 
-        // Simplified Logic: Directly use the last committed value
-        const finalVal = lastCommittedRef.current;
-        console.log('[TBarControl] handlePointerUp releasing:', { finalVal, disabled });
+        if (isZoom) {
+            stopZoomVelocityLoop();
+            sendZoomStop();
+            setVisualPercentage(null);
+            startPendingTimeout();
+        } else {
+            // Simplified Logic: Directly use the last committed value
+            const finalVal = lastCommittedRef.current;
 
-        // 1. Send command immediately
-        commitValue(finalVal, { stop: true });
+            // 1. Send command immediately
+            commitValue(finalVal, { stop: true });
 
-        // 2. Start 10s cooldown for UI sync
-        startPendingTimeout();
+            // 2. Start 10s cooldown for UI sync
+            startPendingTimeout();
+        }
 
         if (trackRef.current) {
             try {
@@ -295,7 +495,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                 // Ignore capture release errors
             }
         }
-    }, [commitValue, startPendingTimeout, disabled]);
+    }, [commitValue, disabled, isZoom, sendZoomStop, startPendingTimeout, stopZoomVelocityLoop]);
 
     // Calculate value based on Y position in track
     const updateValueFromPointer = (e: React.PointerEvent) => {
@@ -309,6 +509,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
 
         const relativeY = e.clientY - rect.top;
         const height = rect.height;
+
         // ratio 0(top) -> 1(bottom).
         // so value = max - ratio * (max-min)
         // inverted: 1 at top, 0 at bottom.
@@ -316,7 +517,12 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         // Let's map:
         // val = min + (1 - (y / height)) * (range)
 
-        const ratio = clamp(1 - (relativeY / height), 0, 1);
+        // Constrain handle within track
+        const padding = 12;
+        const effectiveHeight = Math.max(1, height - padding * 2);
+        const effectiveY = clamp(relativeY - padding, 0, effectiveHeight);
+
+        const ratio = clamp(1 - (effectiveY / effectiveHeight), 0, 1);
         const nextRaw = min + ratio * (max - min);
         rawValueRef.current = nextRaw;
         commitQuantizedValue(nextRaw);
@@ -553,7 +759,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
                         {/* Handle Pivot Container positioned by percentage */}
                         <div
                             className="zcam-tbar-handle-container"
-                            style={{ bottom: `${percentage * 100}%` }}
+                            style={{ bottom: `calc(12px + ${(visualPercentage ?? percentage)} * (100% - 24px))` }}
                         >
                             <div className="zcam-tbar-handle" />
                         </div>

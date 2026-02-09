@@ -20,20 +20,23 @@ export const focusSliderConfig: SliderControlConfig = {
   operationId: 'ptz.setFocus', // For slider drag
   orientation: 'vertical',
   size: 'small',
-  valueRange: { min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 1 },
+  valueRange: { min: 0, max: 100, step: 1 },
 
   // Read dynamic range from camera state
-  readValueRange: (view) => {
-    const focus = view.camera.ptz?.focus as any;
-    return {
-      min: focus?.min ?? PTZ_FOCUS_RANGE.min,
-      max: focus?.max ?? PTZ_FOCUS_RANGE.max,
-      step: focus?.step ?? 1,
-    };
-  },
+  readValueRange: () => ({ min: 0, max: 100, step: 1 }),
 
-  readValue: (view) => view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min,
-  formatValue: (value) => String(value),
+  readValue: (view) => {
+    const raw = view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min;
+    const range = PTZ_FOCUS_RANGE.max - PTZ_FOCUS_RANGE.min;
+    if (range === 0) return 0;
+    return Math.max(0, Math.min(100, Math.round(((raw - PTZ_FOCUS_RANGE.min) / range) * 100)));
+  },
+  onValueChange: (value, store) => {
+    const range = PTZ_FOCUS_RANGE.max - PTZ_FOCUS_RANGE.min;
+    const raw = Math.round((value / 100) * range + PTZ_FOCUS_RANGE.min);
+    store.runOperation('zcam.camera.pages.main.ptz.focus', 'ptz.focus', 'ptz.setFocus', { value: raw });
+  },
+  formatValue: (value) => String(Math.round(value)),
   enablePointerDrag: true,
   profileKey: 'gentle',
   hideHeaderValue: true,

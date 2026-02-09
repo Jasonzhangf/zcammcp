@@ -106,17 +106,8 @@ export const ptzOperations: OperationDefinition[] = [
       const value = Number(payload.value ?? 0);
       const clamped = clamp(value, PTZ_ZOOM_RANGE.min, PTZ_ZOOM_RANGE.max);
 
-      // Map to: zcam control zoom pos <value>
       return {
-        cliRequest: {
-          id: `ptz.zoom.${Date.now()}`,
-          command: 'control',
-          args: ['control', 'zoom', 'pos', String(clamped)],
-          params: {
-            // Pass slider metadata to help store reconcile optimistic updates if needed
-            ...(extractSliderMeta(payload) ? { sliderMeta: extractSliderMeta(payload) } : {})
-          }
-        }
+        cliRequest: buildUvcCliRequest('zoom', clamped, { meta: extractSliderMeta(payload) }),
       };
     },
   },
@@ -137,8 +128,9 @@ export const ptzOperations: OperationDefinition[] = [
     cliCommand: 'control.ptz.focusnear',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       // Get fzSpeed from UI state (0-100) and normalize to 0.0-1.0
-      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
-      const normalizedSpeed = Math.max(0.01, Math.min(1.0, fzSpeed / 100.0));
+      // const fzSpeed = ctx.uiState.fzSpeed ?? 50;
+      const focusSpeed = 1;
+      const normalizedSpeed = Math.max(0.01, Math.min(1.0, focusSpeed / 100.0));
 
       return {
         cliRequest: {
@@ -154,8 +146,9 @@ export const ptzOperations: OperationDefinition[] = [
     cliCommand: 'control.ptz.focusfar',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       // Get fzSpeed from UI state (0-100) and normalize to 0.0-1.0
-      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
-      const normalizedSpeed = Math.max(0.01, Math.min(1.0, fzSpeed / 100.0));
+      // const fzSpeed = ctx.uiState.fzSpeed ?? 50;
+      const focusSpeed = 1;
+      const normalizedSpeed = Math.max(0.01, Math.min(1.0, focusSpeed / 100.0));
 
       return {
         cliRequest: {
@@ -223,6 +216,77 @@ export const ptzOperations: OperationDefinition[] = [
           command: 'control',
           args: ['control', 'ptz', 'zoomstop'],
         }
+      };
+    },
+  },
+  {
+    id: 'lens.zoomVelocity',
+    cliCommand: 'control.ptz.zoomVelocity',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      const v = Number(payload.params?.['v'] ?? 0);
+      if (!Number.isFinite(v)) {
+        return {};
+      }
+
+      const abs = Math.abs(v);
+      if (abs < 0.0001) {
+        return {
+          cliRequest: {
+            id: `lens.zoomVelocity.stop.${Date.now()}`,
+            command: 'control',
+            args: ['control', 'ptz', 'zoomstop'],
+          }
+        };
+      }
+
+      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
+      const normalizedMax = Math.max(0.01, Math.min(1, fzSpeed / 100));
+      const speed = Math.max(0.01, Math.min(1, abs * normalizedMax));
+      const action = v > 0 ? 'zoomin' : 'zoomout';
+
+      return {
+        cliRequest: {
+          id: `lens.zoomVelocity.${action}.${Date.now()}`,
+          command: 'control',
+          args: ['control', 'ptz', action, speed.toFixed(2)],
+        }
+      };
+    },
+  },
+  {
+    id: 'ptz.nudge',
+    cliCommand: 'ptz.nudge',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      const direction = payload.params?.['direction'] as PtzDirection | undefined;
+      if (!direction) return {};
+
+      const delta = PTZ_DIRECTION_DELTAS[direction];
+      if (!delta) return {};
+
+      const step = deriveStep(ctx, payload);
+      const currentPan = ctx.cameraState.ptz?.pan?.value ?? 0;
+      const currentTilt = ctx.cameraState.ptz?.tilt?.value ?? 0;
+
+      const nextPan = delta.pan
+        ? clamp(currentPan + delta.pan * step, PTZ_PAN_RANGE.min, PTZ_PAN_RANGE.max)
+        : currentPan;
+      const nextTilt = delta.tilt
+        ? clamp(currentTilt + delta.tilt * step, PTZ_TILT_RANGE.min, PTZ_TILT_RANGE.max)
+        : currentTilt;
+
+      const cliRequests: CliRequest[] = [];
+      if (delta.pan) cliRequests.push(buildUvcCliRequest('pan', nextPan, { meta: extractSliderMeta(payload) }));
+      if (delta.tilt) cliRequests.push(buildUvcCliRequest('tilt', nextTilt, { meta: extractSliderMeta(payload) }));
+
+      return {
+        newStatePartial: {
+          ptz: {
+            ...(ctx.cameraState.ptz ?? {}),
+            pan: { value: nextPan, view: String(nextPan) },
+            tilt: { value: nextTilt, view: String(nextTilt) },
+          },
+        },
+        cliRequests,
       };
     },
   },

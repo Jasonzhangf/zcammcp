@@ -8,8 +8,8 @@ const { StateHost } = require('./state-host/state-host.cjs');
 
 const INITIAL_WIDTH = 1200;
 const INITIAL_HEIGHT = 960;
-const PTZ_ONLY_WIDTH = 820;
-const PTZ_ONLY_HEIGHT = 720;
+const PTZ_ONLY_WIDTH = 480;
+const PTZ_ONLY_HEIGHT = 630;
 const LAYOUT_VARIANTS = ['normal', 'studio'];
 
 const CLI_ROOT = process.env.ZCAM_CLI_ROOT || path.resolve(__dirname, '..', 'cli');

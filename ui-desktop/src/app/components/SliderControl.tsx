@@ -208,8 +208,8 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const getSpeedMultiplier = useCallback(() => {
     try {
       // 如果是zoom滑块，从view中获取speed值
-      if (config.kind === 'ptz.zoom' && view.ui.ptzSpeed !== undefined) {
-        const speedValue = view.ui.ptzSpeed;
+      if (config.kind === 'ptz.zoom' && view.ui.fzSpeed !== undefined) {
+        const speedValue = view.ui.fzSpeed;
         // speed范围0-100，映射为归一化乘数
         // speed满值(100) = 1.0 (满速)
         // speed 50 = 0.5 (半速)

@@ -28,7 +28,8 @@ export const defaultShutterSelectConfig: ShutterSelectConfig = {
     value: v,
   })),
   readValue(view) {
-    return view.camera.exposure?.shutter?.value;
+    const value = view.camera.exposure?.shutter?.value;
+    return typeof value === 'number' ? value : undefined;
   },
   formatValue(view, v) {
     // 优先使用 cameraState 中已有的 view 文本, 回退到选项 label

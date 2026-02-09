@@ -77,7 +77,7 @@ const ptSpeedSliderConfig: SliderControlConfig = {
 const fzSpeedSliderConfig: SliderControlConfig = {
   nodePath: 'zcam.camera.pages.main.ptz.fzSpeed',
   kind: 'ptz.fzSpeed',
-  label: 'FZ SPEED',
+  label: 'ZOOM SPEED',
   size: 'small',
   orientation: 'horizontal',
   valueRange: { min: 0, max: 100, step: 1 },
@@ -482,6 +482,8 @@ export function PtzCard() {
     [focusManager],
   );
 
+  const [afOn, setAfOn] = useState(true);
+
   const handlePadKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (isInteractionDisabled) return;
@@ -615,9 +617,6 @@ export function PtzCard() {
               {/* FZ Sliders */}
               <div className="zcam-ptz-sliders">
                 <div className="zcam-ptz-slider-column">
-                  <SliderControl config={focusSliderConfig} disabled={isInteractionDisabled} />
-                </div>
-                <div className="zcam-ptz-slider-column">
                   <TBarControl
                     config={zoomSliderConfig}
                     disabled={isInteractionDisabled}
@@ -636,17 +635,38 @@ export function PtzCard() {
                     }, [])}
                   />
                 </div>
+
+                <div className="zcam-ptz-slider-column">
+                  <SliderControl
+                    config={focusSliderConfig}
+                    disabled={isInteractionDisabled || afOn}
+                  />
+                </div>
               </div>
 
               {/* FZ Status Grid */}
               <div className="zcam-ptz-status-grid">
                 <div className="zcam-ptz-status-cell">
-                  <span className="zcam-ptz-status-label">Focus</span>
-                  <span className="zcam-ptz-status-value">{focusDisplay}</span>
-                </div>
-                <div className="zcam-ptz-status-cell">
                   <span className="zcam-ptz-status-label">Zoom</span>
                   <span className="zcam-ptz-status-value">{zoomDisplay}</span>
+                </div>
+                {/* Placeholder for Focus Value (Replaced with AF Switch) */}
+                <div className="zcam-ptz-status-cell">
+                  <span className="zcam-ptz-status-label">Focus</span>
+                  <div className="zcam-toggle-group" style={{ margin: 0, justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className={`zcam-toggle ${afOn ? 'zcam-toggle-on' : 'zcam-toggle-off'}`}
+                      onClick={() => setAfOn(prev => !prev)}
+                      disabled={isInteractionDisabled}
+                      style={{ margin: 0 }}
+                    >
+                      <span className="zcam-toggle-knob" />
+                    </button>
+                    <span className={afOn ? 'zcam-toggle-label-on' : 'zcam-toggle-label-off'} style={{ marginLeft: 6, fontSize: '12px', minWidth: '32px' }}>
+                      {afOn ? 'AUTO' : 'MANUAL'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
