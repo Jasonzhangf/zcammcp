@@ -29,7 +29,7 @@ export interface UvcResponse {
 
 export interface WindowStatePayload {
   mode?: 'main' | 'ball';
-  layoutSize?: 'normal' | 'studio';
+  layoutSize?: 'normal' | 'studio' | 'ptz';
   ballVisible?: boolean;
   lastBounds?: { x: number; y: number; width: number; height: number };
   updatedAt?: number;

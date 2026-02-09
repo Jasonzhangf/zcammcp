@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   restoreFromBall: () => ipcRenderer.invoke('window:restoreFromBall'),
   moveBall: (payload) => ipcRenderer.invoke('window:moveBall', payload),
   toggleSize: () => ipcRenderer.invoke('window:toggleSize'),
+  setBounds: (bounds) => ipcRenderer.invoke('window:setBounds', bounds),
   sendWindowCommand: (cmd) => ipcRenderer.invoke('window:sendCommand', cmd),
   pushState: (channel, payload) => ipcRenderer.invoke('state:push', { channel, payload }),
   runCliCommand: (payload) => ipcRenderer.invoke('cli:run', payload),

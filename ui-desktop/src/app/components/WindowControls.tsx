@@ -59,8 +59,9 @@ export function WindowControls() {
     }
   };
 
-  const layoutLabel = scene.layoutSize === 'normal' ? 'A' : 'B';
-  const layoutTitle = scene.layoutSize === 'normal' ? '布局方案 A' : '布局方案 B';
+  const layoutLabel = scene.layoutSize === 'normal' ? 'A' : scene.layoutSize === 'studio' ? 'B' : 'P';
+  const layoutTitle =
+    scene.layoutSize === 'normal' ? '布局方案 A' : scene.layoutSize === 'studio' ? '布局方案 B' : '布局方案 P（PTZ）';
   const toggleTitle = isBall ? '恢复主窗口' : '缩小成球';
 
   return (

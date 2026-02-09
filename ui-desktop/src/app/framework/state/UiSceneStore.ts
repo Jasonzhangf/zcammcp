@@ -1,6 +1,6 @@
 export type WindowMode = 'main' | 'ball';
 
-export type LayoutSize = 'normal' | 'studio';
+export type LayoutSize = 'normal' | 'studio' | 'ptz';
 
 export interface UiSceneState {
   windowMode: WindowMode;

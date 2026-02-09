@@ -1757,9 +1757,15 @@ body {
 }
 
 .zcam-main-grid[data-path='zcam.layout.normal'],
-.zcam-main-grid[data-path='zcam.layout.studio'] {
+.zcam-main-grid[data-path='zcam.layout.studio'],
+.zcam-main-grid[data-path='zcam.layout.ptz.main'] {
   gap: var(--zcam-safe-gap);
   padding: 0 var(--zcam-safe-gap) var(--zcam-safe-gap);
+}
+
+.page-shell[data-layout='ptz'] .zcam-main-control-row {
+  height: 100%;
+  padding-right: 0;
 }
 
 [data-container-id]>.zcam-card {

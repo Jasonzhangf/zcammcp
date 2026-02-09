@@ -8,6 +8,8 @@ const { StateHost } = require('./state-host/state-host.cjs');
 
 const INITIAL_WIDTH = 1200;
 const INITIAL_HEIGHT = 960;
+const PTZ_ONLY_WIDTH = 820;
+const PTZ_ONLY_HEIGHT = 720;
 const LAYOUT_VARIANTS = ['normal', 'studio'];
 
 const CLI_ROOT = process.env.ZCAM_CLI_ROOT || path.resolve(__dirname, '..', 'cli');
@@ -31,6 +33,7 @@ const TEST_COMMAND_TIMEOUT_MS = parseInt(process.env.ZCAM_TEST_COMMAND_TIMEOUT |
 let mainWindow = null;
 let ballWindow = null;
 let lastNormalBounds = null;
+let lastMainBoundsBeforePtz = null;
 let cliServiceProcess = null;
 let cameraStateProcess = null;
 let cameraPollTimer = null;
@@ -253,9 +256,28 @@ function moveBall(payload) {
 }
 
 function toggleWindowSize() {
+  if (!mainWindow) {
+    return { ok: false, error: 'main window not ready' };
+  }
   const current = windowState.layoutSize || 'normal';
-  const nextLayout = current === 'normal' ? 'studio' : 'normal';
-  const state = pushWindowState({ layoutSize: nextLayout });
+  const nextLayout = current === 'normal' ? 'studio' : current === 'studio' ? 'ptz' : 'normal';
+  if (current !== 'ptz' && nextLayout === 'ptz') {
+    lastMainBoundsBeforePtz = mainWindow.getBounds();
+    const prev = lastMainBoundsBeforePtz;
+    const display = screen.getDisplayMatching(prev);
+    const { workArea } = display;
+
+    const width = Math.min(workArea.width, PTZ_ONLY_WIDTH);
+    const height = Math.min(workArea.height, PTZ_ONLY_HEIGHT);
+    let x = Math.round(prev.x + (prev.width - width) / 2);
+    let y = Math.round(prev.y + (prev.height - height) / 2);
+    x = Math.max(workArea.x, Math.min(workArea.x + workArea.width - width, x));
+    y = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, y));
+    mainWindow.setBounds({ x, y, width, height });
+  } else if (current === 'ptz' && nextLayout !== 'ptz' && lastMainBoundsBeforePtz) {
+    mainWindow.setBounds(lastMainBoundsBeforePtz);
+  }
+  const state = pushWindowState({ layoutSize: nextLayout, lastBounds: mainWindow.getBounds() });
   return { ok: true, state };
 }
 

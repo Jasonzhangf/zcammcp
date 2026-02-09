@@ -39,6 +39,29 @@ const STUDIO_BOUNDS: ContainerBoundsMap = {
   shortcuts: { x: 20, y: 85, width: 80, height: 15 },
 };
 
+function MainPtzOnlyLayout() {
+  return (
+    <div className="zcam-main-layout-wrapper" data-path="zcam.layout.ptz">
+      <div className="zcam-main-grid" data-path="zcam.layout.ptz.main">
+        <div className="zcam-main-control-row" data-path="zcam.layout.ptz.controls">
+          <ContainerHost
+            id="group.ptz"
+            parentId="page.root"
+            kind="group"
+            layoutMode="flow"
+            className="zcam-main-control zcam-main-control-ptz"
+            data-path="zcam.layout.ptz.ptz"
+            defaultBounds={{ x: 0, y: 0, width: 100, height: 100 }}
+            resizable
+          >
+            <PtzCard />
+          </ContainerHost>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MainNormalLayout() {
   return (
     <div className="zcam-main-layout-wrapper" data-path="zcam.layout.normal">
@@ -194,6 +217,11 @@ const mainVariants: SceneVariants = {
     layoutSize: 'studio',
     slots: [{ id: 'studio-grid', component: MainStudioLayout }],
   },
+  ptz: {
+    id: 'main',
+    layoutSize: 'ptz',
+    slots: [{ id: 'ptz-only-grid', component: MainPtzOnlyLayout }],
+  },
 };
 
 const ballVariants: SceneVariants = {
@@ -205,6 +233,11 @@ const ballVariants: SceneVariants = {
   studio: {
     id: 'ball',
     layoutSize: 'studio',
+    slots: [{ id: 'status', component: StatusCard }],
+  },
+  ptz: {
+    id: 'ball',
+    layoutSize: 'ptz',
     slots: [{ id: 'status', component: StatusCard }],
   },
 };

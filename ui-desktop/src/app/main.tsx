@@ -58,7 +58,7 @@ function attachWindowStateBridge(store: UiSceneStore) {
     if (state.mode === 'ball' || state.mode === 'main') {
       patch.windowMode = state.mode;
     }
-    if (state.layoutSize === 'normal' || state.layoutSize === 'studio') {
+    if (state.layoutSize === 'normal' || state.layoutSize === 'studio' || state.layoutSize === 'ptz') {
       patch.layoutSize = state.layoutSize;
     }
     if (Object.keys(patch).length > 0) {
