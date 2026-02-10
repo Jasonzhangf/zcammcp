@@ -51,7 +51,7 @@ const zoomSliderConfig: SliderControlConfig = {
   },
   // Enable immediate sync for button operations
   // Buttons will show real-time backend values instead of optimistic UI
-  buttonOperationsDisableOptimistic: true,
+  buttonOperationsDisableOptimistic: false,
 };
 
 // PT Speed (Pan/Tilt) - 用于圆盘右侧的小滑块
