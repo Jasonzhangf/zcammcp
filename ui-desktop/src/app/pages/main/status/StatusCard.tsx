@@ -188,7 +188,9 @@ export function StatusCard() {
               data-path="zcam.camera.pages.main.status.recording"
             >
               <span className={`zcam-chip ${recordingState.isRecording ? 'zcam-chip-active' : ''}`}>
-                REC ● {recordingState.isRecording ? recordingState.durationText : '--:--:--'}
+                <span className={recordingState.isRecording ? 'zcam-chip-label-active' : ''}>REC ●</span>
+                {' '}
+                {recordingState.isRecording ? recordingState.durationText : '--:--:--'}
               </span>
               <span className="zcam-chip" style={{ opacity: 1 }}>剩余 {recordingState.remainingText}</span>
             </div>
@@ -196,7 +198,9 @@ export function StatusCard() {
               className="zcam-status-chip-group zcam-status-chip-group-right"
               data-path="zcam.camera.pages.main.status.streaming"
             >
-              <span className="zcam-chip zcam-chip-active">STREAM ● RTMP</span>
+              <span className="zcam-chip zcam-chip-active">
+                <span className="zcam-chip-label-active">STREAM ●</span> RTMP
+              </span>
               <span className="zcam-chip">1080p60 / 8Mbps</span>
             </div>
           </div>

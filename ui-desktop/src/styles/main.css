@@ -387,6 +387,7 @@ body {
 
 .zcam-status-item-value {
   font-size: 11px;
+  color: #fff;
 }
 
 .zcam-status-item-sub {
@@ -446,10 +447,14 @@ body {
   border-radius: 999px;
   font-size: 10px;
   border: 1px solid #333;
+  color: #fff;
 }
 
 .zcam-chip-active {
   border-color: #ff4d4f;
+}
+
+.zcam-chip-label-active {
   color: #ff4d4f;
 }
 
