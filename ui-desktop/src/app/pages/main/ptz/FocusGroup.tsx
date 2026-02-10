@@ -4,6 +4,7 @@ import type { ContainerNode } from '../../../framework/container/ContainerNode.j
 import { SliderControl } from '../../../components/SliderControl.js';
 import type { SliderControlConfig } from '../../../framework/ui/ControlConfig.js';
 import { PTZ_FOCUS_RANGE } from '../../../app/operations/ptzOperations.js';
+import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 
 export const focusGroupNode: ContainerNode = {
   path: 'zcam.camera.pages.main.ptz.focusGroup',
@@ -18,23 +19,18 @@ export const focusSliderConfig: SliderControlConfig = {
   kind: 'ptz.focus',
   label: 'Focus',
   operationId: 'ptz.setFocus', // For slider drag
-  orientation: 'vertical',
+  orientation: 'horizontal',
   size: 'small',
-  valueRange: { min: 0, max: 100, step: 1 },
+  valueRange: { min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 1 },
 
   // Read dynamic range from camera state
-  readValueRange: () => ({ min: 0, max: 100, step: 1 }),
+  readValueRange: () => ({ min: PTZ_FOCUS_RANGE.min, max: PTZ_FOCUS_RANGE.max, step: 1 }),
 
   readValue: (view) => {
-    const raw = view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min;
-    const range = PTZ_FOCUS_RANGE.max - PTZ_FOCUS_RANGE.min;
-    if (range === 0) return 0;
-    return Math.max(0, Math.min(100, Math.round(((raw - PTZ_FOCUS_RANGE.min) / range) * 100)));
+    return view.camera.ptz?.focus?.value ?? PTZ_FOCUS_RANGE.min;
   },
   onValueChange: (value, store) => {
-    const range = PTZ_FOCUS_RANGE.max - PTZ_FOCUS_RANGE.min;
-    const raw = Math.round((value / 100) * range + PTZ_FOCUS_RANGE.min);
-    store.runOperation('zcam.camera.pages.main.ptz.focus', 'ptz.focus', 'ptz.setFocus', { value: raw });
+    store.runOperation('zcam.camera.pages.main.ptz.focus', 'ptz.focus', 'ptz.setFocus', { value });
   },
   formatValue: (value) => String(Math.round(value)),
   enablePointerDrag: true,
@@ -60,13 +56,16 @@ interface FocusGroupProps {
 }
 
 export function FocusGroup({ disabled = false }: FocusGroupProps = {}) {
-  const [afOn, setAfOn] = useState(true);
+  const store = usePageStore();
+  const { camera } = useViewState();
+  const afOn = (camera.ptz?.focusMode?.value ?? 'AF') === 'AF';
   const [editRange, setEditRange] = useState(false);
   const [editingPreset, setEditingPreset] = useState<'far' | 'near' | null>(null);
 
   const toggleAf = () => {
     if (disabled) return;
-    setAfOn((prev) => !prev);
+    const newMode = !afOn;
+    store.runOperation('zcam.camera.pages.main.ptz.focus', 'ptz.focus', 'ptz.setFocusMode', { value: newMode ? 'AF' : 'MF' });
   };
 
   const toggleEdit = () => {
@@ -97,12 +96,15 @@ export function FocusGroup({ disabled = false }: FocusGroupProps = {}) {
           >
             <span className="zcam-toggle-knob" />
           </button>
-          <span className={afOn ? 'zcam-toggle-label-on' : 'zcam-toggle-label-off'}>
-            {afOn ? 'AF' : 'MF'}
+          <span className={afOn ? 'zcam-toggle-label-on' : 'zcam-toggle-label-off'} style={{ minWidth: '80px', textAlign: 'right' }}>
+            {afOn ? 'FOCUS AUTO' : 'MANUAL'}
           </span>
         </div>
       </div>
 
+      {/* Optional: Focus Limit Row can be conditionally rendered or kept if desired. 
+          The user only asked for Focus Control and Focus Switch. 
+          Keeping it as it provides extra functionality which is good. */}
       <div className="zcam-ptz-focus-limit-row" data-path="zcam.camera.pages.main.ptz.focusLimit">
         <span className="zcam-ptz-focus-limit-label">Focus Limit</span>
         <div className="zcam-ptz-focus-limit-buttons">

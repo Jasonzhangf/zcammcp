@@ -19,7 +19,7 @@ const WS_RECONNECT_INTERVAL = 3000;
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,lens_zoom_pos,lens_focus_pos,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain'
 )
   .split(',')
   .map((k) => k.trim())
@@ -212,6 +212,7 @@ function projectCameraState(values) {
       tilt: projectValue('tilt'),
       zoom: projectValue('lens_zoom_pos'),
       focus: projectValue('lens_focus_pos'),
+      focusMode: projectValue('focus'),
       speed: projectValue('speed') || projectValue('ptz_common_speed'),
     },
     exposure: {

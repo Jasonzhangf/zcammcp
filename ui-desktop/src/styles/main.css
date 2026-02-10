@@ -535,16 +535,16 @@ body {
   display: grid;
   grid-template-columns: 6fr 4fr;
   /* 6:4 ratio for PT:FZ */
-  column-gap: 12px;
-  /* Left Drop = 12px */
+  column-gap: 4px;
+  /* Left Drop = 4px (1/3 of 12px) */
   align-items: stretch;
   justify-content: center;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   flex: 1;
   min-width: 0;
   max-width: 100%;
-  padding-right: 8px;
-  /* Right Drop = 4px(base) + 8px = 12px. Balance! */
+  padding-right: 2;
+  /* Removed right padding */
 }
 
 .zcam-ptz-grid {
@@ -1017,7 +1017,6 @@ body {
 }
 
 .zcam-ptz-focus-wrap {
-  margin-top: 4px;
   padding: 6px 8px;
   border-radius: 8px;
   border: 1px solid #333;
@@ -1302,9 +1301,61 @@ body {
   gap: 6px;
 }
 
+.zcam-ptz-focus-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.zcam-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
 .zcam-slider-row .zcam-slider-wrap {
   flex: 1 1 auto;
   max-width: none;
+}
+
+.zcam-ptz-focus-limit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.zcam-ptz-focus-limit-label {
+  font-size: 10px;
+  color: #888;
+}
+
+.zcam-ptz-focus-limit-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.zcam-ptz-focus-limit-btn {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background: #1f1f1f;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.zcam-ptz-focus-limit-btn:hover:not(:disabled) {
+  background: #262626;
+  border-color: #666;
+}
+
+.zcam-ptz-focus-limit-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .zcam-slider-row label {

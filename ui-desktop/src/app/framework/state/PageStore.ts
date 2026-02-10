@@ -9,6 +9,7 @@ export interface CameraState {
     zoom?: { value: number; view: string; min?: number; max?: number; step?: number };
     speed?: { value: number; view: string; min?: number; max?: number; step?: number };
     focus?: { value: number; view: string; min?: number; max?: number; step?: number };
+    focusMode?: { value: string; view: string; options?: string[] };
   };
 
   // 曝光设置
@@ -66,6 +67,7 @@ function mergeCameraStates(current: CameraState, next: CameraState): CameraState
     const keys = Object.keys(next.ptz) as Array<keyof typeof next.ptz>;
     for (const key of keys) {
       if (next.ptz[key]) {
+        // @ts-ignore
         merged.ptz[key] = { ...(merged.ptz[key] ?? {}), ...next.ptz[key] };
       }
     }

@@ -124,6 +124,21 @@ export const ptzOperations: OperationDefinition[] = [
     },
   },
   {
+    id: 'ptz.setFocusMode',
+    cliCommand: 'ptz.focusMode',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      const mode = String(payload.value || 'AF'); // 'AF' or 'MF'
+      
+      return {
+        cliRequest: {
+          id: `ptz.setFocusMode.${Date.now()}`,
+          command: 'uvc',
+          args: ['uvc', 'set', 'focus', mode],
+        }
+      };
+    },
+  },
+  {
     id: 'ptz.focusNear',
     cliCommand: 'control.ptz.focusnear',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
