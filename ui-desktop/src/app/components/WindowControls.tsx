@@ -25,6 +25,10 @@ function sendElectronCommand(command: WindowCommand): void {
       void window.electronAPI.sendWindowCommand?.('toggleSize');
     }
   }
+
+  if (command === 'switchToPtz') {
+    void window.electronAPI.sendWindowCommand?.('switchToPtz');
+  }
 }
 
 function pushWindowPatch(patch: Record<string, unknown>): void {
@@ -48,6 +52,12 @@ export function WindowControls() {
     applyWindowCommand(store, 'toggleSize');
     sendElectronCommand('toggleSize');
     pushWindowPatch({ layoutSize: store.state.layoutSize });
+  };
+
+  const handleSwitchToPtz = () => {
+    applyWindowCommand(store, 'switchToPtz');
+    sendElectronCommand('switchToPtz');
+    pushWindowPatch({ layoutSize: 'ptz' });
   };
 
   const handleClose = () => {
@@ -83,6 +93,15 @@ export function WindowControls() {
         onClick={handleLayoutToggle}
       >
         {layoutLabel}
+      </button>
+      <button
+        type="button"
+        className="control-btn"
+        title="切换到PTZ模式"
+        aria-label="切换到PTZ模式"
+        onClick={handleSwitchToPtz}
+      >
+        PTZ
       </button>
       <button
         type="button"

@@ -30,7 +30,7 @@ export interface SliderControlConfig {
     toActual?(value: number): number;
   };
   profileKey?: string;
-  onValueChange?: (value: number, store: any) => void;
+  onValueChange?: (value: number, store: any, context?: { simulationOnly?: boolean }) => void;
 
   // New: +/- button operation configs
   incrementOperation?: {
@@ -50,6 +50,10 @@ export interface SliderControlConfig {
   // New: visually invert the slider progress bar (100% -> 0%)
   // Useful when Min value corresponds to "Full" or "Far" conceptually, or vice versa
   displayInverted?: boolean;
+
+  // New: Simulate value changes locally while performing button operations
+  // If true, holding +/- buttons will trigger both the operation AND local value simulation (via startHold)
+  simulateValueOnOperation?: boolean;
 }
 
 export interface ToggleControlConfig {

@@ -134,6 +134,14 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
     const rawFocus = camera.ptz.focus ?? camera['lens_focus_pos'];
     const focus = mapEntry(rawFocus);
     if (focus) next.ptz.focus = focus;
+
+    if (camera.ptz.focusMode) {
+      const entry = camera.ptz.focusMode;
+      const value = String(entry.value ?? entry);
+      const view = entry.view ?? value;
+      const options = Array.isArray(entry.opts) ? entry.opts.map(String) : undefined;
+      next.ptz.focusMode = { value, view, options };
+    }
   }
 
   if (camera.image) {

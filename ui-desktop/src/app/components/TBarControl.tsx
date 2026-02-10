@@ -272,6 +272,11 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         // 1. Initial Start Sync (Best effort)
         let currentVal = effectiveValue;
 
+        // Force immediate update to prevent frame gap
+        const startVal = Math.round(currentVal);
+        setPendingValue(startVal);
+        onSimulation?.(startVal);
+
         // 2. Simulation Loop
         pollIntervalRef.current = setInterval(() => {
             // Speed logic: Range 4528. Speed 100 => 2750ms. Step ≈ 1.6465 * speed.

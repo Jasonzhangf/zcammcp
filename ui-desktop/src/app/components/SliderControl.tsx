@@ -26,6 +26,7 @@ interface SliderOperationMeta {
   direction?: 1 | -1;
   tick?: number;
   stop?: boolean;
+  simulationOnly?: boolean;
 }
 
 export function SliderControl({ config, disabled = false }: SliderControlProps) {
@@ -144,13 +145,15 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   }, [clearPendingTimeout]);
 
   const commitValue = useCallback(
-    (next: number, meta?: SliderOperationMeta) => {
+    (next: number, meta?: SliderOperationMeta & { simulationOnly?: boolean }) => {
       if (disabled) return;
 
       if (config.onValueChange) {
-        config.onValueChange(next, store);
+        config.onValueChange(next, store, { simulationOnly: meta?.simulationOnly });
         return;
       }
+
+      if (meta?.simulationOnly) return; // Skip operation if simulation only
 
       const payload: OperationPayload = { value: next };
       if (meta) {
@@ -224,7 +227,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   }, [config.kind, view]);
 
   const applyStep = useCallback(
-    (direction: 1 | -1, tick: number = 0, stepScale?: number) => {
+    (direction: 1 | -1, tick: number = 0, stepScale?: number, simulationOnly?: boolean) => {
       if (disabled) return;
 
       const scale = typeof stepScale === 'number' ? stepScale : holdStepScaleRef.current ?? 1;
@@ -257,12 +260,13 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         intervalMs: getProfileInterval(profile),
         direction,
         tick,
+        simulationOnly,
       });
     },
     [commitQuantizedValue, disabled, getSpeedMultiplier, max, min, profile],
   );
 
-  const stopHold = useCallback(() => {
+  const stopHold = useCallback((options?: { simulationOnly?: boolean }) => {
     const hadHold = Boolean(holdDirectionRef.current || holdTimerRef.current || keyboardHoldKeyRef.current);
     if (holdTimerRef.current) {
       clearInterval(holdTimerRef.current);
@@ -300,11 +304,11 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         value: currentValue,
       },
     });
-    commitValue(currentValue, { stop: true });
+    commitValue(currentValue, { stop: true, simulationOnly: options?.simulationOnly });
   }, [actualValue, baseStep, commitValue, config.nodePath, max, min, startPendingTimeout, pendingValue]);
 
   const startHold = useCallback(
-    (direction: 1 | -1, stepScale = 1, options?: { key?: string }) => {
+    (direction: 1 | -1, stepScale = 1, options?: { key?: string; simulationOnly?: boolean }) => {
       if (disabled) return;
 
       // Clear legacy hold state
@@ -326,13 +330,13 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
           key: options?.key,
         },
       });
-      applyStep(direction, 0, stepScale);
+      applyStep(direction, 0, stepScale, options?.simulationOnly);
       if (options?.key) {
         keyboardHoldKeyRef.current = options.key;
       }
       holdTimerRef.current = setInterval(() => {
         holdTickRef.current += 1;
-        applyStep(direction, holdTickRef.current);
+        applyStep(direction, holdTickRef.current, undefined, options?.simulationOnly);
       }, getProfileInterval(profile));
     },
     [applyStep, disabled, profile, clearPendingTimeout],
@@ -495,8 +499,12 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         config.incrementOperation.onPress,
         {}
       );
+
+      if (config.simulateValueOnOperation) {
+        startHold(1, 1, { simulationOnly: true });
+      }
     }
-  }, [config, store, clearPendingTimeout]);
+  }, [config, store, clearPendingTimeout, startHold]);
 
   const handleIncrementRelease = useCallback(() => {
     // Only send release command if button was actually pressed
@@ -515,8 +523,12 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       if (!config.buttonOperationsDisableOptimistic) {
         startPendingTimeout(); // Unlock after release
       }
+
+      if (config.simulateValueOnOperation) {
+        stopHold({ simulationOnly: true });
+      }
     }
-  }, [config, store, startPendingTimeout]);
+  }, [config, store, startPendingTimeout, stopHold]);
 
   const handleDecrementPress = useCallback(() => {
     if (config.decrementOperation?.onPress) {
@@ -537,8 +549,12 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         config.decrementOperation.onPress,
         {}
       );
+
+      if (config.simulateValueOnOperation) {
+        startHold(-1, 1, { simulationOnly: true });
+      }
     }
-  }, [config, store, clearPendingTimeout]);
+  }, [config, store, clearPendingTimeout, startHold]);
 
   const handleDecrementRelease = useCallback(() => {
     // Only send release command if button was actually pressed
@@ -557,8 +573,12 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       if (!config.buttonOperationsDisableOptimistic) {
         startPendingTimeout(); // Unlock after release
       }
+
+      if (config.simulateValueOnOperation) {
+        stopHold({ simulationOnly: true });
+      }
     }
-  }, [config, store, startPendingTimeout]);
+  }, [config, store, startPendingTimeout, stopHold]);
 
   const increaseButton = (
     <button
@@ -583,6 +603,16 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         e.preventDefault();
         if (config.incrementOperation) {
           handleIncrementRelease();
+          if (config.simulateValueOnOperation) {
+            // Also need to release pointer capture if we were holding
+            if (e.currentTarget.releasePointerCapture) {
+              try {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              } catch {
+                // ignore release errors
+              }
+            }
+          }
         } else {
           if (e.currentTarget.releasePointerCapture) {
             try {
@@ -597,6 +627,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       onPointerLeave={() => {
         if (config.incrementOperation) {
           handleIncrementRelease();
+          // handleIncrementRelease already calls stopHold if simulating
         } else {
           stopHold();
         }
@@ -669,12 +700,22 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
         e.preventDefault();
         if (config.decrementOperation) {
           handleDecrementRelease();
+          if (config.simulateValueOnOperation) {
+            // Also need to release pointer capture if we were holding
+            if (e.currentTarget.releasePointerCapture) {
+              try {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+              } catch {
+                // ignore release errors
+              }
+            }
+          }
         } else {
           if (e.currentTarget.releasePointerCapture) {
             try {
               e.currentTarget.releasePointerCapture(e.pointerId);
             } catch {
-              // ignore
+              // ignore release errors
             }
           }
           stopHold();
@@ -683,6 +724,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
       onPointerLeave={() => {
         if (config.decrementOperation) {
           handleDecrementRelease();
+          // handleDecrementRelease already calls stopHold if simulating
         } else {
           stopHold();
         }

@@ -145,13 +145,24 @@ function pickNumeric(value) {
 async function refreshKeys(keys) {
   const results = [];
   for (const key of keys) {
+    // Map storage key 'focus_mode' back to camera key 'focus' for fetching
+    const fetchKey = key === 'focus_mode' ? 'focus' : key;
+    
     try {
-      const entry = await fetchProperty(key);
-      state.values[key] = entry;
+      const entry = await fetchProperty(fetchKey);
+      
+      // Map camera key 'focus' to storage key 'focus_mode'
+      const storageKey = fetchKey === 'focus' ? 'focus_mode' : fetchKey;
+      
+      // Update entry key to match storage key
+      entry.key = storageKey;
+      
+      state.values[storageKey] = entry;
       results.push(entry);
     } catch (err) {
-      state.values[key] = {
-        key,
+      const storageKey = key === 'focus' ? 'focus_mode' : key;
+      state.values[storageKey] = {
+        key: storageKey,
         value: null,
         raw: null,
         updatedAt: Date.now(),
@@ -201,6 +212,9 @@ function projectCameraState(values) {
       value: entry.value,
       view: String(entry.value),
       opts: entry.raw?.opts ?? entry.raw?.options, // Alias opts for frontend compatibility
+      min: entry.raw?.min,
+      max: entry.raw?.max,
+      step: entry.raw?.step,
       updatedAt: entry.updatedAt,
       w: entry.raw,
     };
@@ -212,7 +226,7 @@ function projectCameraState(values) {
       tilt: projectValue('tilt'),
       zoom: projectValue('lens_zoom_pos'),
       focus: projectValue('lens_focus_pos'),
-      focusMode: projectValue('focus'),
+      focusMode: projectValue('focus_mode'),
       speed: projectValue('speed') || projectValue('ptz_common_speed'),
     },
     exposure: {
@@ -465,8 +479,9 @@ function handleWebSocketMessage(msg) {
         nextRaw.supportsAuto = supportsAuto;
       }
       // 更新缓存
-      state.values[key] = {
-        key,
+      const storageKey = key === 'focus' ? 'focus_mode' : key;
+      state.values[storageKey] = {
+        key: storageKey,
         value: nextValue,
         raw: nextRaw,
         updatedAt: Date.now(),
@@ -474,7 +489,7 @@ function handleWebSocketMessage(msg) {
       };
       state.updatedAt = Date.now();
 
-      console.log(`[CameraState] WebSocket update: ${key} = ${nextValue}`);
+      console.log(`[CameraState] WebSocket update: ${key} -> ${storageKey} = ${nextValue}`);
 
       // If Zoom changed, refresh Focus to update range (metadata)
       if (key === 'lens_zoom_pos') {

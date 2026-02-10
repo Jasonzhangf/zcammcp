@@ -9,7 +9,7 @@ const { StateHost } = require('./state-host/state-host.cjs');
 const INITIAL_WIDTH = 1200;
 const INITIAL_HEIGHT = 960;
 const PTZ_ONLY_WIDTH = 410;
-const PTZ_ONLY_HEIGHT = 740;
+const PTZ_ONLY_HEIGHT = 712;
 const LAYOUT_VARIANTS = ['normal', 'studio'];
 
 const CLI_ROOT = process.env.ZCAM_CLI_ROOT || path.resolve(__dirname, '..', 'cli');
@@ -260,24 +260,39 @@ function toggleWindowSize() {
     return { ok: false, error: 'main window not ready' };
   }
   const current = windowState.layoutSize || 'normal';
-  const nextLayout = current === 'normal' ? 'studio' : current === 'studio' ? 'ptz' : 'normal';
-  if (current !== 'ptz' && nextLayout === 'ptz') {
-    lastMainBoundsBeforePtz = mainWindow.getBounds();
-    const prev = lastMainBoundsBeforePtz;
-    const display = screen.getDisplayMatching(prev);
-    const { workArea } = display;
+  // AB Mode: Toggle between normal and studio
+  // If current is PTZ, switch back to normal
+  const nextLayout = current === 'normal' ? 'studio' : 'normal';
 
-    const width = Math.min(workArea.width, PTZ_ONLY_WIDTH);
-    const height = Math.min(workArea.height, PTZ_ONLY_HEIGHT);
-    let x = Math.round(prev.x + (prev.width - width) / 2);
-    let y = Math.round(prev.y + (prev.height - height) / 2);
-    x = Math.max(workArea.x, Math.min(workArea.x + workArea.width - width, x));
-    y = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, y));
-    mainWindow.setBounds({ x, y, width, height });
-  } else if (current === 'ptz' && nextLayout !== 'ptz' && lastMainBoundsBeforePtz) {
+  if (current === 'ptz' && lastMainBoundsBeforePtz) {
     mainWindow.setBounds(lastMainBoundsBeforePtz);
   }
+  
   const state = pushWindowState({ layoutSize: nextLayout, lastBounds: mainWindow.getBounds() });
+  return { ok: true, state };
+}
+
+function switchToPtz() {
+  if (!mainWindow) {
+    return { ok: false, error: 'main window not ready' };
+  }
+  const current = windowState.layoutSize || 'normal';
+  if (current === 'ptz') return { ok: true, state: windowState };
+
+  lastMainBoundsBeforePtz = mainWindow.getBounds();
+  const prev = lastMainBoundsBeforePtz;
+  const display = screen.getDisplayMatching(prev);
+  const { workArea } = display;
+
+  const width = Math.min(workArea.width, PTZ_ONLY_WIDTH);
+  const height = Math.min(workArea.height, PTZ_ONLY_HEIGHT);
+  let x = Math.round(prev.x + (prev.width - width) / 2);
+  let y = Math.round(prev.y + (prev.height - height) / 2);
+  x = Math.max(workArea.x, Math.min(workArea.x + workArea.width - width, x));
+  y = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, y));
+  mainWindow.setBounds({ x, y, width, height });
+
+  const state = pushWindowState({ layoutSize: 'ptz', lastBounds: mainWindow.getBounds() });
   return { ok: true, state };
 }
 
@@ -593,6 +608,7 @@ ipcMain.handle('window:restoreFromBall', () => restoreFromBall());
 ipcMain.handle('window:moveBall', (_, payload) => moveBall(payload));
 
 ipcMain.handle('window:toggleSize', () => toggleWindowSize());
+ipcMain.handle('window:switchToPtz', () => switchToPtz());
 
 ipcMain.handle('window:setBounds', (_, bounds) => setWindowBounds(bounds));
 
@@ -604,6 +620,8 @@ ipcMain.handle('window:sendCommand', (_, cmd, payload) => {
       return restoreFromBall();
     case 'toggleSize':
       return toggleWindowSize();
+    case 'switchToPtz':
+      return switchToPtz();
     case 'setBounds':
       return setWindowBounds(payload);
     default:

@@ -538,6 +538,43 @@ export function PtzCard() {
     setViewMode(prev => prev === 'pad' ? 'wheel' : 'pad');
   }, []);
 
+  const handleHome = useCallback(() => {
+    if (isInteractionDisabled) return;
+
+    stopSimulation();
+    stopKeeper();
+    targetVelocityRef.current = { pan: 0, tilt: 0 };
+
+    holdDirectionRef.current = null;
+    holdPathRef.current = null;
+    holdTickRef.current = 0;
+    keyboardHoldKeyRef.current = null;
+    setActiveDirection(null);
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+
+    simPanRef.current = 0;
+    simTiltRef.current = 0;
+    panTargetRef.current = 0;
+    tiltTargetRef.current = 0;
+
+    setSimState({ pan: 0, tilt: 0, zoom: 0 });
+    store.applyCameraState({
+      ptz: {
+        pan: { value: 0, view: '0' },
+        tilt: { value: 0, view: '0' },
+        zoom: { value: 0, view: '0' },
+      },
+    });
+
+    void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.stop', 'ptz.stop', {});
+    void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {});
+
+    startKeeper();
+  }, [isInteractionDisabled, startKeeper, stopKeeper, stopSimulation, store]);
+
   return (
     <div className="zcam-card" data-path="zcam.camera.pages.main.ptz">
       <div className="zcam-card-header">
@@ -578,7 +615,7 @@ export function PtzCard() {
 
                   <div
                     className="zcam-ptz-home-btn"
-                    onClick={() => void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {})}
+                    onClick={handleHome}
                     title="Home"
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="#ccc">
