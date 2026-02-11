@@ -47,14 +47,9 @@ export interface CameraState {
 
   // 录制状态
   recording?: {
-    remain?: {
-      value: string;
-      view: string;
-      raw?: any;
-      duration?: number; // Parsed from desc
-      remaining?: number; // Parsed from msg
-    };
-    streamStatus?: { value: string; view: string; raw?: any }; // raw from backend
+    status: 'idle' | 'streaming';
+    duration: number;
+    remain: number;
   };
 }
 
@@ -89,6 +84,9 @@ function mergeCameraStates(current: CameraState, next: CameraState): CameraState
   }
   if (next.image) {
     merged.image = { ...(current.image ?? {}), ...next.image };
+  }
+  if (next.recording) {
+    merged.recording = { ...(current.recording ?? {}), ...next.recording };
   }
   if (next.devices) {
     merged.devices = next.devices;

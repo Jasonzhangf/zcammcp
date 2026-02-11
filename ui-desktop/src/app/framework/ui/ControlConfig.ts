@@ -54,6 +54,9 @@ export interface SliderControlConfig {
   // New: Simulate value changes locally while performing button operations
   // If true, holding +/- buttons will trigger both the operation AND local value simulation (via startHold)
   simulateValueOnOperation?: boolean;
+
+  // New: Force compact mode (hide track rail/fill, show only value)
+  hideTrack?: boolean;
 }
 
 export interface ToggleControlConfig {

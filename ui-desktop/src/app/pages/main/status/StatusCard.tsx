@@ -28,9 +28,14 @@ export function StatusCard() {
 
   const wbText = cam.whiteBalance?.temperature?.view ?? '---';
   const awbMode = cam.whiteBalance?.awbEnabled ? 'AWB' : 'MANUAL';
-  const zoomVal = cam.ptz?.zoom?.view ?? '-';
-  const panView = cam.ptz?.pan?.view ?? '--';
-  const tiltView = cam.ptz?.tilt?.view ?? '--';
+  const zoomVal = cam.ptz?.zoom?.value;
+  const panVal = cam.ptz?.pan?.value;
+  const tiltVal = cam.ptz?.tilt?.value;
+
+  const panDisplay = typeof panVal === 'number' ? Math.round(panVal) : '--';
+  const tiltDisplay = typeof tiltVal === 'number' ? Math.round(tiltVal) : '--';
+  const zoomDisplay = typeof zoomVal === 'number' ? Math.round(zoomVal) : '--';
+
   /* 
     Recording Status Logic
     remain.raw is expected to be { code: number, desc: string, msg: string }
@@ -38,44 +43,24 @@ export function StatusCard() {
     msg: remaining time (s).
   */
   const recordingState = useMemo(() => {
-    const remainRaw = cam.recording?.remain?.raw;
-    const streamStatus = cam.recording?.streamStatus?.value;
+    const status = cam.recording?.status;
+    const durationSec = cam.recording?.duration;
+    const remainingSec = cam.recording?.remain;
 
-    // Use pre-parsed values from PageStore/main.tsx
-    const durationSec = cam.recording?.remain?.duration;
-    const remainingSec = cam.recording?.remain?.remaining;
+    let isRecording = status === 'streaming';
+    let durationText = '00:00:00';
+    let remainingText = '0min';
 
-    let isRecording = false;
-    let durationText = '--:--:--';
-    let remainingText = '--:--:--';
-
-    // 1. Check Duration from `remain` property (Primary: pre-parsed)
     if (typeof durationSec === 'number' && durationSec > 0) {
-      isRecording = true;
       durationText = formatDuration(durationSec);
     }
-    // Fallback to raw parsing if pre-parsed missing (safety net)
-    else if (remainRaw?.desc && Number(remainRaw.desc) > 0) {
-      isRecording = true;
-      durationText = formatDuration(Number(remainRaw.desc));
-    }
 
-    // 2. Format Remaining Time (Primary: pre-parsed)
     if (typeof remainingSec === 'number') {
-      remainingText = formatDuration(remainingSec);
-    }
-    // Fallback to raw parsing
-    else if (remainRaw?.msg && Number(remainRaw.msg) > 0) {
-      remainingText = formatDuration(Number(remainRaw.msg));
-    }
-
-    // 3. Fallback / Additional Check: If `streamStatus` says streaming, we are recording/streaming
-    if (streamStatus === 'streaming') {
-      isRecording = true;
+      remainingText = formatRemain(remainingSec);
     }
 
     return { isRecording, durationText, remainingText };
-  }, [cam.recording?.remain?.raw, cam.recording?.streamStatus?.value, cam.recording?.remain?.duration, cam.recording?.remain?.remaining]);
+  }, [cam.recording?.status, cam.recording?.duration, cam.recording?.remain]);
 
   const containerData = useMemo(
     () => ({
@@ -117,10 +102,11 @@ export function StatusCard() {
               data-path="zcam.camera.pages.main.status.ptz"
             >
               <div className="zcam-status-item-label">PTZ</div>
-              <div className="zcam-status-item-value">
-                Pan {panView} · Tilt {tiltView}
+              <div className="zcam-status-item-value" style={{ display: 'flex', gap: '16px' }}>
+                <span>Pan {panDisplay}</span>
+                <span>Tilt {tiltDisplay}</span>
+                <span>Zoom {zoomDisplay}</span>
               </div>
-              <div className="zcam-status-item-sub">Zoom {zoomVal}</div>
             </div>
           </div>
 
@@ -131,8 +117,8 @@ export function StatusCard() {
               data-path="zcam.camera.pages.main.status.whiteBalance"
             >
               <div className="zcam-status-item-label">White Balance</div>
-              <div className="zcam-status-item-value">{wbText}</div>
-              <div className="zcam-status-item-sub">{awbMode}</div>
+              <div className="zcam-status-item-value">{wbText}K</div>
+              {/* <div className="zcam-status-item-sub">{awbMode}</div> */}
             </div>
             <div
               className="zcam-status-item"
@@ -140,7 +126,7 @@ export function StatusCard() {
             >
               <div className="zcam-status-item-label">Exposure</div>
               <div className="zcam-status-item-value">{exposureText}</div>
-              <div className="zcam-status-item-sub">AE {cam.exposure?.aeEnabled ? 'ON' : 'OFF'}</div>
+              {/* <div className="zcam-status-item-sub">AE {cam.exposure?.aeEnabled ? 'ON' : 'OFF'}</div> */}
             </div>
           </div>
 
@@ -153,7 +139,7 @@ export function StatusCard() {
               <div className="zcam-status-item-label">Brightness</div>
               <div className="zcam-status-item-value">
                 {typeof cam.image?.brightness === 'number'
-                  ? `${cam.image.brightness}%`
+                  ? `${cam.image.brightness}`
                   : '--'}
               </div>
             </div>
@@ -164,7 +150,7 @@ export function StatusCard() {
               <div className="zcam-status-item-label">Contrast</div>
               <div className="zcam-status-item-value">
                 {typeof cam.image?.contrast === 'number'
-                  ? `${cam.image.contrast}%`
+                  ? `${cam.image.contrast}`
                   : '--'}
               </div>
             </div>
@@ -175,7 +161,7 @@ export function StatusCard() {
               <div className="zcam-status-item-label">Saturation</div>
               <div className="zcam-status-item-value">
                 {typeof cam.image?.saturation === 'number'
-                  ? `${cam.image.saturation}%`
+                  ? `${cam.image.saturation}`
                   : '--'}
               </div>
             </div>
@@ -187,7 +173,10 @@ export function StatusCard() {
               className="zcam-status-chip-group"
               data-path="zcam.camera.pages.main.status.recording"
             >
-              <span className={`zcam-chip ${recordingState.isRecording ? 'zcam-chip-active' : ''}`}>
+              <span 
+                className={`zcam-chip ${recordingState.isRecording ? 'zcam-chip-active' : ''}`}
+                style={recordingState.isRecording ? { color: '#ef4444' } : undefined}
+              >
                 <span className={recordingState.isRecording ? 'zcam-chip-label-active' : ''}>REC ●</span>
                 {' '}
                 {recordingState.isRecording ? recordingState.durationText : '--:--:--'}
@@ -216,5 +205,14 @@ function formatDuration(seconds: number): string {
   const s = seconds % 60;
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+function formatRemain(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.floor(minutes % 60);
+  if (h > 0) {
+    return `${h}h${m}min`;
+  }
+  return `${m}min`;
 }
 

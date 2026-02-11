@@ -7,6 +7,7 @@ import { PtzCircularControl, PtzDirection8 } from '../../../components/PtzCircul
 import type { SliderControlConfig } from '../../../framework/ui/ControlConfig.js';
 import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
+import { useUiSceneState } from '../../../hooks/useUiSceneStore.js';
 import { focusGroupNode, FocusGroup, focusSliderConfig } from './FocusGroup.js';
 import { PTZ_FOCUS_RANGE, PTZ_PAN_RANGE, PTZ_TILT_RANGE, PTZ_ZOOM_RANGE } from '../../../app/operations/ptzOperations.js';
 import {
@@ -157,6 +158,7 @@ interface AxisStepMeta {
 export function PtzCard() {
   const store = usePageStore();
   const view = useViewState();
+  const uiScene = useUiSceneState();
   const containerState = useContainerState('group.ptz');
   const controlsLocked = Boolean(containerState?.data?.['lockControls']);
   const zoomVal = view.camera.ptz?.zoom?.value ?? PTZ_ZOOM_RANGE.min;
@@ -309,6 +311,10 @@ export function PtzCard() {
   );
   useContainerData('group.ptz', containerData);
   const dpadProfile = useMemo(() => getSliderProfile(DPAD_PROFILE_KEY), []);
+  const activeFzSpeedConfig = useMemo(() => ({
+    ...fzSpeedSliderConfig,
+    hideTrack: uiScene.layoutSize === 'ptz',
+  }), [uiScene.layoutSize]);
 
   const adjustAxis = useCallback(
     (axis: 'pan' | 'tilt', delta: number, nodePath: string, stepMeta?: AxisStepMeta) => {
@@ -681,7 +687,7 @@ export function PtzCard() {
               </div>
 
               <div className="zcam-ptz-speed-slider">
-                <SliderControl config={fzSpeedSliderConfig} disabled={isInteractionDisabled} />
+                <SliderControl config={activeFzSpeedConfig} disabled={isInteractionDisabled} />
               </div>
             </div>
           </div>

@@ -51,6 +51,9 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
   const pointerInteractive = config.enablePointerDrag === true && !disabled;
   const rawValueRef = useRef(actualValue);
   const lastCommittedRef = useRef(actualValue);
+  const isCompact = config.hideTrack === true;
+  const orientation = config.orientation ?? 'horizontal';
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // Optimistic UI state: overrides actualValue when user has pending changes
   const [pendingValue, setPendingValue] = useState<number | null>(null);
@@ -82,7 +85,6 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
 
   const displayMin = transform.toDisplay ? transform.toDisplay(min) : min;
   const displayMax = transform.toDisplay ? transform.toDisplay(max) : max;
-  const orientation = config.orientation ?? 'horizontal';
   const sliderRootRef = useRef<HTMLDivElement | null>(null);
   const focusManager = useFocusManager();
   const sliderPercent = useMemo(() => {
@@ -774,10 +776,13 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
     </button>
   );
 
+  const compactClass = isCompact ? 'zcam-slider-compact' : '';
+
   return (
     <div
-      className={`zcam-slider-wrap ${sizeClass} ${orientationClass} ${isFocused ? 'zcam-slider-focused' : ''}`}
+      className={`zcam-slider-wrap ${sizeClass} ${orientationClass} ${compactClass} ${isFocused ? 'zcam-slider-focused' : ''}`}
       data-path={config.nodePath}
+      ref={containerRef}
     >
       <div className="zcam-slider-header">
         {config.label ? <span className="zcam-slider-label">{config.label}</span> : null}

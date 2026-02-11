@@ -244,40 +244,11 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
   }
 
   if (camera.recording) {
-    next.recording = {};
-    if (camera.recording.remain) {
-      const entry = camera.recording.remain;
-      const rawValue = typeof entry.value !== 'undefined' ? entry.value : entry;
-      // rawValue is expected to be a JSON string like {"code":0,"desc":"77","msg":"3717"}
-      try {
-        const parsed = typeof rawValue === 'string' && rawValue.startsWith('{') ? JSON.parse(rawValue) : rawValue;
-
-        // Pass the raw parsed object to the view state
-        next.recording.remain = {
-          value: rawValue,
-          view: rawValue,
-          raw: parsed,
-          duration: entry.duration,
-          remaining: entry.remaining
-        };
-      } catch (e) {
-        console.warn('Failed to parse recording remain value:', rawValue);
-        next.recording.remain = {
-          value: rawValue,
-          view: rawValue
-        };
-      }
-    }
-
-    if (camera.recording.stream_status) {
-      const entry = camera.recording.stream_status;
-      const rawValue = typeof entry.value !== 'undefined' ? entry.value : entry;
-      next.recording.streamStatus = {
-        value: rawValue,
-        view: String(rawValue),
-        raw: entry.w
-      };
-    }
+    next.recording = {
+      status: (camera.recording.status as 'idle' | 'streaming') ?? 'idle',
+      duration: Number(camera.recording.duration) || 0,
+      remain: Number(camera.recording.remain) || 0,
+    };
   }
 
   return Object.keys(next).length > 0 ? next : null;

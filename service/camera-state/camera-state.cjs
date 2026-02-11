@@ -19,7 +19,7 @@ const WS_RECONNECT_INTERVAL = 3000;
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain,stream_status'
 )
   .split(',')
   .map((k) => k.trim())
@@ -37,6 +37,7 @@ const state = {
 
 let pollingTimer = null;
 let wsClient = null;
+let recordingPollTimer = null;
 let wsReconnectTimer = null;
 
 function ensureFetch() {
@@ -54,6 +55,18 @@ function ensureFetch() {
 const fetchImpl = ensureFetch();
 
 async function fetchProperty(key) {
+  if (key === 'remain') {
+    const url = new URL('/ctrl/rec', UVC_BASE_URL);
+    url.searchParams.set('action', 'remain');
+    try {
+      const res = await fetchImpl(url.toString(), { method: 'GET' });
+      const text = await res.text();
+      return normalizeValue(key, { value: text });
+    } catch (err) {
+      return normalizeValue(key, { error: err.message });
+    }
+  }
+
   if (key === 'pan' || key === 'tilt') {
     const url = new URL('/ctrl/pt', UVC_BASE_URL);
     url.searchParams.set('action', 'query');
@@ -142,6 +155,35 @@ function pickNumeric(value) {
   return null;
 }
 
+function updateRecordingPolling(status) {
+  if (status === 'streaming') {
+    if (!recordingPollTimer) {
+      console.log('[CameraState] Starting recording poll timer (remain)...');
+      // Fetch immediately
+      fetchProperty('remain').then((entry) => {
+        state.values['remain'] = entry;
+        state.updatedAt = Date.now();
+      }).catch((err) => console.error('[CameraState] Failed to fetch remain:', err));
+
+      recordingPollTimer = setInterval(async () => {
+        try {
+          const entry = await fetchProperty('remain');
+          state.values['remain'] = entry;
+          state.updatedAt = Date.now();
+        } catch (err) {
+          console.error('[CameraState] Background remain refresh failed:', err);
+        }
+      }, 1000);
+    }
+  } else {
+    if (recordingPollTimer) {
+      console.log('[CameraState] Stopping recording poll timer...');
+      clearInterval(recordingPollTimer);
+      recordingPollTimer = null;
+    }
+  }
+}
+
 async function refreshKeys(keys) {
   const results = [];
   for (const key of keys) {
@@ -158,6 +200,12 @@ async function refreshKeys(keys) {
       entry.key = storageKey;
       
       state.values[storageKey] = entry;
+
+      // [Request] If recording is active, refresh 'remain'
+      if (storageKey === 'stream_status') {
+        updateRecordingPolling(entry.value);
+      }
+
       results.push(entry);
     } catch (err) {
       const storageKey = key === 'focus' ? 'focus_mode' : key;
@@ -269,32 +317,40 @@ function projectCameraState(values) {
       hue: projectValue('hue'),
       gamma: projectValue('gamma'),
     },
-    recording: {
-      remain: (() => {
-        const entry = projectValue('remain');
-        if (!entry) return undefined;
-        let duration = 0;
-        let remaining = 0;
-        try {
-          const raw = typeof entry.value === 'string' && entry.value.startsWith('{')
-            ? JSON.parse(entry.value)
-            : (typeof entry.value === 'object' ? entry.value : null);
+    recording: (() => {
+      const streamEntry = projectValue('stream_status');
+      const remainEntry = projectValue('remain');
 
-          if (raw) {
-            // desc: recording duration (s), msg: remaining duration (s)
-            duration = Number(raw.desc) || 0;
-            remaining = Number(raw.msg) || 0;
+      let status = 'idle';
+      if (streamEntry?.value === 'streaming') {
+        status = 'streaming';
+      }
+
+      let duration = 0;
+      let remain = 0;
+
+      // Parse remain JSON
+      // Expected format: {"code":0, "desc":"duration", "msg":"remain"}
+      if (remainEntry?.value) {
+        let raw = null;
+        if (typeof remainEntry.value === 'string' && remainEntry.value.startsWith('{')) {
+          try {
+            raw = JSON.parse(remainEntry.value);
+          } catch (e) {
+            // ignore
           }
-        } catch (e) { }
+        } else if (typeof remainEntry.value === 'object') {
+          raw = remainEntry.value;
+        }
 
-        return {
-          ...entry,
-          duration,
-          remaining
-        };
-      })(),
-      stream_status: projectValue('stream_status'),
-    },
+        if (raw) {
+          duration = Number(raw.desc) || 0;
+          remain = Number(raw.msg) || 0;
+        }
+      }
+
+      return { status, duration, remain };
+    })(),
   };
 }
 
@@ -488,6 +544,10 @@ function handleWebSocketMessage(msg) {
         error: undefined
       };
       state.updatedAt = Date.now();
+
+      if (storageKey === 'stream_status') {
+        updateRecordingPolling(nextValue);
+      }
 
       console.log(`[CameraState] WebSocket update: ${key} -> ${storageKey} = ${nextValue}`);
 

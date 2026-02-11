@@ -18,10 +18,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function formatPercent(value: number): string {
-  return `${Math.round(clamp(value, 0, 100))}%`;
-}
-
 function formatTemperature(
   value: number,
   range?: { min: number; max: number; step: number },
@@ -95,7 +91,7 @@ const brightnessSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.brightness ?? 50,
-  formatValue: (value) => formatPercent(value),
+  formatValue: (value) => String(Math.round(clamp(value, 0, 100))),
   enablePointerDrag: true,
   minHoldStep: 1,
   profileKey: 'gentle',

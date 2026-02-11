@@ -803,8 +803,8 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             </div>
 
             <div className="zcam-slider-thresholds">
-                <span>{max}</span>
                 <span>{min}</span>
+                <span>{max}</span>
             </div>
 
         </div>
