@@ -208,11 +208,6 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
       const value = typeof tempEntry.value !== 'undefined' ? tempEntry.value : tempEntry;
       const numeric = Number(value);
 
-      console.log('[WB Mapping] tempEntry:', tempEntry);
-      console.log('[WB Mapping] tempEntry.min:', tempEntry.min);
-      console.log('[WB Mapping] tempEntry.max:', tempEntry.max);
-      console.log('[WB Mapping] tempEntry.w:', tempEntry.w);
-
       if (Number.isFinite(numeric)) {
         // Extract min/max/step from tempEntry or tempEntry.w or tempEntry.raw
         const extractNumber = (key: string) => {
@@ -225,8 +220,6 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
         const min = extractNumber('min');
         const max = extractNumber('max');
         const step = extractNumber('step');
-
-        console.log('[WB Mapping] Extracted min/max/step:', min, max, step);
 
         next.whiteBalance.temperature = {
           value: numeric,
