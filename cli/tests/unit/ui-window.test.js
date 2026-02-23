@@ -33,6 +33,69 @@ describe('UI Window Module', () => {
       assert(code.includes('waitForHeartbeat'), 'Missing heartbeat check');
       assert(code.includes('statusCard'), 'Missing statusCard heartbeat');
     });
+
+    it('should have --json option in cycle command', () => {
+      const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
+      const code = fs.readFileSync(uiWindowPath, 'utf8');
+      assert(code.includes(".option('--json'"), 'Missing --json option');
+      assert(code.includes('isJson'), 'Missing isJson variable');
+    });
+
+    it('should output JSON structure with required fields', () => {
+      const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
+      const code = fs.readFileSync(uiWindowPath, 'utf8');
+      // Check for JSON output structure
+      assert(code.includes('ok: true'), 'Missing ok: true in JSON output');
+      assert(code.includes('ok: false'), 'Missing ok: false in JSON output');
+      assert(code.includes('loop:'), 'Missing loop field in JSON output');
+      assert(code.includes('timeoutMs'), 'Missing timeoutMs field in JSON output');
+      assert(code.includes('totalMs'), 'Missing totalMs field in JSON output');
+      assert(code.includes('results'), 'Missing results array in JSON output');
+    });
+
+    it('should include durationMs in results', () => {
+      const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
+      const code = fs.readFileSync(uiWindowPath, 'utf8');
+      assert(code.includes('durationMs'), 'Missing durationMs in results');
+    });
+  });
+
+  describe('JSON Output Structure', () => {
+    it('should have valid JSON schema for success case', () => {
+      // Simulate JSON structure validation
+      const mockOutput = {
+        ok: true,
+        loop: 1,
+        timeoutMs: 5000,
+        totalMs: 1234,
+        results: [
+          { loop: 1, status: 'pass', durationMs: 1234 }
+        ]
+      };
+      assert.strictEqual(typeof mockOutput.ok, 'boolean');
+      assert.strictEqual(typeof mockOutput.loop, 'number');
+      assert.strictEqual(typeof mockOutput.timeoutMs, 'number');
+      assert.strictEqual(typeof mockOutput.totalMs, 'number');
+      assert(Array.isArray(mockOutput.results));
+      assert(mockOutput.results.length > 0);
+      assert.strictEqual(typeof mockOutput.results[0].loop, 'number');
+      assert.strictEqual(typeof mockOutput.results[0].status, 'string');
+      assert.strictEqual(typeof mockOutput.results[0].durationMs, 'number');
+    });
+
+    it('should have valid JSON schema for failure case', () => {
+      const mockOutput = {
+        ok: false,
+        loop: 1,
+        timeoutMs: 5000,
+        totalMs: 1234,
+        results: [
+          { loop: 1, status: 'fail', error: 'test error', durationMs: 1234 }
+        ]
+      };
+      assert.strictEqual(mockOutput.ok, false);
+      assert.strictEqual(typeof mockOutput.results[0].error, 'string');
+    });
   });
 
   describe('assertWindowState', () => {

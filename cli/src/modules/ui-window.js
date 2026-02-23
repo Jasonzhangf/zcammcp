@@ -219,41 +219,79 @@ function buildCommand() {
     .description('Run shrink→ball→restore cycle test')
     .option('-t, --timeout <ms>', 'Timeout per stage (ms)', '5000')
     .option('--loop <n>', 'Number of loops, default 1', '1')
+    .option('--json', 'Output JSON result for CI aggregation')
     .action(async (options) => {
       const loop = Math.max(1, parseInt(options.loop, 10) || 1);
-      console.log(chalk.cyan('[UI Cycle] Starting cycle test'));
+      const timeoutMs = parseInt(options.timeout, 10);
+      const isJson = options.json === true;
+      
+      if (!isJson) {
+        console.log(chalk.cyan('[UI Cycle] Starting cycle test'));
+      }
       const startMs = Date.now();
       const results = [];
 
       for (let i = 1; i <= loop; i++) {
         try {
-          console.log(chalk.gray(`Loop ${i}: shrink`));
+          if (!isJson) {
+            console.log(chalk.gray(`Loop ${i}: shrink`));
+          }
           const shrinkState = await sendWindowCommand('shrinkToBall');
           assertWindowState(shrinkState.state, { mode: 'ball', ballVisible: true, requireBounds: true }, 'shrink');
           assertNoScrollbar(shrinkState.state, {}, 'shrink');
-          console.log(chalk.gray(`Loop ${i}: restore`));
+          if (!isJson) {
+            console.log(chalk.gray(`Loop ${i}: restore`));
+          }
           const restoreState = await sendWindowCommand('restoreFromBall');
           assertWindowState(restoreState.state, { mode: 'main', ballVisible: false }, 'restore');
           
           // TODO#2: heartbeat check after restore
-          console.log(chalk.gray(`Loop ${i}: waiting for statusCard heartbeat...`));
-          const timeoutMs = parseInt(options.timeout, 10);
+          if (!isJson) {
+            console.log(chalk.gray(`Loop ${i}: waiting for statusCard heartbeat...`));
+          }
           await waitForHeartbeat('statusCard', timeoutMs);
-          console.log(chalk.gray(`Loop ${i}: heartbeat received`));
+          if (!isJson) {
+            console.log(chalk.gray(`Loop ${i}: heartbeat received`));
+          }
           
-          results.push({ loop: i, status: 'pass' });
+          results.push({ loop: i, status: 'pass', durationMs: Date.now() - startMs });
         } catch (err) {
-          results.push({ loop: i, status: 'fail', error: err.message });
-          console.error(chalk.red(`✗ Cycle test failed (loop ${i})`), err.message);
+          const durationMs = Date.now() - startMs;
+          results.push({ loop: i, status: 'fail', error: err.message, durationMs });
+          
+          if (isJson) {
+            const output = {
+              ok: false,
+              loop: i,
+              timeoutMs,
+              totalMs: durationMs,
+              results
+            };
+            console.log(JSON.stringify(output, null, 2));
+          } else {
+            console.error(chalk.red(`✗ Cycle test failed (loop ${i})`), err.message);
+          }
           process.exit(1);
         }
       }
 
-      console.log(chalk.green(`✓ Cycle test finished, ${results.length} loops, total ${Date.now() - startMs}ms`));
-      results.forEach((r) => {
-        const status = r.status === 'pass' ? chalk.green('✓') : chalk.red('✗');
-        console.log(`${status} loop ${r.loop} : ${r.status}`);
-      });
+      const totalMs = Date.now() - startMs;
+      if (isJson) {
+        const output = {
+          ok: true,
+          loop: results.length,
+          timeoutMs,
+          totalMs,
+          results
+        };
+        console.log(JSON.stringify(output, null, 2));
+      } else {
+        console.log(chalk.green(`✓ Cycle test finished, ${results.length} loops, total ${totalMs}ms`));
+        results.forEach((r) => {
+          const status = r.status === 'pass' ? chalk.green('✓') : chalk.red('✗');
+          console.log(`${status} loop ${r.loop} : ${r.status}`);
+        });
+      }
       process.exit(0);
     });
 
