@@ -74,7 +74,6 @@ describe('UI Window Module - Runtime Tests', () => {
     afterEach(restoreMocks);
 
     it('should output correct JSON for 2 loops with per-loop durationMs', async () => {
-      // 2 complete loops: shrink, state, restore, state, heartbeat per loop
       mockResponses = [
         JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 0, y: 0, width: 100, height: 100 } } }),
         JSON.stringify({ ok: true }),
@@ -94,13 +93,18 @@ describe('UI Window Module - Runtime Tests', () => {
       
       await new Promise(r => setTimeout(r, 300));
       
+      // CRITICAL: Assert process.exit(0) was called
       assert(exitCodes.length > 0, 'Should have called process.exit');
       assert.strictEqual(exitCodes[exitCodes.length - 1], 0, 'Should exit with 0 for success');
       
+      // CRITICAL: Assert JSON output exists
       assert(loggedOutput.length > 0, 'Should have logged output');
       const jsonOutput = JSON.parse(loggedOutput[0]);
       
+      // CRITICAL: Assert ok:true
       assert.strictEqual(jsonOutput.ok, true, 'ok should be true');
+      
+      // CRITICAL: Assert results structure
       assert.strictEqual(jsonOutput.loop, 2, 'loop count should be 2');
       assert.strictEqual(jsonOutput.timeoutMs, 5000, 'timeoutMs should be 5000');
       assert.strictEqual(typeof jsonOutput.totalMs, 'number', 'totalMs should be number');
@@ -110,6 +114,7 @@ describe('UI Window Module - Runtime Tests', () => {
       const result1 = jsonOutput.results[0];
       const result2 = jsonOutput.results[1];
       
+      // CRITICAL: Assert status:'pass'
       assert.strictEqual(result1.loop, 1, 'First result should be loop 1');
       assert.strictEqual(result1.status, 'pass', 'First loop should pass');
       assert.strictEqual(typeof result1.durationMs, 'number', 'durationMs should be number');
@@ -125,8 +130,37 @@ describe('UI Window Module - Runtime Tests', () => {
         `totalMs (${jsonOutput.totalMs}) should be >= sum of durationMs (${sumDurations})`);
     });
 
-    it('should output failure JSON when restore fails', async () => {
-      // shrink succeeds, restore fails
+    it('should output ok:true and exit(0) for single loop success', async () => {
+      mockResponses = [
+        JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 0, y: 0, width: 100, height: 100 } } }),
+        JSON.stringify({ ok: true }),
+        JSON.stringify({ ok: true, state: { mode: 'main', ballVisible: false } }),
+        JSON.stringify({ ok: true }),
+        JSON.stringify({ ok: true, state: { heartbeats: { statusCard: { updated: true, ts: Date.now() } } } }),
+      ];
+      
+      const cmd = require('../../src/modules/ui-window.js');
+      cmd.name('zcam');
+      await cmd.parseAsync(['cycle', '--loop', '1', '--json', '--timeout', '5000'], { from: 'user' });
+      
+      await new Promise(r => setTimeout(r, 300));
+      
+      // CRITICAL: process.exit(0) must be called
+      assert(exitCodes.length > 0, 'Should have called process.exit');
+      assert.strictEqual(exitCodes[exitCodes.length - 1], 0, 'MUST exit with 0 for success');
+      
+      // CRITICAL: JSON must have ok:true
+      assert(loggedOutput.length > 0, 'Should have logged JSON output');
+      const jsonOutput = JSON.parse(loggedOutput[0]);
+      assert.strictEqual(jsonOutput.ok, true, 'ok MUST be true for success');
+      
+      // CRITICAL: results[0].status must be 'pass'
+      assert.strictEqual(jsonOutput.results.length, 1, 'Should have 1 result');
+      assert.strictEqual(jsonOutput.results[0].status, 'pass', 'status MUST be pass');
+      assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs must be number');
+    });
+
+    it('should output ok:false and exit(1) when restore fails', async () => {
       mockResponses = [
         JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 0, y: 0, width: 100, height: 100 } } }),
         JSON.stringify({ ok: true }),
@@ -139,32 +173,32 @@ describe('UI Window Module - Runtime Tests', () => {
       
       await new Promise(r => setTimeout(r, 300));
       
-      // NOTE: This test documents expected failure behavior
-      // The current implementation may not properly exit with code 1 due to async handling
-      // We verify the failure was logged at minimum
-      if (loggedOutput.length > 0) {
-        const jsonOutput = JSON.parse(loggedOutput[0]);
-        // If failure JSON was logged, verify structure
-        if (jsonOutput.ok === false) {
-          assert.strictEqual(jsonOutput.ok, false, 'ok should be false');
-          assert.strictEqual(jsonOutput.results.length, 1, 'Should have 1 result');
-          const result = jsonOutput.results[0];
-          assert.strictEqual(result.loop, 1, 'Should be loop 1');
-          assert.strictEqual(result.status, 'fail', 'status should be fail');
-          assert.strictEqual(typeof result.error, 'string', 'Should have error string');
-          assert.strictEqual(typeof result.durationMs, 'number', 'durationMs should be number');
-        }
-      }
+      // CRITICAL: process.exit(1) must be called on failure
+      assert(exitCodes.length > 0, 'Should have called process.exit');
+      assert.strictEqual(exitCodes[exitCodes.length - 1], 1, 'MUST exit with 1 for failure');
+      
+      // CRITICAL: JSON must have ok:false
+      assert(loggedOutput.length > 0, 'Should have logged JSON output');
+      const jsonOutput = JSON.parse(loggedOutput[0]);
+      assert.strictEqual(jsonOutput.ok, false, 'ok MUST be false for failure');
+      
+      // CRITICAL: results[0] must have error and durationMs
+      assert.strictEqual(jsonOutput.results.length, 1, 'Should have 1 result');
+      const result = jsonOutput.results[0];
+      assert.strictEqual(result.loop, 1, 'Should be loop 1');
+      assert.strictEqual(result.status, 'fail', 'status MUST be fail');
+      assert.strictEqual(typeof result.error, 'string', 'MUST have error string');
+      assert(result.error.length > 0, 'error must not be empty');
+      assert.strictEqual(typeof result.durationMs, 'number', 'durationMs must be number');
     });
 
-    it('should output failure JSON when heartbeat times out', async () => {
-      // shrink and restore succeed, but heartbeat never returns updated:true
+    it('should output ok:false and exit(1) when heartbeat times out', async () => {
       mockResponses = [
         JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 0, y: 0, width: 100, height: 100 } } }),
         JSON.stringify({ ok: true }),
         JSON.stringify({ ok: true, state: { mode: 'main', ballVisible: false } }),
         JSON.stringify({ ok: true }),
-        // Heartbeat responses without updated:true (will timeout)
+        // Heartbeat never returns updated:true
         JSON.stringify({ ok: true, state: { heartbeats: {} } }),
         JSON.stringify({ ok: true, state: { heartbeats: {} } }),
         JSON.stringify({ ok: true, state: { heartbeats: {} } }),
@@ -172,27 +206,26 @@ describe('UI Window Module - Runtime Tests', () => {
       
       const cmd = require('../../src/modules/ui-window.js');
       cmd.name('zcam');
-      
-      // Use short timeout to speed up test
       await cmd.parseAsync(['cycle', '--loop', '1', '--json', '--timeout', '100'], { from: 'user' });
       
       await new Promise(r => setTimeout(r, 500));
       
-      // NOTE: This test documents expected heartbeat timeout behavior
-      // Verify JSON output if logged
+      // CRITICAL: process.exit(1) for heartbeat timeout
+      if (exitCodes.length > 0) {
+        assert.strictEqual(exitCodes[exitCodes.length - 1], 1, 'MUST exit with 1 for heartbeat timeout');
+      }
+      
+      // CRITICAL: JSON must have ok:false
       if (loggedOutput.length > 0) {
         const jsonOutput = JSON.parse(loggedOutput[0]);
-        if (jsonOutput.ok === false) {
-          assert.strictEqual(jsonOutput.ok, false, 'ok should be false');
-          assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status should be fail');
-          assert(jsonOutput.results[0].error.includes('heartbeat'), 'error should mention heartbeat');
-          assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs should be number');
-        }
+        assert.strictEqual(jsonOutput.ok, false, 'ok MUST be false for timeout');
+        assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status MUST be fail');
+        assert(jsonOutput.results[0].error.includes('heartbeat'), 'error must mention heartbeat');
+        assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs must be number');
       }
     });
 
-    it('should output failure JSON when shrinkToBall command fails', async () => {
-      // shrinkToBall fails immediately
+    it('should output ok:false and exit(1) when shrinkToBall fails', async () => {
       mockResponses = [
         JSON.stringify({ ok: false, error: 'shrink failed: window not ready' }),
       ];
@@ -203,16 +236,18 @@ describe('UI Window Module - Runtime Tests', () => {
       
       await new Promise(r => setTimeout(r, 300));
       
-      // NOTE: This test documents expected failure behavior
-      // Verify JSON output if logged
+      // CRITICAL: process.exit(1) for shrink failure
+      if (exitCodes.length > 0) {
+        assert.strictEqual(exitCodes[exitCodes.length - 1], 1, 'MUST exit with 1 for failure');
+      }
+      
+      // CRITICAL: JSON must have ok:false and error
       if (loggedOutput.length > 0) {
         const jsonOutput = JSON.parse(loggedOutput[0]);
-        if (jsonOutput.ok === false) {
-          assert.strictEqual(jsonOutput.ok, false, 'ok should be false');
-          assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status should be fail');
-          assert(jsonOutput.results[0].error.length > 0, 'Should have error message');
-          assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs should be number');
-        }
+        assert.strictEqual(jsonOutput.ok, false, 'ok MUST be false for failure');
+        assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status MUST be fail');
+        assert(jsonOutput.results[0].error.length > 0, 'Must have error message');
+        assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs must be number');
       }
     });
 

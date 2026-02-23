@@ -273,6 +273,7 @@ function buildCommand() {
             console.error(chalk.red(`✗ Cycle test failed (loop ${i})`), err.message);
           }
           process.exit(1);
+          return; // Ensure we don't continue after exit
         }
       }
 
