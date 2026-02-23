@@ -220,10 +220,20 @@ function buildCommand() {
     .option('-t, --timeout <ms>', 'Timeout per stage (ms)', '5000')
     .option('--loop <n>', 'Number of loops, default 1', '1')
     .option('--json', 'Output JSON result for CI aggregation')
-    .action(async (options) => {
+    .action(async (options, command) => {
       const loop = Math.max(1, parseInt(options.loop, 10) || 1);
       const timeoutMs = parseInt(options.timeout, 10);
-      const isJson = options.json === true;
+      
+      // Check for --json at any level in command hierarchy
+      let checkCmd = command;
+      let isJson = options.json === true;
+      while (checkCmd) {
+        if (checkCmd.opts && checkCmd.opts().json) {
+          isJson = true;
+          break;
+        }
+        checkCmd = checkCmd.parent;
+      }
       
       if (!isJson) {
         console.log(chalk.cyan('[UI Cycle] Starting cycle test'));
@@ -259,28 +269,41 @@ function buildCommand() {
           const durationMs = Date.now() - loopStartMs;
           results.push({ loop: i, status: 'fail', error: err.message, durationMs });
           
-          const output = {
-            ok: false,
-            loop: i,
-            timeoutMs,
-            totalMs: Date.now() - startMs,
-            results
-          };
-          console.log(JSON.stringify(output, null, 2));
+          if (isJson) {
+            const output = {
+              ok: false,
+              loop: i,
+              timeoutMs,
+              totalMs: Date.now() - startMs,
+              results
+            };
+            console.log(JSON.stringify(output, null, 2));
+          } else {
+            console.error(chalk.red(`✗ Cycle test failed (loop ${i})`), err.message);
+          }
           process.exit(1);
           return;
         }
       }
 
       const totalMs = Date.now() - startMs;
-      const output = {
-        ok: true,
-        loop: results.length,
-        timeoutMs,
-        totalMs,
-        results
-      };
-      console.log(JSON.stringify(output, null, 2));
+      
+      if (isJson) {
+        const output = {
+          ok: true,
+          loop: results.length,
+          timeoutMs,
+          totalMs,
+          results
+        };
+        console.log(JSON.stringify(output, null, 2));
+      } else {
+        console.log(chalk.green(`✓ Cycle test finished, ${results.length} loops, total ${totalMs}ms`));
+        results.forEach((r) => {
+          const status = r.status === 'pass' ? chalk.green('✓') : chalk.red('✗');
+          console.log(`${status} loop ${r.loop} : ${r.status}`);
+        });
+      }
       process.exit(0);
     });
 

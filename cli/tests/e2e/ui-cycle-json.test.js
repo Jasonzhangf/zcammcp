@@ -14,25 +14,24 @@ describe('ui dev cycle --json E2E Integration', () => {
   const TEST_PORT = 16224;
 
   let fakeServer = null;
+  let requestCount = 0;
 
   function startFakeServer(responses) {
     return new Promise((resolve, reject) => {
+      requestCount = 0;
       const server = http.createServer((req, res) => {
-        let body = '';
-        req.on('data', chunk => { body += chunk; });
-        req.on('end', () => {
-          const response = responses.shift();
-          if (response === undefined) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: 'No more mock responses' }));
-          } else if (typeof response === 'string') {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: response }));
-          } else {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(response));
-          }
-        });
+        requestCount++;
+        const response = responses.shift();
+        if (response === undefined) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'No more mock responses' }));
+        } else if (typeof response === 'string') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: response }));
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(response));
+        }
       });
 
       server.listen(TEST_PORT, '127.0.0.1', () => {
@@ -63,11 +62,16 @@ describe('ui dev cycle --json E2E Integration', () => {
         NODE_ENV: 'test'
       };
       
-      // Pass --json after cycle subcommand
-      const allArgs = ['ui', 'window', 'cycle', '--json'];
-      args.split(' ').forEach(arg => {
-        if (arg.trim()) allArgs.push(arg.trim());
-      });
+      // Build args array: ui window cycle [options] --json
+      // --json MUST be placed AFTER cycle subcommand and its options
+      const allArgs = ['ui', 'window', 'cycle'];
+      
+      // Parse args and add them in correct order
+      const argParts = args.split(' ').filter(a => a.trim());
+      argParts.forEach(arg => allArgs.push(arg.trim()));
+      
+      // Add --json flag at the end (after loop/timeout options)
+      allArgs.push('--json');
       
       const proc = spawn('node', [CLI_INDEX, ...allArgs], {
         env,
@@ -115,17 +119,22 @@ describe('ui dev cycle --json E2E Integration', () => {
   describe('Full success scenario - one complete loop', () => {
     it('MUST output valid JSON with ok:true and exit(0)', async () => {
       fakeServer = await startFakeServer([
+        // Request 1: shrinkToBall
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
+        // Request 2: state POST (after shrinkToBall)
         { ok: true },
+        // Request 3: restoreFromBall - MUST include mode
         { ok: true, state: { mode: 'main', ballVisible: false } },
+        // Request 4: state POST (after restoreFromBall)
         { ok: true },
+        // Request 5: heartbeat check
         { ok: true, state: { heartbeats: { statusCard: { updated: true, ts: Date.now() } } } },
       ]);
 
       const result = await runCycle('--loop 1 --timeout 2000');
 
       // CRITICAL: Exit code MUST be 0
-      assert.strictEqual(result.exitCode, 0, `Expected exit code 0, got ${result.exitCode}`);
+      assert.strictEqual(result.exitCode, 0, `Expected exit code 0, got ${result.exitCode}. stdout: ${result.stdout}`);
 
       // CRITICAL: MUST parse JSON from stdout
       const jsonOutput = parseJsonOutput(result.stdout);
@@ -149,8 +158,11 @@ describe('ui dev cycle --json E2E Integration', () => {
   describe('Restore failure scenario', () => {
     it('MUST output valid JSON with ok:false, exit(1), and error field', async () => {
       fakeServer = await startFakeServer([
+        // shrinkToBall success
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
+        // state POST
         { ok: true },
+        // restoreFromBall failure
         'restore failed: window not found',
       ]);
 
@@ -177,16 +189,25 @@ describe('ui dev cycle --json E2E Integration', () => {
   describe('Heartbeat timeout scenario', () => {
     it('MUST output valid JSON with ok:false and exit(1) on timeout', async () => {
       fakeServer = await startFakeServer([
+        // shrinkToBall success
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
+        // state POST
         { ok: true },
-        { ok: true, state: { mode: 'main', ballVisible: false } },
+        // restoreFromBall success but no heartbeat
+        { ok: true, state: { mode: 'main', ballVisible: false, heartbeats: {} } },
+        // state POST
         { ok: true },
+        // Multiple heartbeat checks that never return updated
+        { ok: true, state: { heartbeats: {} } },
+        { ok: true, state: { heartbeats: {} } },
+        { ok: true, state: { heartbeats: {} } },
+        { ok: true, state: { heartbeats: {} } },
         { ok: true, state: { heartbeats: {} } },
         { ok: true, state: { heartbeats: {} } },
         { ok: true, state: { heartbeats: {} } },
       ]);
 
-      const result = await runCycle('--loop 1 --timeout 300');
+      const result = await runCycle('--loop 1 --timeout 200');
 
       // CRITICAL: Exit code MUST be 1
       assert.strictEqual(result.exitCode, 1, `Expected exit code 1, got ${result.exitCode}`);
@@ -199,7 +220,7 @@ describe('ui dev cycle --json E2E Integration', () => {
       assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status MUST be fail');
       assert(
         jsonOutput.results[0].error.includes('heartbeat') || jsonOutput.results[0].error.includes('timeout'),
-        'error MUST mention heartbeat or timeout'
+        `error MUST mention heartbeat or timeout, got: ${jsonOutput.results[0].error}`
       );
       assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs MUST be number');
     });
@@ -208,15 +229,21 @@ describe('ui dev cycle --json E2E Integration', () => {
   describe('Multi-loop success scenario', () => {
     it('MUST output valid JSON with 2 successful loop results', async () => {
       const responses = [
+        // Loop 1: shrink
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
+        // Loop 1: restore
         { ok: true, state: { mode: 'main', ballVisible: false } },
         { ok: true },
+        // Loop 1: heartbeat
         { ok: true, state: { heartbeats: { statusCard: { updated: true, ts: Date.now() } } } },
+        // Loop 2: shrink
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
+        // Loop 2: restore
         { ok: true, state: { mode: 'main', ballVisible: false } },
         { ok: true },
+        // Loop 2: heartbeat
         { ok: true, state: { heartbeats: { statusCard: { updated: true, ts: Date.now() } } } },
       ];
       
@@ -225,7 +252,7 @@ describe('ui dev cycle --json E2E Integration', () => {
       const result = await runCycle('--loop 2 --timeout 2000');
 
       // CRITICAL: Exit code MUST be 0
-      assert.strictEqual(result.exitCode, 0, `Expected exit code 0, got ${result.exitCode}`);
+      assert.strictEqual(result.exitCode, 0, `Expected exit code 0, got ${result.exitCode}. stdout: ${result.stdout}`);
 
       // CRITICAL: MUST parse JSON from stdout
       const jsonOutput = parseJsonOutput(result.stdout);
@@ -254,11 +281,15 @@ describe('ui dev cycle --json E2E Integration', () => {
   describe('Partial failure in multi-loop', () => {
     it('MUST output valid JSON with ok:false when 2nd loop fails', async () => {
       fakeServer = await startFakeServer([
+        // Loop 1: shrink
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
+        // Loop 1: restore
         { ok: true, state: { mode: 'main', ballVisible: false } },
         { ok: true },
+        // Loop 1: heartbeat
         { ok: true, state: { heartbeats: { statusCard: { updated: true, ts: Date.now() } } } },
+        // Loop 2: shrink fails
         'shrink failed: window busy',
       ]);
 

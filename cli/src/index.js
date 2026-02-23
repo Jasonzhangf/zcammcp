@@ -1,5 +1,9 @@
 const startTime = Date.now();
-console.log(`[Timer] Start: ${startTime}`);
+const isJsonMode = process.argv.includes('--json') || process.env.NODE_ENV === 'test';
+
+if (!isJsonMode) {
+  console.log(`[Timer] Start: ${startTime}`);
+}
 
 const { Command } = require('commander');
 const pkg = require('../package.json');
@@ -23,7 +27,10 @@ program
   .description('Z CAM Camera Control CLI - 官方命令行控制工具')
   .version(pkg.version, '-v, --version', '显示版本号')
   .helpOption('-h, --help', '显示帮助信息');
-console.log(`[Timer] Base config: ${Date.now() - startTime}ms`);
+
+if (!isJsonMode) {
+  console.log(`[Timer] Base config: ${Date.now() - startTime}ms`);
+}
 
 // 全局选项 - 移除默认值，要求显式指定或使用配置文件
 program
@@ -52,10 +59,14 @@ const modules = [
 ];
 
 // 初始化服务容器 - 支持依赖注入
-console.log(`[Timer] Container: ${Date.now() - startTime}ms`);
+if (!isJsonMode) {
+  console.log(`[Timer] Container: ${Date.now() - startTime}ms`);
+}
 const serviceContainer = getServiceContainer();
-console.log(`[Timer] Container done: ${Date.now() - startTime}ms`);
-console.log(`✓ 服务容器已初始化，支持 ${serviceContainer.getRegisteredServices().length} 个服务`);
+if (!isJsonMode) {
+  console.log(`[Timer] Container done: ${Date.now() - startTime}ms`);
+  console.log(`✓ 服务容器已初始化，支持 ${serviceContainer.getRegisteredServices().length} 个服务`);
+}
 
 // 严格模块加载 - 失败时直接报错
 let loadedModules = 0;
@@ -79,10 +90,13 @@ modules.forEach(moduleName => {
     process.exit(1);
   }
 });
-console.log(`[Timer] Modules loaded: ${Date.now() - startTime}ms`);
+
+if (!isJsonMode) {
+  console.log(`[Timer] Modules loaded: ${Date.now() - startTime}ms`);
+}
 
 // 显示加载统计
-if (loadedModules > 0) {
+if (loadedModules > 0 && !isJsonMode) {
   console.log(`✓ 成功加载 ${loadedModules} 个必需模块`);
 }
 
@@ -106,8 +120,8 @@ function getModuleDescription(moduleName) {
   return descriptions[moduleName] || '模块功能';
 }
 
-// 在开发模式下显示模块状态
-if (process.env.NODE_ENV === 'development') {
+// 在开发模式下显示模块状态（非JSON模式下）
+if (process.env.NODE_ENV === 'development' && !isJsonMode) {
   console.log(`Z CAM CLI - ${modules.length} modules registered`);
 }
 
@@ -145,9 +159,13 @@ if (process.argv.length <= 2) {
 
 // 解析命令行参数
 try {
-  console.log(`[Timer] Before parse: ${Date.now() - startTime}ms`);
+  if (!isJsonMode) {
+    console.log(`[Timer] Before parse: ${Date.now() - startTime}ms`);
+  }
   program.parse(process.argv);
-  console.log(`[Timer] After parse: ${Date.now() - startTime}ms`);
+  if (!isJsonMode) {
+    console.log(`[Timer] After parse: ${Date.now() - startTime}ms`);
+  }
 } catch (error) {
   handleErrors(error, program.opts());
 }
