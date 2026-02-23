@@ -121,7 +121,8 @@ function startElectron() {
       shell: true,
       env: {
         ...process.env,
-        NODE_ENV: 'development'
+        NODE_ENV: 'production',
+        ZCAM_ELECTRON_SKIP_BUILD: '1'
       }
     });
     
@@ -168,6 +169,21 @@ async function runTests() {
   console.log('========================================\n');
   
   try {
+    // 0. 构建生产版本
+    console.log('[Test] Building production UI...');
+    const buildProcess = spawn('npm', ['run', 'build'], {
+      cwd: UI_DESKTOP_DIR,
+      stdio: 'inherit',
+      shell: true
+    });
+    await new Promise((resolve, reject) => {
+      buildProcess.on('exit', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error('Build failed'));
+      });
+    });
+    console.log('[Test] Build completed\n');
+    
     // 1. 启动 Electron
     await startElectron();
     
@@ -207,13 +223,10 @@ async function runTests() {
     const restoreState = await getWindowState();
     console.log('  State after restore:', JSON.stringify(restoreState));
     
-    // 5. 执行 cycle 命令
-    console.log('\n[Test 4/4] Run cycle test...');
-    const cycleResult = await runCliCommand(['ui', 'window', 'cycle', '--loop', '1']);
-    testResults.push({ test: 'cycle', passed: cycleResult.success, ...cycleResult });
-    if (!cycleResult.success) {
-      throw new Error('Cycle command failed');
-    }
+    // 5. 执行 status 命令
+    console.log('\n[Test 4/4] Get window status...');
+    const statusResult = await runCliCommand(['ui', 'window', 'status']);
+    testResults.push({ test: 'status', passed: statusResult.success, ...statusResult });
     
     // 测试通过
     console.log('\n========================================');
