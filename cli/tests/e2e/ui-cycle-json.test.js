@@ -1,6 +1,7 @@
 /**
  * E2E Integration Tests: ui dev cycle --json
  * 真实执行 cycle 命令，通过 fake StateHost 覆盖成功/失败场景
+ * 所有测试必须从 stdout 提取并成功 JSON.parse，否则测试失败
  */
 
 const { spawn } = require('child_process');
@@ -62,7 +63,13 @@ describe('ui dev cycle --json E2E Integration', () => {
         NODE_ENV: 'test'
       };
       
-      const proc = spawn('node', [CLI_INDEX, 'ui', 'window', 'cycle', ...args.split(' '), '--json'], {
+      // Pass --json after cycle subcommand
+      const allArgs = ['ui', 'window', 'cycle', '--json'];
+      args.split(' ').forEach(arg => {
+        if (arg.trim()) allArgs.push(arg.trim());
+      });
+      
+      const proc = spawn('node', [CLI_INDEX, ...allArgs], {
         env,
         stdio: ['pipe', 'pipe', 'pipe']
       });
@@ -83,6 +90,20 @@ describe('ui dev cycle --json E2E Integration', () => {
     });
   }
 
+  function parseJsonOutput(stdout) {
+    // Extract JSON from stdout (skip timer logs and other text)
+    // Look for the JSON block that starts with { and contains "ok": true/false
+    const jsonMatch = stdout.match(/\{[\s\S]*"ok"\s*:\s*(?:true|false)[\s\S]*\}/m);
+    assert(jsonMatch, `Expected JSON output in stdout. Got:\n${stdout}`);
+    
+    let jsonOutput;
+    assert.doesNotThrow(() => {
+      jsonOutput = JSON.parse(jsonMatch[0]);
+    }, `stdout should contain valid JSON. Got: ${jsonMatch[0]}`);
+    
+    return jsonOutput;
+  }
+
   beforeEach(async () => {
     await stopFakeServer();
   });
@@ -92,7 +113,7 @@ describe('ui dev cycle --json E2E Integration', () => {
   });
 
   describe('Full success scenario - one complete loop', () => {
-    it('should output ok:true, exit(0), and valid JSON structure', async () => {
+    it('MUST output valid JSON with ok:true and exit(0)', async () => {
       fakeServer = await startFakeServer([
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
@@ -103,33 +124,30 @@ describe('ui dev cycle --json E2E Integration', () => {
 
       const result = await runCycle('--loop 1 --timeout 2000');
 
-      // Extract JSON from stdout (skip timer logs, look for JSON output)
-      const jsonMatch = result.stdout.match(/\{[\s\S]*"ok"\s*:\s*(?:true|false)[\s\S]*"results"[\s\S]*\}/);
-      if (!jsonMatch) {
-        // If --json flag isn't producing output, verify the test ran and passed based on output text
-        assert(result.stdout.includes('Cycle test finished'), 'Test should complete');
-        assert(result.stdout.includes('loop 1 : pass'), 'Loop 1 should pass');
-        assert.strictEqual(result.exitCode, 0, 'Exit code should be 0');
-        return; // Skip JSON validation if not in JSON mode
-      }
-      
-      let jsonOutput;
-      assert.doesNotThrow(() => {
-        jsonOutput = JSON.parse(jsonMatch[0]);
-      }, 'stdout should contain valid JSON');
+      // CRITICAL: Exit code MUST be 0
+      assert.strictEqual(result.exitCode, 0, `Expected exit code 0, got ${result.exitCode}`);
 
-      assert.strictEqual(jsonOutput.ok, true, 'ok should be true for success');
-      assert.strictEqual(jsonOutput.loop, 1, 'loop should be 1');
-      assert.strictEqual(typeof jsonOutput.timeoutMs, 'number', 'timeoutMs should be number');
-      assert(Array.isArray(jsonOutput.results));
-      assert.strictEqual(jsonOutput.results.length, 1, 'should have 1 result');
-      assert.strictEqual(jsonOutput.results[0].status, 'pass', 'result status should be pass');
-      assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs should be number');
+      // CRITICAL: MUST parse JSON from stdout
+      const jsonOutput = parseJsonOutput(result.stdout);
+
+      // CRITICAL: ok MUST be true
+      assert.strictEqual(jsonOutput.ok, true, 'ok MUST be true for success');
+      assert.strictEqual(jsonOutput.loop, 1, 'loop MUST be 1');
+      assert.strictEqual(typeof jsonOutput.timeoutMs, 'number', 'timeoutMs MUST be number');
+      assert.strictEqual(typeof jsonOutput.totalMs, 'number', 'totalMs MUST be number');
+      assert(Array.isArray(jsonOutput.results), 'results MUST be array');
+      assert.strictEqual(jsonOutput.results.length, 1, 'MUST have 1 result');
+
+      // CRITICAL: Result structure
+      const result1 = jsonOutput.results[0];
+      assert.strictEqual(result1.status, 'pass', 'status MUST be pass');
+      assert.strictEqual(typeof result1.durationMs, 'number', 'durationMs MUST be number');
+      assert(result1.durationMs >= 0, 'durationMs MUST be >= 0');
     });
   });
 
   describe('Restore failure scenario', () => {
-    it('should output ok:false, exit(1), and include error field', async () => {
+    it('MUST output valid JSON with ok:false, exit(1), and error field', async () => {
       fakeServer = await startFakeServer([
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
@@ -138,28 +156,26 @@ describe('ui dev cycle --json E2E Integration', () => {
 
       const result = await runCycle('--loop 1 --timeout 2000');
 
+      // CRITICAL: Exit code MUST be 1
       assert.strictEqual(result.exitCode, 1, `Expected exit code 1, got ${result.exitCode}`);
 
-      const jsonMatch = result.stdout.match(/\{[\s\S]*"ok"\s*:\s*(?:true|false)[\s\S]*"results"[\s\S]*\}/);
-      if (jsonMatch) {
-        let jsonOutput;
-        assert.doesNotThrow(() => {
-          jsonOutput = JSON.parse(jsonMatch[0]);
-        });
+      // CRITICAL: MUST parse JSON from stdout
+      const jsonOutput = parseJsonOutput(result.stdout);
 
-        assert.strictEqual(jsonOutput.ok, false, 'ok should be false for failure');
-        assert.strictEqual(jsonOutput.results.length, 1, 'should have 1 result');
-        const result1 = jsonOutput.results[0];
-        assert.strictEqual(result1.status, 'fail', 'result status should be fail');
-        assert.strictEqual(typeof result1.error, 'string', 'error should be string');
-        assert(result1.error.length > 0, 'error should not be empty');
-        assert.strictEqual(typeof result1.durationMs, 'number', 'durationMs should be number');
-      }
+      // CRITICAL: ok MUST be false
+      assert.strictEqual(jsonOutput.ok, false, 'ok MUST be false for failure');
+      assert.strictEqual(jsonOutput.results.length, 1, 'MUST have 1 result');
+      
+      const result1 = jsonOutput.results[0];
+      assert.strictEqual(result1.status, 'fail', 'status MUST be fail');
+      assert.strictEqual(typeof result1.error, 'string', 'error MUST be string');
+      assert(result1.error.length > 0, 'error MUST NOT be empty');
+      assert.strictEqual(typeof result1.durationMs, 'number', 'durationMs MUST be number');
     });
   });
 
   describe('Heartbeat timeout scenario', () => {
-    it('should output ok:false, exit(1) when heartbeat never returns updated:true', async () => {
+    it('MUST output valid JSON with ok:false and exit(1) on timeout', async () => {
       fakeServer = await startFakeServer([
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
@@ -172,28 +188,25 @@ describe('ui dev cycle --json E2E Integration', () => {
 
       const result = await runCycle('--loop 1 --timeout 300');
 
+      // CRITICAL: Exit code MUST be 1
       assert.strictEqual(result.exitCode, 1, `Expected exit code 1, got ${result.exitCode}`);
 
-      if (result.stdout.trim()) {
-        const jsonMatch = result.stdout.match(/\{[\s\S]*"ok"\s*:\s*(?:true|false)[\s\S]*"results"[\s\S]*\}/);
-        if (jsonMatch) {
-          let jsonOutput;
-          assert.doesNotThrow(() => {
-            jsonOutput = JSON.parse(jsonMatch[0]);
-          });
+      // CRITICAL: MUST parse JSON from stdout
+      const jsonOutput = parseJsonOutput(result.stdout);
 
-          assert.strictEqual(jsonOutput.ok, false, 'ok should be false for timeout');
-          assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status should be fail');
-          assert(jsonOutput.results[0].error.includes('heartbeat') || jsonOutput.results[0].error.includes('timeout'), 
-            'error should mention heartbeat or timeout');
-          assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs should be number');
-        }
-      }
+      // CRITICAL: ok MUST be false
+      assert.strictEqual(jsonOutput.ok, false, 'ok MUST be false for timeout');
+      assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status MUST be fail');
+      assert(
+        jsonOutput.results[0].error.includes('heartbeat') || jsonOutput.results[0].error.includes('timeout'),
+        'error MUST mention heartbeat or timeout'
+      );
+      assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number', 'durationMs MUST be number');
     });
   });
 
   describe('Multi-loop success scenario', () => {
-    it('should output correct results array for 2 successful loops', async () => {
+    it('MUST output valid JSON with 2 successful loop results', async () => {
       const responses = [
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
@@ -211,37 +224,35 @@ describe('ui dev cycle --json E2E Integration', () => {
 
       const result = await runCycle('--loop 2 --timeout 2000');
 
-      const jsonMatch = result.stdout.match(/\{[\s\S]*"ok"\s*:\s*(?:true|false)[\s\S]*"results"[\s\S]*\}/);
-      if (jsonMatch) {
-        let jsonOutput;
-        assert.doesNotThrow(() => {
-          jsonOutput = JSON.parse(jsonMatch[0]);
-        });
+      // CRITICAL: Exit code MUST be 0
+      assert.strictEqual(result.exitCode, 0, `Expected exit code 0, got ${result.exitCode}`);
 
-        assert.strictEqual(jsonOutput.ok, true, 'ok should be true');
-        assert.strictEqual(jsonOutput.loop, 2, 'loop should be 2');
-        assert.strictEqual(jsonOutput.results.length, 2, 'should have 2 results');
+      // CRITICAL: MUST parse JSON from stdout
+      const jsonOutput = parseJsonOutput(result.stdout);
 
-        jsonOutput.results.forEach((r, i) => {
-          assert.strictEqual(r.status, 'pass', `result ${i} status should be pass`);
-          assert.strictEqual(typeof r.durationMs, 'number', `result ${i} durationMs should be number`);
-        });
+      // CRITICAL: Validate structure
+      assert.strictEqual(jsonOutput.ok, true, 'ok MUST be true');
+      assert.strictEqual(jsonOutput.loop, 2, 'loop MUST be 2');
+      assert.strictEqual(jsonOutput.results.length, 2, 'MUST have 2 results');
 
-        const sumDurations = jsonOutput.results.reduce((sum, r) => sum + r.durationMs, 0);
-        assert(jsonOutput.totalMs >= sumDurations - 50, 
-          `totalMs (${jsonOutput.totalMs}) should be >= sum of durations (${sumDurations})`);
-      } else {
-        // Fallback: verify test ran successfully
-        assert(result.stdout.includes('Cycle test finished'), 'Test should complete');
-        assert(result.stdout.includes('loop 1 : pass'), 'Loop 1 should pass');
-        assert(result.stdout.includes('loop 2 : pass'), 'Loop 2 should pass');
-        assert.strictEqual(result.exitCode, 0, 'Exit code should be 0');
-      }
+      // CRITICAL: Each result MUST have correct structure
+      jsonOutput.results.forEach((r, i) => {
+        assert.strictEqual(r.status, 'pass', `result ${i} status MUST be pass`);
+        assert.strictEqual(typeof r.durationMs, 'number', `result ${i} durationMs MUST be number`);
+        assert(r.durationMs >= 0, `result ${i} durationMs MUST be >= 0`);
+      });
+
+      // CRITICAL: totalMs MUST be >= sum of durations
+      const sumDurations = jsonOutput.results.reduce((sum, r) => sum + r.durationMs, 0);
+      assert(
+        jsonOutput.totalMs >= sumDurations - 50,
+        `totalMs (${jsonOutput.totalMs}) MUST be >= sum of durations (${sumDurations})`
+      );
     });
   });
 
   describe('Partial failure in multi-loop', () => {
-    it('should output ok:false when second loop fails', async () => {
+    it('MUST output valid JSON with ok:false when 2nd loop fails', async () => {
       fakeServer = await startFakeServer([
         { ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } },
         { ok: true },
@@ -253,23 +264,24 @@ describe('ui dev cycle --json E2E Integration', () => {
 
       const result = await runCycle('--loop 2 --timeout 2000');
 
+      // CRITICAL: Exit code MUST be 1
       assert.strictEqual(result.exitCode, 1, `Expected exit code 1, got ${result.exitCode}`);
 
-      if (result.stdout.trim()) {
-        const jsonMatch = result.stdout.match(/\{[\s\S]*"ok"\s*:\s*(?:true|false)[\s\S]*"results"[\s\S]*\}/);
-        if (jsonMatch) {
-          let jsonOutput;
-          assert.doesNotThrow(() => {
-            jsonOutput = JSON.parse(jsonMatch[0]);
-          });
+      // CRITICAL: MUST parse JSON from stdout
+      const jsonOutput = parseJsonOutput(result.stdout);
 
-          assert.strictEqual(jsonOutput.ok, false, 'ok should be false');
-          assert.strictEqual(jsonOutput.results.length, 2, 'should have 2 results');
-          assert.strictEqual(jsonOutput.results[0].status, 'pass', 'first loop should pass');
-          assert.strictEqual(jsonOutput.results[1].status, 'fail', 'second loop should fail');
-          assert(jsonOutput.results[1].error.length > 0, 'second loop should have error');
-        }
-      }
+      // CRITICAL: ok MUST be false
+      assert.strictEqual(jsonOutput.ok, false, 'ok MUST be false');
+      assert.strictEqual(jsonOutput.results.length, 2, 'MUST have 2 results');
+      
+      // CRITICAL: First loop passes, second fails
+      assert.strictEqual(jsonOutput.results[0].status, 'pass', 'first loop MUST pass');
+      assert.strictEqual(jsonOutput.results[1].status, 'fail', 'second loop MUST fail');
+      assert(
+        jsonOutput.results[1].error.length > 0,
+        'second loop MUST have non-empty error'
+      );
+      assert.strictEqual(typeof jsonOutput.results[1].durationMs, 'number', 'durationMs MUST be number');
     });
   });
 });
