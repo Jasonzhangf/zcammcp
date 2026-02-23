@@ -246,7 +246,6 @@ function buildCommand() {
           const restoreState = await sendWindowCommand('restoreFromBall');
           assertWindowState(restoreState.state, { mode: 'main', ballVisible: false }, 'restore');
           
-          // TODO#2: heartbeat check after restore
           if (!isJson) {
             console.log(chalk.gray(`Loop ${i}: waiting for statusCard heartbeat...`));
           }
@@ -260,40 +259,28 @@ function buildCommand() {
           const durationMs = Date.now() - loopStartMs;
           results.push({ loop: i, status: 'fail', error: err.message, durationMs });
           
-          if (isJson) {
-            const output = {
-              ok: false,
-              loop: i,
-              timeoutMs,
-              totalMs: Date.now() - startMs,
-              results
-            };
-            console.log(JSON.stringify(output, null, 2));
-          } else {
-            console.error(chalk.red(`✗ Cycle test failed (loop ${i})`), err.message);
-          }
+          const output = {
+            ok: false,
+            loop: i,
+            timeoutMs,
+            totalMs: Date.now() - startMs,
+            results
+          };
+          console.log(JSON.stringify(output, null, 2));
           process.exit(1);
-          return; // Ensure we don't continue after exit
+          return;
         }
       }
 
       const totalMs = Date.now() - startMs;
-      if (isJson) {
-        const output = {
-          ok: true,
-          loop: results.length,
-          timeoutMs,
-          totalMs,
-          results
-        };
-        console.log(JSON.stringify(output, null, 2));
-      } else {
-        console.log(chalk.green(`✓ Cycle test finished, ${results.length} loops, total ${totalMs}ms`));
-        results.forEach((r) => {
-          const status = r.status === 'pass' ? chalk.green('✓') : chalk.red('✗');
-          console.log(`${status} loop ${r.loop} : ${r.status}`);
-        });
-      }
+      const output = {
+        ok: true,
+        loop: results.length,
+        timeoutMs,
+        totalMs,
+        results
+      };
+      console.log(JSON.stringify(output, null, 2));
       process.exit(0);
     });
 
