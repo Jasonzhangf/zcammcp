@@ -50,6 +50,50 @@
 
 ## 2. 系统测试层（System）
 
+
+#### 1.3.1 cycle --json 输出格式（CI 聚合）
+
+`zcam ui window cycle --json` 用于 CI 自动化测试和结果聚合，输出稳定 JSON 格式：
+
+```json
+{
+  "ok": true,
+  "loop": 2,
+  "timeoutMs": 5000,
+  "totalMs": 3456,
+  "results": [
+    { "loop": 1, "status": "pass", "durationMs": 1728 },
+    { "loop": 2, "status": "pass", "durationMs": 1728 }
+  ]
+}
+```
+
+字段说明：
+- `ok`: 测试是否通过（`true` 成功，`false` 失败）
+- `loop`: 总循环次数
+- `timeoutMs`: 每轮超时配置
+- `totalMs`: 总耗时（毫秒）
+- `results[]`: 每轮详细结果
+  - `loop`: 轮次编号
+  - `status`: 状态（`pass` 通过，`fail` 失败）
+  - `durationMs`: 单轮耗时（毫秒）
+  - `error`: 失败时的错误信息（仅失败时存在）
+
+失败时输出结构：
+```json
+{
+  "ok": false,
+  "loop": 1,
+  "timeoutMs": 5000,
+  "totalMs": 234,
+  "results": [
+    { "loop": 1, "status": "fail", "error": "connection refused", "durationMs": 234 }
+  ]
+}
+```
+
+失败时 CLI 退出码为 1，便于 CI 判定失败。
+
 系统测试通过“消息→CLI→IPC→Electron→UI”的方式执行完整回环，目标是不依赖人工点击 UI，即可验证窗口行为。
 
 ### 2.1 基本回环（shrink→ball→restore）

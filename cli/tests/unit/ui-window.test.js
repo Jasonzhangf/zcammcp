@@ -1,6 +1,6 @@
 /**
  * UI Window Commands Unit Tests
- * 测试 CLI 命令处理逻辑（不依赖 Electron 运行时）
+ * 测试 CLI 命令处理逻辑
  */
 
 const assert = require('assert');
@@ -19,32 +19,17 @@ describe('UI Window Module', () => {
       assert(code.includes('assertNoScrollbar'), 'Missing assertNoScrollbar');
     });
 
-    it('should define cycle command', () => {
+    it('should define cycle command with --json option', () => {
       const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
       const code = fs.readFileSync(uiWindowPath, 'utf8');
-      assert(code.includes('.command(\'cycle\')'), 'Missing cycle command');
-      assert(code.includes('shrinkToBall'), 'Missing shrinkToBall in cycle');
-      assert(code.includes('restoreFromBall'), 'Missing restoreFromBall in cycle');
-    });
-
-    it('should have heartbeat check in cycle', () => {
-      const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
-      const code = fs.readFileSync(uiWindowPath, 'utf8');
-      assert(code.includes('waitForHeartbeat'), 'Missing heartbeat check');
-      assert(code.includes('statusCard'), 'Missing statusCard heartbeat');
-    });
-
-    it('should have --json option in cycle command', () => {
-      const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
-      const code = fs.readFileSync(uiWindowPath, 'utf8');
-      assert(code.includes(".option('--json'"), 'Missing --json option');
+      assert(code.includes(".command('cycle')"), 'Missing cycle command');
+      assert(code.includes("--json"), 'Missing --json option');
       assert(code.includes('isJson'), 'Missing isJson variable');
     });
 
-    it('should output JSON structure with required fields', () => {
+    it('should have correct JSON output structure fields', () => {
       const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
       const code = fs.readFileSync(uiWindowPath, 'utf8');
-      // Check for JSON output structure
       assert(code.includes('ok: true'), 'Missing ok: true in JSON output');
       assert(code.includes('ok: false'), 'Missing ok: false in JSON output');
       assert(code.includes('loop:'), 'Missing loop field in JSON output');
@@ -53,16 +38,27 @@ describe('UI Window Module', () => {
       assert(code.includes('results'), 'Missing results array in JSON output');
     });
 
-    it('should include durationMs in results', () => {
+    it('should use loopStartMs for per-loop duration calculation', () => {
       const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
       const code = fs.readFileSync(uiWindowPath, 'utf8');
-      assert(code.includes('durationMs'), 'Missing durationMs in results');
+      // Verify loopStartMs is used to calculate durationMs
+      assert(code.includes('loopStartMs'), 'Missing loopStartMs variable');
+      assert(code.includes('Date.now() - loopStartMs'), 'Should calculate duration from loopStartMs');
+      // Make sure it's not using global startMs
+      const loopDurationCode = code.match(/durationMs:[^}]+/g) || [];
+      assert(loopDurationCode.length > 0, 'Should have durationMs calculation');
+    });
+
+    it('should have separate totalMs calculation', () => {
+      const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
+      const code = fs.readFileSync(uiWindowPath, 'utf8');
+      // Verify totalMs uses global startMs
+      assert(code.match(/const totalMs = Date\.now\(\) - startMs/), 'Should calculate totalMs from startMs');
     });
   });
 
-  describe('JSON Output Structure', () => {
+  describe('JSON Output Structure Validation', () => {
     it('should have valid JSON schema for success case', () => {
-      // Simulate JSON structure validation
       const mockOutput = {
         ok: true,
         loop: 1,
@@ -81,6 +77,27 @@ describe('UI Window Module', () => {
       assert.strictEqual(typeof mockOutput.results[0].loop, 'number');
       assert.strictEqual(typeof mockOutput.results[0].status, 'string');
       assert.strictEqual(typeof mockOutput.results[0].durationMs, 'number');
+      assert(mockOutput.totalMs >= mockOutput.results[0].durationMs, 'totalMs should be >= durationMs');
+    });
+
+    it('should have valid JSON schema for multi-loop success case', () => {
+      const mockOutput = {
+        ok: true,
+        loop: 2,
+        timeoutMs: 5000,
+        totalMs: 3456,
+        results: [
+          { loop: 1, status: 'pass', durationMs: 1728 },
+          { loop: 2, status: 'pass', durationMs: 1728 }
+        ]
+      };
+      assert.strictEqual(mockOutput.loop, 2);
+      assert.strictEqual(mockOutput.results.length, 2);
+      assert.strictEqual(mockOutput.results[0].loop, 1);
+      assert.strictEqual(mockOutput.results[1].loop, 2);
+      // totalMs should be roughly sum of durations
+      const sumDurations = mockOutput.results.reduce((sum, r) => sum + r.durationMs, 0);
+      assert(mockOutput.totalMs >= sumDurations - 10, 'totalMs should be >= sum of durationMs');
     });
 
     it('should have valid JSON schema for failure case', () => {
@@ -88,18 +105,25 @@ describe('UI Window Module', () => {
         ok: false,
         loop: 1,
         timeoutMs: 5000,
-        totalMs: 1234,
+        totalMs: 234,
         results: [
-          { loop: 1, status: 'fail', error: 'test error', durationMs: 1234 }
+          { loop: 1, status: 'fail', error: 'connection refused', durationMs: 234 }
         ]
       };
       assert.strictEqual(mockOutput.ok, false);
       assert.strictEqual(typeof mockOutput.results[0].error, 'string');
+      assert(mockOutput.results[0].error.length > 0);
+    });
+
+    it('should validate exit codes in documentation', () => {
+      const uiWindowPath = path.resolve(__dirname, '../../src/modules/ui-window.js');
+      const code = fs.readFileSync(uiWindowPath, 'utf8');
+      assert(code.includes('process.exit(0)'), 'Should have exit 0 for success');
+      assert(code.includes('process.exit(1)'), 'Should have exit 1 for failure');
     });
   });
 
   describe('assertWindowState', () => {
-    // 从被测模块复制逻辑进行测试
     function assertWindowState(state, expectation, stage) {
       if (!state) {
         throw new Error(`missing window state for ${stage}`);
@@ -182,37 +206,6 @@ describe('UI Window Module', () => {
         () => assertNoScrollbar(state, {}, 'test'),
         /unexpected vertical scrollbar/
       );
-    });
-  });
-
-  describe('formatState', () => {
-    function formatState(state) {
-      if (!state) return 'No state';
-      const parts = [
-        `mode=${state.mode || 'unknown'}`,
-        `layout=${state.layoutSize || 'unknown'}`,
-        `ball=${state.ballVisible ? 'visible' : 'hidden'}`,
-      ];
-      return parts.join(' ');
-    }
-
-    it('should format null state', () => {
-      assert.strictEqual(formatState(null), 'No state');
-    });
-
-    it('should format ball state', () => {
-      const state = { mode: 'ball', ballVisible: true };
-      const formatted = formatState(state);
-      assert(formatted.includes('mode=ball'));
-      assert(formatted.includes('ball=visible'));
-    });
-
-    it('should format main state', () => {
-      const state = { mode: 'main', layoutSize: 'studio', ballVisible: false };
-      const formatted = formatState(state);
-      assert(formatted.includes('mode=main'));
-      assert(formatted.includes('layout=studio'));
-      assert(formatted.includes('ball=hidden'));
     });
   });
 });

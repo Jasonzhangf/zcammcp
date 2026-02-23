@@ -232,6 +232,7 @@ function buildCommand() {
       const results = [];
 
       for (let i = 1; i <= loop; i++) {
+        const loopStartMs = Date.now();
         try {
           if (!isJson) {
             console.log(chalk.gray(`Loop ${i}: shrink`));
@@ -254,9 +255,9 @@ function buildCommand() {
             console.log(chalk.gray(`Loop ${i}: heartbeat received`));
           }
           
-          results.push({ loop: i, status: 'pass', durationMs: Date.now() - startMs });
+          results.push({ loop: i, status: 'pass', durationMs: Date.now() - loopStartMs });
         } catch (err) {
-          const durationMs = Date.now() - startMs;
+          const durationMs = Date.now() - loopStartMs;
           results.push({ loop: i, status: 'fail', error: err.message, durationMs });
           
           if (isJson) {
@@ -264,7 +265,7 @@ function buildCommand() {
               ok: false,
               loop: i,
               timeoutMs,
-              totalMs: durationMs,
+              totalMs: Date.now() - startMs,
               results
             };
             console.log(JSON.stringify(output, null, 2));
