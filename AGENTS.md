@@ -96,11 +96,14 @@ ui-desktop/
 
 1. [x] `cycle` 命令增加滚动条规则（默认开启）。
 2. [x] `cycle` 增加恢复后控件 heartbeat 检查（比如 `statusCard` 的 `updated`）。
-3. [ ] `cycle --json` 输出，便于 CI 聚合结果。
+3. [x] `cycle --json` 输出，便于 CI 聚合结果 (2026-02-24)。
+   - JSON 输出字段：`ok`, `loop`, `timeoutMs`, `totalMs`, `results[{loop, status, durationMs, error?}]`
+   - 失败时退出码为 1，便于 CI 判定
+   - 测试覆盖：E2E 5/5, Unit 14/14
 4. [ ] 扩大消息系统：贴边、全屏、Dock 等窗口行为也通过命令控制。
 5. [ ] 控件层增加更多自动化规则（例如 slider 是否超出范围、modal 是否关闭）。
 
-> 下一步：根据实际需求，优先完成 TODO #1/#2，逐步完善“自动回环测试系统”。
+> 下一步：根据实际需求，优先完成 TODO #4/#5，逐步完善“自动回环测试系统”。
 
 ## Landing the Plane (Session Completion)
 
