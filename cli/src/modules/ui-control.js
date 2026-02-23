@@ -42,6 +42,7 @@ function requestJson(path, method = 'GET', payload) {
 
 /**
  * 发送 UI 命令 (通过 command channel)
+ * 返回结构: { ok, result: { ok, data/commands } }
  */
 async function sendCommand(command, params = {}) {
   const res = await requestJson('/command', 'POST', { 
@@ -54,11 +55,13 @@ async function sendCommand(command, params = {}) {
     throw new Error(res.error || 'Command failed');
   }
   
-  return res;
+  // 从 res.result 获取实际数据
+  return res.result || res;
 }
 
 /**
  * 获取命令列表
+ * 返回结构: { ok, result: { ok, commands: [...] } }
  */
 async function listCommands() {
   const res = await requestJson('/command', 'POST', { 
@@ -71,7 +74,8 @@ async function listCommands() {
     throw new Error(res.error || 'List commands failed');
   }
   
-  return res.commands || [];
+  // 从 res.result.commands 获取列表
+  return res.result?.commands || [];
 }
 
 function buildCommand() {
@@ -85,11 +89,11 @@ function buildCommand() {
     .action(async () => {
       try {
         const startTime = Date.now();
-        const res = await sendCommand('ui.window.shrinkToBall');
+        const result = await sendCommand('ui.window.shrinkToBall');
         const elapsed = Date.now() - startTime;
         console.log(chalk.green('✓ ui.window.shrinkToBall executed'));
         console.log(`  Elapsed: ${elapsed}ms`);
-        console.log(`  Result: ${JSON.stringify(res.data || {})}`);
+        console.log(`  Result: ${JSON.stringify(result.data || result)}`);
       } catch (err) {
         console.error(chalk.red('✗ ui.window.shrinkToBall failed'), err.message);
         process.exit(1);
@@ -103,11 +107,11 @@ function buildCommand() {
     .action(async () => {
       try {
         const startTime = Date.now();
-        const res = await sendCommand('ui.window.restoreFromBall');
+        const result = await sendCommand('ui.window.restoreFromBall');
         const elapsed = Date.now() - startTime;
         console.log(chalk.green('✓ ui.window.restoreFromBall executed'));
         console.log(`  Elapsed: ${elapsed}ms`);
-        console.log(`  Result: ${JSON.stringify(res.data || {})}`);
+        console.log(`  Result: ${JSON.stringify(result.data || result)}`);
       } catch (err) {
         console.error(chalk.red('✗ ui.window.restoreFromBall failed'), err.message);
         process.exit(1);
@@ -147,11 +151,11 @@ function buildCommand() {
         }
         
         const startTime = Date.now();
-        const res = await sendCommand(commandId, params);
+        const result = await sendCommand(commandId, params);
         const elapsed = Date.now() - startTime;
         console.log(chalk.green(`✓ ${commandId} executed`));
         console.log(`  Elapsed: ${elapsed}ms`);
-        console.log(`  Result: ${JSON.stringify(res.data || {})}`);
+        console.log(`  Result: ${JSON.stringify(result.data || result)}`);
       } catch (err) {
         console.error(chalk.red(`✗ ${commandId} failed`), err.message);
         process.exit(1);

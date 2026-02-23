@@ -92,6 +92,26 @@ function assertWindowState(state, expectation, stage) {
   }
 }
 
+/**
+ * 验证滚动条状态（cycle 测试 TODO#1）
+ * @param {object} state - 窗口状态
+ * @param {object} expectation - 期望值
+ * @param {string} stage - 当前阶段
+ */
+function assertNoScrollbar(state, expectation, stage) {
+  if (!state || !state.scrollInfo) {
+    // 如果没有 scrollInfo，跳过检查（可能是旧版本）
+    return;
+  }
+  const { hasHorizontalScrollbar, hasVerticalScrollbar } = state.scrollInfo;
+  if (hasHorizontalScrollbar) {
+    throw new Error(`unexpected horizontal scrollbar during ${stage}`);
+  }
+  if (hasVerticalScrollbar) {
+    throw new Error(`unexpected vertical scrollbar during ${stage}`);
+  }
+}
+
 function buildCommand() {
   const cmd = new Command('window');
   cmd.description('Desktop UI window control via state host');
@@ -186,6 +206,7 @@ function buildCommand() {
           console.log(chalk.gray(`Loop ${i}: shrink`));
           const shrinkState = await sendWindowCommand('shrinkToBall');
           assertWindowState(shrinkState.state, { mode: 'ball', ballVisible: true, requireBounds: true }, 'shrink');
+          assertNoScrollbar(shrinkState.state, {}, 'shrink');
           console.log(chalk.gray(`Loop ${i}: restore`));
           const restoreState = await sendWindowCommand('restoreFromBall');
           assertWindowState(restoreState.state, { mode: 'main', ballVisible: false }, 'restore');

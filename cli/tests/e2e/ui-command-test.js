@@ -39,74 +39,18 @@ function requestJson(path, method = 'GET', payload) {
 }
 
 async function sendCommand(command, params = {}) {
-  return requestJson('/command', 'POST', {
+  const res = await requestJson('/command', 'POST', {
     channel: 'command',
     action: 'execute',
     payload: { command, params }
   });
+  if (!res.ok) throw new Error(res.error);
+  return res.result || res;
 }
 
 async function getWindowState() {
   const res = await requestJson('/state?channel=window', 'GET');
   return res.state || null;
-}
-
-async function testShrinkToBall() {
-  console.log('[TEST] ui.window.shrinkToBall...');
-  
-  // 1. 执行 shrink 命令
-  const result = await sendCommand('ui.window.shrinkToBall');
-  if (!result.ok) {
-    throw new Error(`shrinkToBall command failed: ${result.error}`);
-  }
-  console.log('  ✓ Command returned ok');
-  
-  // 2. 等待状态更新
-  await new Promise(r => setTimeout(r, 500));
-  
-  // 3. 验证窗口状态变化
-  const state = await getWindowState();
-  if (!state) {
-    throw new Error('Failed to get window state');
-  }
-  if (state.mode !== 'ball') {
-    throw new Error(`Expected mode=ball, got mode=${state.mode}`);
-  }
-  if (!state.ballVisible) {
-    throw new Error('Expected ballVisible=true');
-  }
-  console.log('  ✓ Window state changed to ball mode');
-  
-  return true;
-}
-
-async function testRestoreFromBall() {
-  console.log('[TEST] ui.window.restoreFromBall...');
-  
-  // 1. 执行 restore 命令
-  const result = await sendCommand('ui.window.restoreFromBall');
-  if (!result.ok) {
-    throw new Error(`restoreFromBall command failed: ${result.error}`);
-  }
-  console.log('  ✓ Command returned ok');
-  
-  // 2. 等待状态更新
-  await new Promise(r => setTimeout(r, 500));
-  
-  // 3. 验证窗口状态变化
-  const state = await getWindowState();
-  if (!state) {
-    throw new Error('Failed to get window state');
-  }
-  if (state.mode !== 'main') {
-    throw new Error(`Expected mode=main, got mode=${state.mode}`);
-  }
-  if (state.ballVisible) {
-    throw new Error('Expected ballVisible=false');
-  }
-  console.log('  ✓ Window state changed to main mode');
-  
-  return true;
 }
 
 async function testCommandList() {
@@ -122,7 +66,8 @@ async function testCommandList() {
     throw new Error('List commands failed');
   }
   
-  const commands = result.commands || [];
+  // 从 result.result.commands 获取列表
+  const commands = result.result?.commands || [];
   const hasShrink = commands.some(c => c.id === 'ui.window.shrinkToBall');
   const hasRestore = commands.some(c => c.id === 'ui.window.restoreFromBall');
   
@@ -131,6 +76,46 @@ async function testCommandList() {
   }
   
   console.log(`  ✓ Found ${commands.length} commands including shrink/restore`);
+  return true;
+}
+
+async function testShrinkToBall() {
+  console.log('[TEST] ui.window.shrinkToBall...');
+  
+  const result = await sendCommand('ui.window.shrinkToBall');
+  if (!result.ok) {
+    throw new Error(`shrinkToBall command failed: ${result.error}`);
+  }
+  console.log('  ✓ Command returned ok');
+  
+  await new Promise(r => setTimeout(r, 500));
+  
+  const state = await getWindowState();
+  if (!state) throw new Error('Failed to get window state');
+  if (state.mode !== 'ball') throw new Error(`Expected mode=ball, got mode=${state.mode}`);
+  if (!state.ballVisible) throw new Error('Expected ballVisible=true');
+  console.log('  ✓ Window state changed to ball mode');
+  
+  return true;
+}
+
+async function testRestoreFromBall() {
+  console.log('[TEST] ui.window.restoreFromBall...');
+  
+  const result = await sendCommand('ui.window.restoreFromBall');
+  if (!result.ok) {
+    throw new Error(`restoreFromBall command failed: ${result.error}`);
+  }
+  console.log('  ✓ Command returned ok');
+  
+  await new Promise(r => setTimeout(r, 500));
+  
+  const state = await getWindowState();
+  if (!state) throw new Error('Failed to get window state');
+  if (state.mode !== 'main') throw new Error(`Expected mode=main, got mode=${state.mode}`);
+  if (state.ballVisible) throw new Error('Expected ballVisible=false');
+  console.log('  ✓ Window state changed to main mode');
+  
   return true;
 }
 
