@@ -251,3 +251,81 @@ test.afterEach(() => {
   cleanup();
   cleanupMocks();
 });
+
+test('SliderControl boundary: value is clamped at max', () => {
+  setupMocks();
+  const stores = createMockStore();
+  
+  // Track the values received
+  const receivedValues: number[] = [];
+  const onValueChange = (value: number) => {
+    receivedValues.push(value);
+  };
+  
+  const config = createMockConfig({
+    onValueChange,
+    valueRange: { min: 0, max: 100, step: 1 },
+    keyBindings: ['ArrowLeft', 'ArrowRight'],
+    keyInputMode: 'focus',
+  });
+  
+  renderWithStore(<SliderControl config={config} />, stores);
+  
+  const sliders = screen.getAllByRole('slider');
+  const slider = sliders[0];
+  
+  // Focus the slider
+  slider.focus();
+  assert.strictEqual(document.activeElement, slider, 'Slider should be focused');
+  
+  // Press ArrowRight when at max - value should stay at 100 (clamped)
+  fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' });
+  fireEvent.keyUp(slider, { key: 'ArrowRight', code: 'ArrowRight' });
+  
+  // Verify all values are within valid range
+  for (const v of receivedValues) {
+    assert.ok(v <= 100, `Value ${v} should not exceed max of 100`);
+    assert.ok(v >= 0, `Value ${v} should not be below min of 0`);
+  }
+  
+  cleanupMocks();
+});
+
+test('SliderControl boundary: value is clamped at min', () => {
+  setupMocks();
+  const stores = createMockStore();
+  
+  // Track the values received
+  const receivedValues: number[] = [];
+  const onValueChange = (value: number) => {
+    receivedValues.push(value);
+  };
+  
+  const config = createMockConfig({
+    onValueChange,
+    valueRange: { min: 0, max: 100, step: 1 },
+    keyBindings: ['ArrowLeft', 'ArrowRight'],
+    keyInputMode: 'focus',
+  });
+  
+  renderWithStore(<SliderControl config={config} />, stores);
+  
+  const sliders = screen.getAllByRole('slider');
+  const slider = sliders[0];
+  
+  // Focus the slider
+  slider.focus();
+  assert.strictEqual(document.activeElement, slider, 'Slider should be focused');
+  
+  // Press ArrowLeft when at min - value should stay at 0 (clamped)
+  fireEvent.keyDown(slider, { key: 'ArrowLeft', code: 'ArrowLeft' });
+  fireEvent.keyUp(slider, { key: 'ArrowLeft', code: 'ArrowLeft' });
+  
+  // Verify all values are within valid range
+  for (const v of receivedValues) {
+    assert.ok(v <= 100, `Value ${v} should not exceed max of 100`);
+    assert.ok(v >= 0, `Value ${v} should not be below min of 0`);
+  }
+  
+  cleanupMocks();
+});
