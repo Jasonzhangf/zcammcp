@@ -41,119 +41,78 @@ function requestJson(path, method = 'GET', payload) {
 }
 
 /**
- * 发送 UI 控制命令
+ * 发送 UI 命令 (通过 command channel)
  */
-async function sendUICommand(command, params = {}) {
+async function sendCommand(command, params = {}) {
   const res = await requestJson('/command', 'POST', { 
-    channel: 'ui', 
-    action: 'executeCommand',
+    channel: 'command', 
+    action: 'execute',
     payload: { command, params }
   });
   
   if (!res.ok) {
-    throw new Error(res.error || 'UI command failed');
+    throw new Error(res.error || 'Command failed');
   }
   
   return res;
 }
 
 /**
- * 获取 UI 状态
+ * 获取命令列表
  */
-async function fetchUIState() {
-  const res = await requestJson('/state?channel=camera', 'GET');
+async function listCommands() {
+  const res = await requestJson('/command', 'POST', { 
+    channel: 'command', 
+    action: 'list',
+    payload: {}
+  });
+  
   if (!res.ok) {
-    throw new Error(res.error || 'state unavailable');
+    throw new Error(res.error || 'List commands failed');
   }
-  return res.state || null;
+  
+  return res.commands || [];
 }
 
 function buildCommand() {
   const cmd = new Command('control');
   cmd.description('UI control commands via CommandRegistry');
 
-  // PTZ Commands
-  const ptzCmd = new Command('ptz');
-  ptzCmd.description('PTZ control commands');
-
-  ptzCmd
-    .command('move <direction>')
-    .description('Move PTZ (up/down/left/right/up-left/up-right/down-left/down-right)')
-    .option('-s, --speed <number>', 'Movement speed (0-100)', '50')
-    .action(async (direction, options) => {
-      try {
-        const speed = parseInt(options.speed, 10);
-        const res = await sendUICommand('ptz.move', { direction, speed });
-        console.log(chalk.green('✓ PTZ move:'), direction, `speed=${speed}`);
-        console.log(JSON.stringify(res.data, null, 2));
-      } catch (err) {
-        console.error(chalk.red('✗ PTZ move failed'), err.message);
-        process.exit(1);
-      }
-    });
-
-  ptzCmd
-    .command('stop')
-    .description('Stop PTZ movement')
+  // Window shrink command
+  cmd
+    .command('shrink')
+    .description('Shrink main window to ball (ui.window.shrinkToBall)')
     .action(async () => {
       try {
-        await sendUICommand('ptz.stop');
-        console.log(chalk.green('✓ PTZ stopped'));
+        const startTime = Date.now();
+        const res = await sendCommand('ui.window.shrinkToBall');
+        const elapsed = Date.now() - startTime;
+        console.log(chalk.green('✓ ui.window.shrinkToBall executed'));
+        console.log(`  Elapsed: ${elapsed}ms`);
+        console.log(`  Result: ${JSON.stringify(res.data || {})}`);
       } catch (err) {
-        console.error(chalk.red('✗ PTZ stop failed'), err.message);
+        console.error(chalk.red('✗ ui.window.shrinkToBall failed'), err.message);
         process.exit(1);
       }
     });
 
-  ptzCmd
-    .command('zoom <action>')
-    .description('Zoom control (in/out/stop/set)')
-    .option('-v, --value <number>', 'Zoom value for set')
-    .option('-s, --speed <number>', 'Zoom speed (0-100)', '50')
-    .action(async (action, options) => {
-      try {
-        const params = { action, speed: parseInt(options.speed, 10) };
-        if (options.value) params.value = parseInt(options.value, 10);
-        const res = await sendUICommand('ptz.zoom', params);
-        console.log(chalk.green('✓ PTZ zoom:'), action);
-      } catch (err) {
-        console.error(chalk.red('✗ PTZ zoom failed'), err.message);
-        process.exit(1);
-      }
-    });
-
-  ptzCmd
-    .command('focus <action>')
-    .description('Focus control (near/far/stop/set/auto)')
-    .option('-v, --value <number>', 'Focus value for set')
-    .option('-s, --speed <number>', 'Focus speed (0-100)', '50')
-    .action(async (action, options) => {
-      try {
-        const params = { action, speed: parseInt(options.speed, 10) };
-        if (options.value) params.value = parseInt(options.value, 10);
-        const res = await sendUICommand('ptz.focus', params);
-        console.log(chalk.green('✓ PTZ focus:'), action);
-      } catch (err) {
-        console.error(chalk.red('✗ PTZ focus failed'), err.message);
-        process.exit(1);
-      }
-    });
-
-  ptzCmd
-    .command('state')
-    .description('Get PTZ state')
+  // Window restore command
+  cmd
+    .command('restore')
+    .description('Restore window from ball (ui.window.restoreFromBall)')
     .action(async () => {
       try {
-        const res = await sendUICommand('ptz.getState');
-        console.log(chalk.green('✓ PTZ state:'));
-        console.log(JSON.stringify(res.data, null, 2));
+        const startTime = Date.now();
+        const res = await sendCommand('ui.window.restoreFromBall');
+        const elapsed = Date.now() - startTime;
+        console.log(chalk.green('✓ ui.window.restoreFromBall executed'));
+        console.log(`  Elapsed: ${elapsed}ms`);
+        console.log(`  Result: ${JSON.stringify(res.data || {})}`);
       } catch (err) {
-        console.error(chalk.red('✗ Get PTZ state failed'), err.message);
+        console.error(chalk.red('✗ ui.window.restoreFromBall failed'), err.message);
         process.exit(1);
       }
     });
-
-  cmd.addCommand(ptzCmd);
 
   // List all commands
   cmd
@@ -161,13 +120,11 @@ function buildCommand() {
     .description('List all available UI commands')
     .action(async () => {
       try {
-        const res = await requestJson('/commands', 'GET');
-        if (res.ok && res.commands) {
-          console.log(chalk.cyan('Available UI Commands:'));
-          console.log(JSON.stringify(res.commands, null, 2));
-        } else {
-          console.log(chalk.yellow('No commands registered'));
-        }
+        const commands = await listCommands();
+        console.log(chalk.cyan('Available UI Commands:'));
+        commands.forEach(c => {
+          console.log(`  ${chalk.green(c.id)} - ${c.description}`);
+        });
       } catch (err) {
         console.error(chalk.red('✗ List commands failed'), err.message);
         process.exit(1);
@@ -189,11 +146,14 @@ function buildCommand() {
           process.exit(1);
         }
         
-        const res = await sendUICommand(commandId, params);
-        console.log(chalk.green(`✓ Command ${commandId} executed:`));
-        console.log(JSON.stringify(res.data, null, 2));
+        const startTime = Date.now();
+        const res = await sendCommand(commandId, params);
+        const elapsed = Date.now() - startTime;
+        console.log(chalk.green(`✓ ${commandId} executed`));
+        console.log(`  Elapsed: ${elapsed}ms`);
+        console.log(`  Result: ${JSON.stringify(res.data || {})}`);
       } catch (err) {
-        console.error(chalk.red(`✗ Command ${commandId} failed`), err.message);
+        console.error(chalk.red(`✗ ${commandId} failed`), err.message);
         process.exit(1);
       }
     });

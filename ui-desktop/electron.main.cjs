@@ -474,6 +474,36 @@ async function sendUvcRequest(uvcRequest) {
 }
 
 
+    // 统一命令处理入口 - CLI 通过此接口执行 UI 命令
+    stateHost.registerHandler('command', async (action, payload = {}) => {
+      console.log('[CommandHandler] action=%s payload=%j', action, payload);
+      switch (action) {
+        case 'execute': {
+          const { command, params = {} } = payload;
+          if (command === 'ui.window.shrinkToBall') {
+            const result = await shrinkToBall();
+            return { ok: true, data: result };
+          }
+          if (command === 'ui.window.restoreFromBall') {
+            const result = await restoreFromBall();
+            return { ok: true, data: result };
+          }
+          throw new Error(`unknown command: ${command}`);
+        }
+        case 'list': {
+          return {
+            ok: true,
+            commands: [
+              { id: 'ui.window.shrinkToBall', category: 'window', description: 'Shrink main window to ball' },
+              { id: 'ui.window.restoreFromBall', category: 'window', description: 'Restore window from ball' },
+            ],
+          };
+        }
+        default:
+          throw new Error(`unknown command action: ${action}`);
+      }
+    });
+
 async function ensureCameraStateService() {
   if (!CAMERA_STATE_SCRIPT) return;
   try {
@@ -753,6 +783,36 @@ stateHost
           throw new Error(`unknown uiTest action: ${action}`);
       }
     });
+    // 统一命令处理入口 - CLI 通过此接口执行 UI 命令
+    stateHost.registerHandler('command', async (action, payload = {}) => {
+      console.log('[CommandHandler] action=%s payload=%j', action, payload);
+      switch (action) {
+        case 'execute': {
+          const { command, params = {} } = payload;
+          if (command === 'ui.window.shrinkToBall') {
+            const result = await shrinkToBall();
+            return { ok: true, data: result };
+          }
+          if (command === 'ui.window.restoreFromBall') {
+            const result = await restoreFromBall();
+            return { ok: true, data: result };
+          }
+          throw new Error(`unknown command: ${command}`);
+        }
+        case 'list': {
+          return {
+            ok: true,
+            commands: [
+              { id: 'ui.window.shrinkToBall', category: 'window', description: 'Shrink main window to ball' },
+              { id: 'ui.window.restoreFromBall', category: 'window', description: 'Restore window from ball' },
+            ],
+          };
+        }
+        default:
+          throw new Error(`unknown command action: ${action}`);
+      }
+    });
+
     ensureCameraStateService()
       .then(() => startCameraStateSync())
       .catch((err) => {
