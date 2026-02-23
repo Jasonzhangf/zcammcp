@@ -1,7 +1,7 @@
 // StatusCard.tsx
 // 映射路径: zcam.camera.pages.main.status
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
@@ -17,6 +17,13 @@ export const statusCardNode: ContainerNode = {
 
 export function StatusCard() {
   const view = useViewState();
+  
+  // Heartbeat: 上报 statusCard 更新状态 (TODO#2)
+  useEffect(() => {
+    if (window.electronAPI?.heartbeat) {
+      window.electronAPI.heartbeat('statusCard');
+    }
+  });
   const cam = view.camera;
   const containerState = useContainerState('group.status');
   const cameraName = (containerState?.data?.['cameraName'] as string) ?? 'ZCAM PTZ-01';

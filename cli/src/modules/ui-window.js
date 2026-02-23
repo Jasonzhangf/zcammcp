@@ -60,6 +60,30 @@ async function fetchWindowState() {
   return res.state || null;
 }
 
+/**
+ * 等待控件 heartbeat (TODO#2)
+ * @param {string} controlId - 控件 ID (如 'statusCard')
+ * @param {number} timeoutMs - 超时时间
+ */
+async function waitForHeartbeat(controlId, timeoutMs) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await requestJson('/state?channel=ui', 'GET');
+      if (res.ok && res.state && res.state.heartbeats) {
+        const hb = res.state.heartbeats[controlId];
+        if (hb && hb.updated) {
+          return { success: true, ts: hb.ts };
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  throw new Error(`heartbeat timeout for ${controlId}`);
+}
+
 function formatState(state) {
   if (!state) return chalk.gray('No state');
   const parts = [
@@ -210,6 +234,13 @@ function buildCommand() {
           console.log(chalk.gray(`Loop ${i}: restore`));
           const restoreState = await sendWindowCommand('restoreFromBall');
           assertWindowState(restoreState.state, { mode: 'main', ballVisible: false }, 'restore');
+          
+          // TODO#2: heartbeat check after restore
+          console.log(chalk.gray(`Loop ${i}: waiting for statusCard heartbeat...`));
+          const timeoutMs = parseInt(options.timeout, 10);
+          await waitForHeartbeat('statusCard', timeoutMs);
+          console.log(chalk.gray(`Loop ${i}: heartbeat received`));
+          
           results.push({ loop: i, status: 'pass' });
         } catch (err) {
           results.push({ loop: i, status: 'fail', error: err.message });

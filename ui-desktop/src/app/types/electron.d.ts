@@ -74,6 +74,7 @@ export interface ElectronAPI {
   sendUvcRequest?: (request: UvcRequest) => Promise<UvcResponse>;
   devReport?: (report: unknown) => void;
   onWindowState?: (callback: (state: WindowStatePayload) => void) => () => void;
+  heartbeat?: (controlId: string) => Promise<void>;
   onCameraState?: (callback: (snapshot: CameraStateSnapshot) => void) => () => void;
   registerTestHandler?: (handler: (command: TestCommandMessage) => Promise<TestHandlerResult> | TestHandlerResult) => () => void;
 }

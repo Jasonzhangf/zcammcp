@@ -12,7 +12,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pushState: (channel, payload) => ipcRenderer.invoke('state:push', { channel, payload }),
   runCliCommand: (payload) => ipcRenderer.invoke('cli:run', payload),
   sendUvcRequest: (request) => ipcRenderer.invoke('uvc:request', request),
-  heartbeat: (controlId) => ipcRenderer.invoke('ui:heartbeat', { controlId, ts: Date.now() }),
   onWindowState: (callback) => {
     if (typeof callback !== 'function') {
       return () => { };

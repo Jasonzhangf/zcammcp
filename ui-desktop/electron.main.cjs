@@ -41,6 +41,8 @@ let cameraStateSnapshot = null;
 const pendingTestCommands = new Map();
 
 const stateHost = new StateHost();
+const uiHeartbeats = {};
+
 const windowState = {
   mode: 'main',
   layoutSize: 'normal',
@@ -596,6 +598,13 @@ function stopCameraStateSync() {
 }
 
 // IPC handlers
+ipcMain.handle('ui:heartbeat', async (_event, payload) => {
+  const { controlId, ts } = payload;
+  uiHeartbeats[controlId] = { updated: true, ts };
+  stateHost.push('ui', { heartbeats: uiHeartbeats });
+  return { ok: true };
+});
+
 ipcMain.handle('window:minimize', () => {
   if (mainWindow) mainWindow.minimize();
 });
@@ -754,6 +763,18 @@ stateHost
       }
     });
     // 统一命令处理入口 - CLI 通过此接口执行 UI 命令
+    stateHost.registerHandler('ui', async (action, payload = {}) => {
+      if (action === 'heartbeat') {
+        const { controlId, ts = Date.now() } = payload;
+        uiHeartbeats[controlId] = { updated: true, ts };
+        return { ok: true };
+      }
+      if (action === 'getHeartbeats') {
+        return { ok: true, heartbeats: uiHeartbeats };
+      }
+      throw new Error(`unknown ui action: ${action}`);
+    });
+
     stateHost.registerHandler('command', async (action, payload = {}) => {
       console.log('[CommandHandler] action=%s payload=%j', action, payload);
       switch (action) {
