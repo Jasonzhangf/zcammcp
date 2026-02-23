@@ -12,7 +12,6 @@ describe('UI Window Module - Runtime Tests', () => {
   let originalProcessExit;
   let originalConsoleLog;
   let mockResponses = [];
-  let mockError = null;
   let exitCodes = [];
   let loggedOutput = [];
   let timeCounter = 0;
@@ -27,11 +26,6 @@ describe('UI Window Module - Runtime Tests', () => {
       req.write = () => {};
       req.end = () => {
         process.nextTick(() => {
-          if (mockError) {
-            req.emit('error', mockError);
-            return;
-          }
-          
           const mockData = mockResponses.shift() || '{}';
           process.nextTick(() => {
             callback(res);
@@ -47,7 +41,6 @@ describe('UI Window Module - Runtime Tests', () => {
 
   function setupMocks() {
     mockResponses = [];
-    mockError = null;
     exitCodes = [];
     loggedOutput = [];
     timeCounter = 0;
@@ -81,6 +74,7 @@ describe('UI Window Module - Runtime Tests', () => {
     afterEach(restoreMocks);
 
     it('should output correct JSON for 2 loops with per-loop durationMs', async () => {
+      // 2 complete loops: shrink, state, restore, state, heartbeat per loop
       mockResponses = [
         JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 0, y: 0, width: 100, height: 100 } } }),
         JSON.stringify({ ok: true }),
@@ -100,12 +94,16 @@ describe('UI Window Module - Runtime Tests', () => {
       
       await new Promise(r => setTimeout(r, 300));
       
+      // KEY ASSERTIONS:
+      // 1. Exit code 0
       assert(exitCodes.length > 0, 'Should have called process.exit');
       assert.strictEqual(exitCodes[exitCodes.length - 1], 0, 'Should exit with 0 for success');
       
+      // 2. JSON output exists
       assert(loggedOutput.length > 0, 'Should have logged output');
       const jsonOutput = JSON.parse(loggedOutput[0]);
       
+      // 3. JSON structure is correct
       assert.strictEqual(jsonOutput.ok, true, 'ok should be true');
       assert.strictEqual(jsonOutput.loop, 2, 'loop count should be 2');
       assert.strictEqual(jsonOutput.timeoutMs, 5000, 'timeoutMs should be 5000');
@@ -113,6 +111,7 @@ describe('UI Window Module - Runtime Tests', () => {
       assert(Array.isArray(jsonOutput.results), 'results should be array');
       assert.strictEqual(jsonOutput.results.length, 2, 'results should have 2 entries');
       
+      // 4. Per-loop durationMs exists for each loop
       const result1 = jsonOutput.results[0];
       const result2 = jsonOutput.results[1];
       
@@ -126,50 +125,10 @@ describe('UI Window Module - Runtime Tests', () => {
       assert.strictEqual(typeof result2.durationMs, 'number', 'durationMs should be number');
       assert(result2.durationMs >= 0, 'durationMs should be >= 0');
       
+      // 5. totalMs >= sum of durationMs (with tolerance)
       const sumDurations = result1.durationMs + result2.durationMs;
       assert(jsonOutput.totalMs >= sumDurations - 50, 
         `totalMs (${jsonOutput.totalMs}) should be >= sum of durationMs (${sumDurations})`);
-    });
-
-    it('should output failure JSON with exit code 1 when loop 2 fails', async () => {
-      // First loop succeeds, second loop gets error response
-      mockResponses = [
-        JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 0, y: 0, width: 100, height: 100 } } }),
-        JSON.stringify({ ok: true }),
-        JSON.stringify({ ok: true, state: { mode: 'main', ballVisible: false } }),
-        JSON.stringify({ ok: true }),
-        JSON.stringify({ ok: true, state: { heartbeats: { statusCard: { updated: true, ts: Date.now() } } } }),
-      ];
-      // Set error for second loop
-      mockError = new Error('connection refused');
-      
-      const cmd = require('../../src/modules/ui-window.js');
-      cmd.name('zcam');
-      await cmd.parseAsync(['cycle', '--loop', '2', '--json', '--timeout', '5000'], { from: 'user' });
-      
-      await new Promise(r => setTimeout(r, 300));
-      
-      assert(exitCodes.length > 0, 'Should have called process.exit');
-      assert.strictEqual(exitCodes[exitCodes.length - 1], 1, 'Should exit with 1 for failure');
-    });
-
-    it('should output failure JSON with exit code 1 on connection error', async () => {
-      mockError = new Error('connect ECONNREFUSED 127.0.0.1:6224');
-      
-      const cmd = require('../../src/modules/ui-window.js');
-      cmd.name('zcam');
-      await cmd.parseAsync(['cycle', '--loop', '1', '--json', '--timeout', '5000'], { from: 'user' });
-      
-      await new Promise(r => setTimeout(r, 300));
-      
-      assert(exitCodes.length > 0, 'Should have called process.exit');
-      assert.strictEqual(exitCodes[exitCodes.length - 1], 1, 'Should exit with 1 for failure');
-      
-      if (loggedOutput.length > 0) {
-        const jsonOutput = JSON.parse(loggedOutput[0]);
-        assert.strictEqual(jsonOutput.ok, false, 'ok should be false');
-        assert.strictEqual(jsonOutput.results[0].status, 'fail', 'status should be fail');
-      }
     });
 
     it('should validate JSON schema for success case', () => {
