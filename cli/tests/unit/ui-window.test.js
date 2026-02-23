@@ -41,16 +41,6 @@ describe('UI Window Module - Runtime Tests', () => {
     };
   }
 
-  function clearRequireCache() {
-    // Clear caches for all modules that might retain state
-    const keysToDelete = Object.keys(require.cache).filter(key => 
-      key.includes('ui-window') || 
-      key.includes('commander') ||
-      key.includes('chalk')
-    );
-    keysToDelete.forEach(key => delete require.cache[key]);
-  }
-
   function setupMocks() {
     mockResponses = [];
     exitCodes = [];
@@ -84,7 +74,6 @@ describe('UI Window Module - Runtime Tests', () => {
 
   describe('cycle --json runtime execution', () => {
     beforeEach(function() {
-      clearRequireCache();
       setupMocks();
     });
     afterEach(restoreMocks);
@@ -121,11 +110,9 @@ describe('UI Window Module - Runtime Tests', () => {
       assert(Array.isArray(jsonOutput.results));
       assert.strictEqual(jsonOutput.results.length, 2);
       
-      // CRITICAL: each loop MUST have its own durationMs
       assert.strictEqual(typeof jsonOutput.results[0].durationMs, 'number');
       assert.strictEqual(typeof jsonOutput.results[1].durationMs, 'number');
       
-      // CRITICAL: totalMs MUST be >= sum of durations
       const sumDurations = jsonOutput.results.reduce((sum, r) => sum + r.durationMs, 0);
       assert(jsonOutput.totalMs >= sumDurations - 50, `totalMs ${jsonOutput.totalMs} < sum ${sumDurations}`);
     });
@@ -174,13 +161,11 @@ describe('UI Window Module - Runtime Tests', () => {
     });
 
     it('should output ok:false and exit(1) when heartbeat times out', async () => {
-      // Mock responses that never return heartbeat updated
       mockResponses = [
         JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } }),
         JSON.stringify({ ok: true }),
         JSON.stringify({ ok: true, state: { mode: 'main', ballVisible: false } }),
         JSON.stringify({ ok: true }),
-        // Multiple heartbeat checks that never return updated
         JSON.stringify({ ok: true, state: { heartbeats: {} } }),
         JSON.stringify({ ok: true, state: { heartbeats: {} } }),
         JSON.stringify({ ok: true, state: { heartbeats: {} } }),
@@ -260,13 +245,14 @@ describe('UI Window Module - Runtime Tests', () => {
   });
 
   describe('cycle without --json flag', () => {
-    beforeEach(function() {
-      clearRequireCache();
+    beforeEach(() => {
+      jest.resetModules();
+      jest.clearAllMocks();
       setupMocks();
     });
     afterEach(restoreMocks);
 
-    it.skip('should output human-readable text (not JSON) when --json is not specified', async () => {
+    it('should output human-readable text (not JSON) when --json is not specified', async () => {
       mockResponses = [
         JSON.stringify({ ok: true, state: { mode: 'ball', ballVisible: true, lastBounds: { x: 100, y: 100, width: 100, height: 100 } } }),
         JSON.stringify({ ok: true }),
