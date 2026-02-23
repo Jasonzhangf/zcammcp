@@ -1,0 +1,486 @@
+// CommandRegistry.test.ts
+// CommandRegistry 单元测试 - 覆盖所有逻辑分支
+
+import { describe, it, expect, beforeEach } from '@jest/globals';
+import { CommandRegistry, getCommandRegistry, resetCommandRegistry } from './CommandRegistry.js';
+import type { CommandDefinition, CommandContext, CommandResult } from './CommandRegistry.js';
+
+// Mock PageStore for testing
+const mockStore = {
+  runOperation: jest.fn(),
+  updateUiState: jest.fn(),
+  getViewState: jest.fn(() => ({ camera: {}, ui: { layoutMode: 'full' } }))
+} as any;
+
+const mockContext: CommandContext = {
+  store: mockStore,
+  view: { camera: {}, ui: { 
+    layoutMode: 'full',
+    selectedNodes: [],
+    debugMode: 'normal',
+    highlightMap: {}
+  } as any },
+  params: {}
+};
+
+describe('CommandRegistry', () => {
+  let registry: CommandRegistry;
+
+  beforeEach(() => {
+    registry = new CommandRegistry();
+    mockStore.runOperation.mockClear();
+    mockStore.updateUiState.mockClear();
+  });
+
+  describe('register', () => {
+    it('should register a new command', () => {
+      const cmd: CommandDefinition = {
+        id: 'test.cmd',
+        category: 'window',
+        description: 'Test command',
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = registry.get('test.cmd');
+
+      expect(result).toBeDefined();
+      expect(result?.id).toBe('test.cmd');
+      expect(result?.category).toBe('window');
+    });
+
+    it('should overwrite existing command with same id', () => {
+      const cmd1: CommandDefinition = {
+        id: 'test.cmd',
+        category: 'window',
+        description: 'First version',
+        handler: async () => ({ success: true, version: 1 })
+      };
+
+      const cmd2: CommandDefinition = {
+        id: 'test.cmd',
+        category: 'window',
+        description: 'Second version',
+        handler: async () => ({ success: true, version: 2 })
+      };
+
+      registry.register(cmd1);
+      registry.register(cmd2);
+
+      const result = registry.get('test.cmd');
+      expect(result?.description).toBe('Second version');
+    });
+
+    it('should register multiple commands', () => {
+      const commands: CommandDefinition[] = [
+        { id: 'cmd1', category: 'window', description: 'Cmd 1', handler: async () => ({ success: true }) },
+        { id: 'cmd2', category: 'window', description: 'Cmd 2', handler: async () => ({ success: true }) },
+        { id: 'cmd3', category: 'window', description: 'Cmd 3', handler: async () => ({ success: true }) }
+      ];
+
+      registry.registerAll(commands);
+      expect(registry.getAll().length).toBe(3);
+    });
+
+    it('should track commands by category', () => {
+      const cmd1: CommandDefinition = {
+        id: 'test.cmd1',
+        category: 'window',
+        description: 'Test 1',
+        handler: async () => ({ success: true })
+      };
+
+      const cmd2: CommandDefinition = {
+        id: 'test.cmd2',
+        category: 'window',
+        description: 'Test 2',
+        handler: async () => ({ success: true })
+      };
+
+      const cmd3: CommandDefinition = {
+        id: 'other.cmd1',
+        category: 'system',
+        description: 'Other 1',
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd1);
+      registry.register(cmd2);
+      registry.register(cmd3);
+
+      const testCommands = registry.getByCategory('window');
+      expect(testCommands.length).toBe(2);
+      expect(testCommands.map(c => c.id)).toContain('test.cmd1');
+      expect(testCommands.map(c => c.id)).toContain('test.cmd2');
+
+      const otherCommands = registry.getByCategory('system');
+      expect(otherCommands.length).toBe(1);
+    });
+  });
+
+  describe('execute - error handling', () => {
+    it('should return error for unknown command', async () => {
+      const result = await registry.execute('unknown.command', mockContext);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Command not found');
+    });
+
+    it('should return error for missing required parameter', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.required',
+        category: 'window',
+        description: 'Test with required param',
+        parameters: [
+          { name: 'value', type: 'number', required: true }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.required', {
+        ...mockContext,
+        params: {} // Missing required 'value'
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Missing required parameter');
+    });
+
+    it('should return error for wrong parameter type - number', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.type.number',
+        category: 'window',
+        description: 'Test number type',
+        parameters: [
+          { name: 'value', type: 'number', required: true }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.type.number', {
+        ...mockContext,
+        params: { value: 'not-a-number' } // String instead of number
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Invalid type');
+    });
+
+    it('should return error for wrong parameter type - string', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.type.string',
+        category: 'window',
+        description: 'Test string type',
+        parameters: [
+          { name: 'value', type: 'string', required: true }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.type.string', {
+        ...mockContext,
+        params: { value: 123 } // Number instead of string
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Invalid type');
+    });
+
+    it('should return error for wrong parameter type - boolean', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.type.boolean',
+        category: 'window',
+        description: 'Test boolean type',
+        parameters: [
+          { name: 'flag', type: 'boolean', required: true }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.type.boolean', {
+        ...mockContext,
+        params: { flag: 'true' } // String instead of boolean
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Invalid type');
+    });
+
+    it('should return error for enum value not in options', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.type.enum',
+        category: 'window',
+        description: 'Test enum type',
+        parameters: [
+          { name: 'mode', type: 'enum', required: true, options: ['auto', 'manual', 'semi'] }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.type.enum', {
+        ...mockContext,
+        params: { mode: 'invalid' } // Not in options
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Invalid type');
+    });
+
+    it('should accept valid enum value', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.type.enum.valid',
+        category: 'window',
+        description: 'Test enum type',
+        parameters: [
+          { name: 'mode', type: 'enum', required: true, options: ['auto', 'manual', 'semi'] }
+        ],
+        handler: async () => ({ success: true, data: 'ok' })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.type.enum.valid', {
+        ...mockContext,
+        params: { mode: 'manual' }
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toBe('ok');
+    });
+
+    it('should return error when handler throws', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.handler.throw',
+        category: 'window',
+        description: 'Test handler throw',
+        handler: async () => {
+          throw new Error('Handler error message');
+        }
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.handler.throw', mockContext);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Handler error message');
+    });
+
+    it('should handle non-Error throw', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.handler.throw.string',
+        category: 'window',
+        description: 'Test handler throw string',
+        handler: async () => {
+          throw 'String error';
+        }
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.handler.throw.string', mockContext);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('String error');
+    });
+  });
+
+  describe('execute - success cases', () => {
+    it('should execute command successfully', async () => {
+      const expectedResult = { success: true, data: { value: 42 } };
+      const cmd: CommandDefinition = {
+        id: 'test.success',
+        category: 'window',
+        description: 'Test success',
+        handler: async () => expectedResult
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.success', mockContext);
+
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(expectedResult.data);
+    });
+
+    it('should pass params to handler', async () => {
+      let capturedParams: any;
+      const cmd: CommandDefinition = {
+        id: 'test.params',
+        category: 'window',
+        description: 'Test params',
+        parameters: [
+          { name: 'value', type: 'number', required: true }
+        ],
+        handler: async (ctx) => {
+          capturedParams = ctx.params.value;
+          return { success: true };
+        }
+      };
+
+      registry.register(cmd);
+      await registry.execute('test.params', {
+        ...mockContext,
+        params: { value: 123 }
+      });
+
+      expect(capturedParams).toBe(123);
+    });
+
+    it('should accept valid number parameter', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.number.valid',
+        category: 'window',
+        description: 'Test number',
+        parameters: [
+          { name: 'value', type: 'number', required: true }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.number.valid', {
+        ...mockContext,
+        params: { value: 42 }
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid string parameter', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.string.valid',
+        category: 'window',
+        description: 'Test string',
+        parameters: [
+          { name: 'value', type: 'string', required: true }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.string.valid', {
+        ...mockContext,
+        params: { value: 'test' }
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept valid boolean parameter', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.boolean.valid',
+        category: 'window',
+        description: 'Test boolean',
+        parameters: [
+          { name: 'flag', type: 'boolean', required: true }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.boolean.valid', {
+        ...mockContext,
+        params: { flag: true }
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should accept optional parameter when not provided', async () => {
+      const cmd: CommandDefinition = {
+        id: 'test.optional',
+        category: 'window',
+        description: 'Test optional',
+        parameters: [
+          { name: 'value', type: 'number', required: false }
+        ],
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      const result = await registry.execute('test.optional', {
+        ...mockContext,
+        params: {} // Optional param not provided
+      });
+
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe('getByCategory and getAll', () => {
+    it('should return empty array for unknown category', () => {
+      const result = registry.getByCategory('device');
+      expect(result).toEqual([]);
+    });
+
+    it('should return all registered commands', () => {
+      const commands: CommandDefinition[] = [
+        { id: 'cmd1', category: 'window', description: 'Cmd 1', handler: async () => ({ success: true }) },
+        { id: 'cmd2', category: 'window', description: 'Cmd 2', handler: async () => ({ success: true }) }
+      ];
+
+      registry.registerAll(commands);
+      const all = registry.getAll();
+
+      expect(all.length).toBe(2);
+      expect(all.map(c => c.id)).toContain('cmd1');
+      expect(all.map(c => c.id)).toContain('cmd2');
+    });
+
+    it('should return correct categories', () => {
+      const commands: CommandDefinition[] = [
+        { id: 'cmd1', category: 'window', description: 'Cmd 1', handler: async () => ({ success: true }) },
+        { id: 'cmd2', category: 'system', description: 'Cmd 2', handler: async () => ({ success: true }) },
+        { id: 'cmd3', category: 'window', description: 'Cmd 3', handler: async () => ({ success: true }) }
+      ];
+
+      registry.registerAll(commands);
+      const categories = registry.getCategories();
+
+      expect(categories).toContain('window');
+      expect(categories).toContain('system');
+      expect(categories.length).toBe(2);
+    });
+  });
+
+  describe('has', () => {
+    it('should return true for registered command', () => {
+      const cmd: CommandDefinition = {
+        id: 'test.exists',
+        category: 'window',
+        description: 'Test',
+        handler: async () => ({ success: true })
+      };
+
+      registry.register(cmd);
+      expect(registry.has('test.exists')).toBe(true);
+    });
+
+    it('should return false for unregistered command', () => {
+      expect(registry.has('test.not.exists')).toBe(false);
+    });
+  });
+});
+
+describe('getCommandRegistry singleton', () => {
+  beforeEach(() => {
+    resetCommandRegistry();
+  });
+
+  it('should return same instance on multiple calls', () => {
+    const instance1 = getCommandRegistry();
+    const instance2 = getCommandRegistry();
+
+    expect(instance1).toBe(instance2);
+  });
+
+  it('should reset singleton on resetCommandRegistry', () => {
+    const instance1 = getCommandRegistry();
+    resetCommandRegistry();
+    const instance2 = getCommandRegistry();
+
+    expect(instance1).not.toBe(instance2);
+  });
+});
