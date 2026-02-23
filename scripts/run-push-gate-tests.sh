@@ -71,82 +71,125 @@ echo ""
 echo "[4/4] Coverage Gate..."
 
 COVERAGE_PASSED=true
-CLI_COVERAGE_PASSED=true
-UI_COVERAGE_PASSED=true
 
 # CLI Coverage
 echo "  Checking CLI coverage..."
 cd "$PROJECT_ROOT/cli"
-if [ -f "scripts/generate-coverage.js" ]; then
-    node scripts/generate-coverage.js 2>&1 | tee "$REPORT_DIR/cli-coverage.log" || true
+if [ ! -f "scripts/generate-coverage.js" ]; then
+    echo "  ✗ CLI coverage script not found"
+    COVERAGE_PASSED=false
+    PASSED=false
+    FAILURES+=("CLI coverage script missing")
+elif ! node scripts/generate-coverage.js 2>&1 | tee "$REPORT_DIR/cli-coverage.log"; then
+    echo "  ✗ CLI coverage generation failed"
+    COVERAGE_PASSED=false
+    PASSED=false
+    FAILURES+=("CLI coverage generation failed")
+elif [ ! -f "coverage/coverage-summary.json" ]; then
+    echo "  ✗ CLI coverage summary not found"
+    COVERAGE_PASSED=false
+    PASSED=false
+    FAILURES+=("CLI coverage summary missing")
+else
+    # Parse coverage using node
+    COVERAGE_RESULT=$(node -e "
+        try {
+            const data = require('./coverage/coverage-summary.json');
+            const lines = data.total?.lines?.pct ?? 0;
+            const branches = data.total?.branches?.pct ?? 0;
+            console.log(JSON.stringify({ lines, branches, passed: lines >= 95 && branches >= 95 }));
+        } catch (e) {
+            console.log(JSON.stringify({ error: e.message, passed: false }));
+        }
+    ")
     
-    if [ -f "coverage/coverage-summary.json" ]; then
-        CLI_LINE=$(cat coverage/coverage-summary.json | grep -o '"lines":{[^}]*}' | grep -o '"pct":[0-9.]*' | grep -o '[0-9.]*')
-        CLI_BRANCH=$(cat coverage/coverage-summary.json | grep -o '"branches":{[^}]*}' | grep -o '"pct":[0-9.]*' | grep -o '[0-9.]*')
-        
-        echo "    Line coverage: ${CLI_LINE}%"
-        echo "    Branch coverage: ${CLI_BRANCH}%"
-        
-        if (( $(echo "$CLI_LINE < 95" | bc -l) )); then
-            echo "    ✗ CLI line coverage below 95%"
+    if echo "$COVERAGE_RESULT" | grep -q '"passed":false'; then
+        if echo "$COVERAGE_RESULT" | grep -q '"error"'; then
+            echo "  ✗ CLI coverage JSON parse error"
             COVERAGE_PASSED=false
-            CLI_COVERAGE_PASSED=false
-        fi
-        
-        if (( $(echo "$CLI_BRANCH < 95" | bc -l) )); then
-            echo "    ✗ CLI branch coverage below 95%"
+            PASSED=false
+            FAILURES+=("CLI coverage JSON parse error")
+        else
+            CLI_LINE=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).lines)")
+            CLI_BRANCH=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).branches)")
+            echo "    Line coverage: ${CLI_LINE}%"
+            echo "    Branch coverage: ${CLI_BRANCH}%"
+            echo "  ✗ CLI coverage below 95% threshold"
             COVERAGE_PASSED=false
-            CLI_COVERAGE_PASSED=false
-        fi
-        
-        if [ "$CLI_COVERAGE_PASSED" = true ]; then
-            echo "    ✓ CLI coverage passed"
+            PASSED=false
+            FAILURES+=("CLI coverage below 95%: lines=${CLI_LINE}%, branches=${CLI_BRANCH}%")
         fi
     else
-        echo "    ⚠ CLI coverage summary not found, skipping..."
+        CLI_LINE=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).lines)")
+        CLI_BRANCH=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).branches)")
+        echo "    Line coverage: ${CLI_LINE}%"
+        echo "    Branch coverage: ${CLI_BRANCH}%"
+        echo "    ✓ CLI coverage passed"
     fi
-else
-    echo "    ⚠ CLI coverage script not found"
 fi
 
 # UI Coverage
 echo "  Checking UI Desktop coverage..."
 cd "$PROJECT_ROOT/ui-desktop"
-if [ -f "scripts/generate-coverage.mjs" ]; then
-    node scripts/generate-coverage.mjs 2>&1 | tee "$REPORT_DIR/ui-coverage.log" || true
+if [ ! -f "scripts/generate-coverage.mjs" ]; then
+    echo "  ✗ UI coverage script not found"
+    COVERAGE_PASSED=false
+    PASSED=false
+    FAILURES+=("UI coverage script missing")
+elif ! node scripts/generate-coverage.mjs 2>&1 | tee "$REPORT_DIR/ui-coverage.log"; then
+    echo "  ✗ UI coverage generation failed"
+    COVERAGE_PASSED=false
+    PASSED=false
+    FAILURES+=("UI coverage generation failed")
+elif [ ! -f "coverage/coverage-summary.json" ]; then
+    echo "  ✗ UI coverage summary not found"
+    COVERAGE_PASSED=false
+    PASSED=false
+    FAILURES+=("UI coverage summary missing")
+else
+    # Parse coverage using node
+    COVERAGE_RESULT=$(node -e "
+        try {
+            const data = require('./coverage/coverage-summary.json');
+            const lines = data.total?.lines?.pct ?? 0;
+            const branches = data.total?.branches?.pct ?? 0;
+            console.log(JSON.stringify({ lines, branches, passed: lines >= 95 && branches >= 95 }));
+        } catch (e) {
+            console.log(JSON.stringify({ error: e.message, passed: false }));
+        }
+    ")
     
-    if [ -f "coverage/coverage-summary.json" ]; then
-        UI_LINE=$(cat coverage/coverage-summary.json | grep -o '"lines":{[^}]*}' | grep -o '"pct":[0-9.]*' | grep -o '[0-9.]*')
-        UI_BRANCH=$(cat coverage/coverage-summary.json | grep -o '"branches":{[^}]*}' | grep -o '"pct":[0-9.]*' | grep -o '[0-9.]*')
-        
-        echo "    Line coverage: ${UI_LINE}%"
-        echo "    Branch coverage: ${UI_BRANCH}%"
-        
-        if (( $(echo "$UI_LINE < 95" | bc -l) )); then
-            echo "    ✗ UI line coverage below 95%"
+    if echo "$COVERAGE_RESULT" | grep -q '"passed":false'; then
+        if echo "$COVERAGE_RESULT" | grep -q '"error"'; then
+            echo "  ✗ UI coverage JSON parse error"
             COVERAGE_PASSED=false
-            UI_COVERAGE_PASSED=false
-        fi
-        
-        if (( $(echo "$UI_BRANCH < 95" | bc -l) )); then
-            echo "    ✗ UI branch coverage below 95%"
+            PASSED=false
+            FAILURES+=("UI coverage JSON parse error")
+        else
+            UI_LINE=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).lines)")
+            UI_BRANCH=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).branches)")
+            echo "    Line coverage: ${UI_LINE}%"
+            echo "    Branch coverage: ${UI_BRANCH}%"
+            echo "  ✗ UI coverage below 95% threshold"
             COVERAGE_PASSED=false
-            UI_COVERAGE_PASSED=false
-        fi
-        
-        if [ "$UI_COVERAGE_PASSED" = true ]; then
-            echo "    ✓ UI coverage passed"
+            PASSED=false
+            FAILURES+=("UI coverage below 95%: lines=${UI_LINE}%, branches=${UI_BRANCH}%")
         fi
     else
-        echo "    ⚠ UI coverage summary not found, skipping..."
+        UI_LINE=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).lines)")
+        UI_BRANCH=$(echo "$COVERAGE_RESULT" | node -e "console.log(JSON.parse(require('fs').readFileSync(0, 'utf-8')).branches)")
+        echo "    Line coverage: ${UI_LINE}%"
+        echo "    Branch coverage: ${UI_BRANCH}%"
+        echo "    ✓ UI coverage passed"
     fi
-else
-    echo "    ⚠ UI coverage script not found"
 fi
 
 if [ "$COVERAGE_PASSED" = false ]; then
-    PASSED=false
-    FAILURES+=("Coverage gate failed: requires >= 95% line and branch coverage")
+    echo ""
+    echo "  ✗ Coverage gate failed"
+else
+    echo ""
+    echo "  ✓ Coverage gate passed"
 fi
 echo ""
 

@@ -11,13 +11,17 @@ describe('Coverage Gate', () => {
   describe('parseCoverageSummary', () => {
     // 模拟覆盖率摘要解析
     function parseCoverageSummary(jsonContent) {
-      const data = JSON.parse(jsonContent);
-      return {
-        lines: data.total?.lines?.pct ?? 0,
-        branches: data.total?.branches?.pct ?? 0,
-        functions: data.total?.functions?.pct ?? 0,
-        statements: data.total?.statements?.pct ?? 0
-      };
+      try {
+        const data = JSON.parse(jsonContent);
+        return {
+          lines: data.total?.lines?.pct ?? 0,
+          branches: data.total?.branches?.pct ?? 0,
+          functions: data.total?.functions?.pct ?? 0,
+          statements: data.total?.statements?.pct ?? 0
+        };
+      } catch (e) {
+        throw new Error(`JSON parse error: ${e.message}`);
+      }
     }
 
     it('should parse valid coverage summary', () => {
@@ -42,6 +46,18 @@ describe('Coverage Gate', () => {
       const result = parseCoverageSummary(summary);
       assert.strictEqual(result.lines, 0);
       assert.strictEqual(result.branches, 0);
+    });
+
+    it('should throw on invalid JSON', () => {
+      assert.throws(() => {
+        parseCoverageSummary('not valid json');
+      }, /JSON parse error/);
+    });
+
+    it('should throw on malformed JSON structure', () => {
+      assert.throws(() => {
+        parseCoverageSummary('{broken json');
+      }, /JSON parse error/);
     });
   });
 
@@ -105,6 +121,180 @@ describe('Coverage Gate', () => {
       const result = checkCoverageThreshold({ lines: 94.99, branches: 95.01 });
       assert.strictEqual(result.passed, false);
       assert(result.failures.some(f => f.includes('94.99%')));
+    });
+  });
+
+  describe('coverageScriptValidation', () => {
+    function validateCoverageScript(scriptPath, summaryPath) {
+      const failures = [];
+      
+      if (!scriptPath) {
+        failures.push('Coverage script path not provided');
+        return { passed: false, failures };
+      }
+      
+      if (!summaryPath) {
+        failures.push('Coverage summary path not provided');
+        return { passed: false, failures };
+      }
+      
+      // Check script exists
+      if (!fs.existsSync(scriptPath)) {
+        failures.push(`Coverage script not found: ${scriptPath}`);
+      }
+      
+      // Check summary exists
+      if (!fs.existsSync(summaryPath)) {
+        failures.push(`Coverage summary not found: ${summaryPath}`);
+      }
+      
+      return {
+        passed: failures.length === 0,
+        failures
+      };
+    }
+
+    it('should fail when coverage script missing', () => {
+      const result = validateCoverageScript('/nonexistent/script.js', '/nonexistent/summary.json');
+      assert.strictEqual(result.passed, false);
+      assert(result.failures.some(f => f.includes('script not found')));
+    });
+
+    it('should fail when coverage summary missing', () => {
+      // Create temp script file
+      const tempScript = '/tmp/test-coverage-script.js';
+      fs.writeFileSync(tempScript, 'console.log("test")');
+      
+      const result = validateCoverageScript(tempScript, '/nonexistent/coverage-summary.json');
+      assert.strictEqual(result.passed, false);
+      assert(result.failures.some(f => f.includes('summary not found')));
+      
+      fs.unlinkSync(tempScript);
+    });
+
+    it('should pass when both script and summary exist', () => {
+      const tempScript = '/tmp/test-script.js';
+      const tempSummary = '/tmp/test-summary.json';
+      
+      fs.writeFileSync(tempScript, 'console.log("test")');
+      fs.writeFileSync(tempSummary, JSON.stringify({ total: { lines: { pct: 95 }, branches: { pct: 95 } } }));
+      
+      const result = validateCoverageScript(tempScript, tempSummary);
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.failures.length, 0);
+      
+      fs.unlinkSync(tempScript);
+      fs.unlinkSync(tempSummary);
+    });
+  });
+
+  describe('coverageGateFailureScenarios', () => {
+    function runCoverageGate(coverageData, scriptExists = true, summaryExists = true) {
+      const failures = [];
+      
+      if (!scriptExists) {
+        failures.push('Coverage script missing');
+        return { passed: false, failures, exitCode: 1 };
+      }
+      
+      if (!summaryExists) {
+        failures.push('Coverage summary missing');
+        return { passed: false, failures, exitCode: 1 };
+      }
+      
+      try {
+        const data = typeof coverageData === 'string' ? JSON.parse(coverageData) : coverageData;
+        const lines = data.total?.lines?.pct ?? 0;
+        const branches = data.total?.branches?.pct ?? 0;
+        
+        if (lines < 95 || branches < 95) {
+          failures.push(`Coverage below 95%: lines=${lines}%, branches=${branches}%`);
+          return { passed: false, failures, exitCode: 1, lines, branches };
+        }
+        
+        return { passed: true, failures: [], exitCode: 0, lines, branches };
+      } catch (e) {
+        failures.push(`JSON parse error: ${e.message}`);
+        return { passed: false, failures, exitCode: 1 };
+      }
+    }
+
+    it('should fail when summary file missing', () => {
+      const result = runCoverageGate(null, true, false);
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.exitCode, 1);
+      assert(result.failures.some(f => f.includes('summary missing')));
+    });
+
+    it('should fail when branch coverage below 95%', () => {
+      const coverageData = {
+        total: {
+          lines: { pct: 96 },
+          branches: { pct: 94 }
+        }
+      };
+      const result = runCoverageGate(coverageData);
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.exitCode, 1);
+      assert(result.failures.some(f => f.includes('94%')));
+    });
+
+    it('should fail when line coverage below 95%', () => {
+      const coverageData = {
+        total: {
+          lines: { pct: 93 },
+          branches: { pct: 96 }
+        }
+      };
+      const result = runCoverageGate(coverageData);
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.exitCode, 1);
+      assert(result.failures.some(f => f.includes('93%')));
+    });
+
+    it('should fail when both coverages below 95%', () => {
+      const coverageData = {
+        total: {
+          lines: { pct: 90 },
+          branches: { pct: 92 }
+        }
+      };
+      const result = runCoverageGate(coverageData);
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.exitCode, 1);
+      assert(result.failures.some(f => f.includes('90%') && f.includes('92%')));
+    });
+
+    it('should fail on JSON parse exception', () => {
+      const result = runCoverageGate('invalid json {', true, true);
+      assert.strictEqual(result.passed, false);
+      assert.strictEqual(result.exitCode, 1);
+      assert(result.failures.some(f => f.includes('JSON parse error')));
+    });
+
+    it('should pass when both coverages meet 95% threshold', () => {
+      const coverageData = {
+        total: {
+          lines: { pct: 95 },
+          branches: { pct: 95 }
+        }
+      };
+      const result = runCoverageGate(coverageData);
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.exitCode, 0);
+      assert.strictEqual(result.failures.length, 0);
+    });
+
+    it('should pass when coverages exceed threshold', () => {
+      const coverageData = {
+        total: {
+          lines: { pct: 98 },
+          branches: { pct: 97 }
+        }
+      };
+      const result = runCoverageGate(coverageData);
+      assert.strictEqual(result.passed, true);
+      assert.strictEqual(result.exitCode, 0);
     });
   });
 
