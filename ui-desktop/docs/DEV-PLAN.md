@@ -150,7 +150,21 @@
 
 ---
 
-## 4. 开发与提交流程建议
+## 4. 已完成功能
+
+### 4.1 TODO#1: cycle 滚动条规则 (2026-02-23)
+- 在 `cli/src/modules/ui-window.js` 的 cycle 测试中添加 `assertNoScrollbar` 验证
+- 在 `electron.main.cjs` 的 `pushWindowState` 中添加 `scrollInfo` 状态
+- 确保窗口收缩/恢复过程中无滚动条出现
+
+### 4.2 TODO#2: 恢复后控件 heartbeat 检查 (2026-02-23)
+- 在 cycle 命令的 restore 阶段后等待 `statusCard` heartbeat
+- 添加 `waitForHeartbeat(controlId, timeoutMs)` 函数
+- 在 `electron.main.cjs` 添加 `ui` channel handler 和 `uiHeartbeats` 跟踪
+- 在 `StatusCard.tsx` 添加 `useEffect` 发送 heartbeat
+- 新增 `ui-cycle-heartbeat-test.js` 覆盖成功/超时路径
+
+## 5. 开发与提交流程建议
 
 1. **功能开发优先级**：
    - **先实现 CLI 层**：确保所有窗口行为（缩球/恢复/切尺寸/设边界）都有对应 CLI 命令和单元测试；

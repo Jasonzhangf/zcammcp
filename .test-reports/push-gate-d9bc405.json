@@ -1,0 +1,15 @@
+{
+  "commit": "d9bc405",
+  "timestamp": 1771848536,
+  "datetime": "2026-02-23 12:08:56 UTC",
+  "passed": true,
+  "summary": "All tests passed",
+  "failures": [
+
+  ],
+  "reports": {
+    "cli": "/Volumes/extension/code/zcammcp/.test-reports/cli-test.log",
+    "ui": "/Volumes/extension/code/zcammcp/.test-reports/ui-test.log",
+    "e2e": "/Volumes/extension/code/zcammcp/.test-reports/e2e-test.log"
+  }
+}
