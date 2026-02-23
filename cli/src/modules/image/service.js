@@ -78,10 +78,9 @@ class ImageService {
    */
   static async setIso(api, value) {
     const isoValue = parseInt(value);
-    const validIsoValues = [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600];
-
-    if (!validIsoValues.includes(isoValue)) {
-      throw new Error(`ISO无效，支持: ${validIsoValues.join(', ')}`);
+    // Remove client-side validation to allow all camera-supported ISO values (e.g. 1/3 stops like 160, 16000, etc.)
+    if (isNaN(isoValue)) {
+      throw new Error('ISO必须是数字');
     }
     return await api.get(`/ctrl/set?iso=${isoValue}`);
   }
@@ -188,39 +187,31 @@ class ImageService {
    * 设置快门速度
    * API: /ctrl/set?shutter_angle={value}
    */
+  /**
+   * 设置快门速度
+   * API: /ctrl/set?shutter_time={value}
+   */
   static async setShutter(api, value) {
-    let shutterValue;
+    // 直接传递字符串值 (e.g. "1/200")
+    return await api.get(`/ctrl/set?shutter_time=${value}`);
+  }
 
-    if (typeof value === 'string' && value.includes('/')) {
-      // 分数格式，如 1/60
-      const [numerator, denominator] = value.split('/').map(Number);
-      if (isNaN(numerator) || isNaN(denominator) || denominator === 0) {
-        throw new Error('快门速度格式错误');
-      }
-      shutterValue = 360 / (numerator / denominator); // 转换为角度
-    } else {
-      // 数值或角度格式
-      const numValue = parseFloat(value);
-      if (isNaN(numValue)) {
-        throw new Error('快门值必须是数字');
-      }
+  /**
+   * 获取快门时间
+   * API: /ctrl/get?k=shutter_time
+   */
+  static async getShutterTime(api) {
+    return await api.get('/ctrl/get?k=shutter_time');
+  }
 
-      if (numValue <= 1) {
-        // 小于等于1认为是角度值
-        if (numValue < 1 || numValue > 360) {
-          throw new Error('快门角度必须是1-360度之间的数值');
-        }
-        shutterValue = numValue;
-      } else {
-        // 大于1认为是秒数，转换为角度
-        shutterValue = 360 / numValue;
-        if (shutterValue < 1 || shutterValue > 360) {
-          throw new Error('快门速度超出有效范围');
-        }
-      }
-    }
-
-    return await api.get(`/ctrl/set?shutter_angle=${shutterValue}`);
+  /**
+   * 设置快门时间
+   * API: /ctrl/set?shutter_time={value}
+   */
+  static async setShutterTime(api, value) {
+    // Pass through shutter time string (e.g. "1/60", "1/100") directly to backend
+    // Backend handles validation.
+    return await api.get(`/ctrl/set?shutter_time=${value}`);
   }
 
   /**

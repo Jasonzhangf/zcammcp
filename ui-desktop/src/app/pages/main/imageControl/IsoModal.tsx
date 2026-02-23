@@ -4,25 +4,25 @@
 import React from 'react';
 import { Modal } from '../../../components/Modal.js';
 
-const ISO_OPTIONS = [100, 200, 400, 800, 1600, 3200, 6400, 12800];
-
 interface IsoModalProps {
   open: boolean;
-  current?: number;
+  current?: number | string;
+  options?: string[];
   anchorRef?: React.RefObject<HTMLElement>;
   onClose: () => void;
-  onSelect: (value: number) => void;
+  onSelect: (value: string) => void;
 }
 
-export const IsoModal: React.FC<IsoModalProps> = ({ open, current, anchorRef, onClose, onSelect }) => {
+export const IsoModal: React.FC<IsoModalProps> = ({ open, current, options, anchorRef, onClose, onSelect }) => {
+  const displayOptions = options && options.length > 0 ? options : ['Auto', '100', '200', '400', '800', '1600', '3200', '6400'];
   return (
     <Modal open={open} title="ISO 感光度" anchorRef={anchorRef} onClose={onClose}>
       <div className="zcam-option-grid">
-        {ISO_OPTIONS.map((v) => (
+        {displayOptions.map((v) => (
           <button
             key={v}
             type="button"
-            className={current === v ? 'zcam-chip-active' : ''}
+            className={String(current) === v ? 'zcam-chip-active' : ''}
             onClick={() => {
               onSelect(v);
               onClose();

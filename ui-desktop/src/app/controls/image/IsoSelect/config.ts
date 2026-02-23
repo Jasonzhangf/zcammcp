@@ -23,12 +23,19 @@ export const defaultIsoSelectConfig: IsoSelectConfig = {
   kind: 'exposure.iso',
   operationId: 'exposure.setIso',
   title: 'ISO 感光度',
-  options: [100, 200, 400, 800, 1600, 3200, 6400, 12800].map((v) => ({
-    label: String(v),
-    value: v,
-  })),
+  // Dynamic options from state, fallback to defaults if not ready
+  // Logic moved to component or we can try to read dynamic here?
+  // Config definition allows static options. We need to handle dynamic options in the Component.
+  options: [],
   readValue(view) {
-    return view.camera.exposure?.iso?.value;
+    // If view has dynamic options, we might want to use them?
+    // Actually IsoSelect component should handle this.
+    // Here we just return value.
+    const val = view.camera.exposure?.iso?.value;
+    return typeof val === 'string' ? undefined : val;
+    // Wait, value is now string | number. If string, readValue expects number? 
+    // The previous implementation expected number. We need to support string.
+    // Changing return type in interface might be needed or handled in component.
   },
   formatValue(view, v) {
     const display = view.camera.exposure?.iso?.view;

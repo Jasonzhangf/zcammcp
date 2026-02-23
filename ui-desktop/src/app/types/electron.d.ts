@@ -14,9 +14,22 @@ export interface CliBridgeResult {
   error?: string;
 }
 
+export interface UvcRequest {
+  url: string;
+  method: 'GET' | 'POST';
+  body?: Record<string, unknown>;
+}
+
+export interface UvcResponse {
+  ok?: boolean;
+  value?: unknown;
+  error?: string;
+  [key: string]: unknown;
+}
+
 export interface WindowStatePayload {
   mode?: 'main' | 'ball';
-  layoutSize?: 'normal' | 'studio';
+  layoutSize?: 'normal' | 'studio' | 'ptz';
   ballVisible?: boolean;
   lastBounds?: { x: number; y: number; width: number; height: number };
   updatedAt?: number;
@@ -58,6 +71,7 @@ export interface ElectronAPI {
   sendWindowCommand?: (cmd: string) => Promise<void>;
   pushState?: (channel: string, payload: unknown) => Promise<void>;
   runCliCommand?: (payload: CliBridgeRequest) => Promise<CliBridgeResult>;
+  sendUvcRequest?: (request: UvcRequest) => Promise<UvcResponse>;
   devReport?: (report: unknown) => void;
   onWindowState?: (callback: (state: WindowStatePayload) => void) => () => void;
   onCameraState?: (callback: (snapshot: CameraStateSnapshot) => void) => () => void;
@@ -81,9 +95,10 @@ declare global {
     electronAPI?: ElectronAPI;
     __ZCAM_CLI_SERVICE_BASE__?: string;
     __ZCAM_USE_MOCK_API__?: boolean;
+    __ZCAM_USE_DIRECT_UVC__?: boolean;
     __ZCAM_ENABLE_CONTAINER_RESIZE__?: boolean;
     __ZCAM_MOCK_AUTO_CYCLE__?: boolean;
   }
 }
 
-export {};
+export { };

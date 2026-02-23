@@ -24,3 +24,15 @@ Object.getOwnPropertyNames(dom.window).forEach((property) => {
   }
   globalAny[property] = (dom.window as any)[property];
 });
+
+if (typeof globalAny.requestAnimationFrame !== 'function') {
+  globalAny.requestAnimationFrame = (callback: (time: number) => void) => {
+    return setTimeout(() => callback(Date.now()), 0) as unknown as number;
+  };
+}
+
+if (typeof globalAny.cancelAnimationFrame !== 'function') {
+  globalAny.cancelAnimationFrame = (id: number) => {
+    clearTimeout(id);
+  };
+}

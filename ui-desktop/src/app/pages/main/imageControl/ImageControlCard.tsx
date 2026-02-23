@@ -9,24 +9,26 @@ import { IsoSelect } from '../../../controls/image/IsoSelect/IsoSelect.js';
 import { useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 
-const TEMPERATURE_MIN = 3200;
-const TEMPERATURE_MAX = 6500;
-const TEMPERATURE_STEP = 50;
+const TEMPERATURE_MIN_DEFAULT = 3200;
+const TEMPERATURE_MAX_DEFAULT = 6500;
+const TEMPERATURE_STEP_DEFAULT = 100;
 
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.max(min, Math.min(max, value));
 }
 
-function formatPercent(value: number): string {
-  return `${Math.round(clamp(value, 0, 100))}%`;
-}
+function formatTemperature(
+  value: number,
+  range?: { min: number; max: number; step: number },
+): string {
+  const min = range?.min ?? TEMPERATURE_MIN_DEFAULT;
+  const max = range?.max ?? TEMPERATURE_MAX_DEFAULT;
+  const step = range?.step ?? TEMPERATURE_STEP_DEFAULT;
 
-function formatTemperature(value: number): string {
-  const limited = clamp(value, TEMPERATURE_MIN, TEMPERATURE_MAX);
-  const snapped =
-    TEMPERATURE_MIN + Math.round((limited - TEMPERATURE_MIN) / TEMPERATURE_STEP) * TEMPERATURE_STEP;
-  return `${clamp(snapped, TEMPERATURE_MIN, TEMPERATURE_MAX)}K`;
+  const limited = clamp(value, min, max);
+  const snapped = min + Math.round((limited - min) / step) * step;
+  return `${clamp(snapped, min, max)}K`;
 }
 
 export const imageControlCardNode: ContainerNode = {
@@ -64,11 +66,19 @@ const temperatureSliderConfig: SliderControlConfig = {
   operationId: 'whiteBalance.setTemperature',
   orientation: 'horizontal',
   size: 'medium',
-  valueRange: { min: 3200, max: 6500, step: 50 },
+  valueRange: { min: 2000, max: 10000, step: 100 },
   readValue: (view) => view.camera.whiteBalance?.temperature?.value ?? 5600,
-  formatValue: (value) => formatTemperature(value),
+  readValueRange: (view) => {
+    const t = view.camera.whiteBalance?.temperature;
+    return {
+      min: t?.min ?? TEMPERATURE_MIN_DEFAULT,
+      max: t?.max ?? TEMPERATURE_MAX_DEFAULT,
+      step: t?.step ?? TEMPERATURE_STEP_DEFAULT,
+    };
+  },
+  formatValue: (value, range) => formatTemperature(value, range),
   enablePointerDrag: true,
-  minHoldStep: 50,
+  minHoldStep: 100,
   profileKey: 'gentle',
 };
 
@@ -81,7 +91,7 @@ const brightnessSliderConfig: SliderControlConfig = {
   size: 'medium',
   valueRange: { min: 0, max: 100, step: 1 },
   readValue: (view) => view.camera.image?.brightness ?? 50,
-  formatValue: (value) => formatPercent(value),
+  formatValue: (value) => String(Math.round(clamp(value, 0, 100))),
   enablePointerDrag: true,
   minHoldStep: 1,
   profileKey: 'gentle',
@@ -134,6 +144,9 @@ export function ImageControlCard() {
       whiteBalance: {
         awbEnabled: view.camera.whiteBalance?.awbEnabled ?? null,
         temperature: view.camera.whiteBalance?.temperature?.value ?? null,
+        temperatureMin: view.camera.whiteBalance?.temperature?.min ?? null,
+        temperatureMax: view.camera.whiteBalance?.temperature?.max ?? null,
+        temperatureStep: view.camera.whiteBalance?.temperature?.step ?? null,
       },
       image: {
         brightness: view.camera.image?.brightness ?? null,
@@ -150,6 +163,9 @@ export function ImageControlCard() {
       view.camera.image?.saturation,
       view.camera.whiteBalance?.awbEnabled,
       view.camera.whiteBalance?.temperature?.value,
+      view.camera.whiteBalance?.temperature?.min,
+      view.camera.whiteBalance?.temperature?.max,
+      view.camera.whiteBalance?.temperature?.step,
     ],
   );
 
@@ -166,11 +182,11 @@ export function ImageControlCard() {
       <div className="zcam-card-body">
         {!hideExposure && (
           <div className="zcam-subsection" data-path="zcam.camera.pages.main.exposure">
-            <div className="zcam-subsection-header">
+            {/* <div className="zcam-subsection-header">
               <div className="zcam-subsection-title">Exposure</div>
               <span className="zcam-control-select" data-path="zcam.camera.pages.main.exposure.shortcutSelect" />
-            </div>
-            <ToggleControl config={aeToggleConfig} />
+            </div> 
+            <ToggleControl config={aeToggleConfig} /> */}
 
             <div className="zcam-field-row zcam-field-row-dual" data-path="zcam.camera.pages.main.exposure.shutterIso">
               <label>Shutter / ISO</label>
@@ -190,7 +206,10 @@ export function ImageControlCard() {
             </div>
             <ToggleControl config={awbToggleConfig} />
             <div className="zcam-slider-row" data-path="zcam.camera.pages.main.whiteBalance.temperature">
-              <SliderControl config={temperatureSliderConfig} />
+              <SliderControl
+                config={temperatureSliderConfig}
+                disabled={view.camera.whiteBalance?.awbEnabled === true}
+              />
             </div>
           </div>
         )}

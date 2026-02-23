@@ -46,6 +46,9 @@ test('MainScene layout attribute toggles between layout variants', async () => {
   await waitFor(() => assert.equal(getShellElement().getAttribute('data-layout'), 'studio'));
 
   fireEvent.click(getByTitle('布局方案 B'));
+  await waitFor(() => assert.equal(getShellElement().getAttribute('data-layout'), 'ptz'));
+
+  fireEvent.click(getByTitle('布局方案 P（PTZ）'));
   await waitFor(() => assert.equal(getShellElement().getAttribute('data-layout'), 'normal'));
 });
 

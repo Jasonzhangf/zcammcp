@@ -4,24 +4,25 @@
 export interface CameraState {
   // PTZ 区: 后续可扩展 pan/tilt 等字段
   ptz?: {
-    pan?: { value: number; view: string };
-    tilt?: { value: number; view: string };
-    zoom?: { value: number; view: string };
-    speed?: { value: number; view: string };
-    focus?: { value: number; view: string };
+    pan?: { value: number; view: string; min?: number; max?: number; step?: number };
+    tilt?: { value: number; view: string; min?: number; max?: number; step?: number };
+    zoom?: { value: number; view: string; min?: number; max?: number; step?: number };
+    speed?: { value: number; view: string; min?: number; max?: number; step?: number };
+    focus?: { value: number; view: string; min?: number; max?: number; step?: number };
+    focusMode?: { value: string; view: string; options?: string[] };
   };
 
   // 曝光设置
   exposure?: {
     aeEnabled?: boolean;
-    shutter?: { value: number; view: string };
-    iso?: { value: number; view: string };
+    shutter?: { value: string | number; view: string; options?: string[] };
+    iso?: { value: string; view: string; options?: string[] };
   };
 
   // 白平衡设置
   whiteBalance?: {
     awbEnabled?: boolean;
-    temperature?: { value: number; view: string };
+    temperature?: { value: number; view: string; min?: number; max?: number; step?: number };
   };
 
   // 图像调节
@@ -33,21 +34,62 @@ export interface CameraState {
     hue?: number;
     gamma?: number;
   };
+  // 设备列表
+  devices?: {
+    activeDeviceId: string | null;
+    list: Array<{
+      id: string;
+      name: string;
+      serialPort: string;
+      active: boolean;
+    }>;
+  };
+
+  // 录制状态
+  recording?: {
+    status: 'idle' | 'streaming';
+    duration: number;
+    remain: number;
+  };
 }
+
 
 function mergeCameraStates(current: CameraState, next: CameraState): CameraState {
   const merged: CameraState = { ...current };
   if (next.ptz) {
-    merged.ptz = { ...(current.ptz ?? {}), ...next.ptz };
+    merged.ptz = { ...(current.ptz ?? {}) };
+    // Deep merge each axis to preserve min/max/step if missing in update
+    const keys = Object.keys(next.ptz) as Array<keyof typeof next.ptz>;
+    for (const key of keys) {
+      if (next.ptz[key]) {
+        // @ts-ignore
+        merged.ptz[key] = { ...(merged.ptz[key] ?? {}), ...next.ptz[key] };
+      }
+    }
   }
   if (next.exposure) {
     merged.exposure = { ...(current.exposure ?? {}), ...next.exposure };
   }
   if (next.whiteBalance) {
-    merged.whiteBalance = { ...(current.whiteBalance ?? {}), ...next.whiteBalance };
+    merged.whiteBalance = { ...merged.whiteBalance };
+    if (next.whiteBalance.awbEnabled !== undefined) {
+      merged.whiteBalance.awbEnabled = next.whiteBalance.awbEnabled;
+    }
+    if (next.whiteBalance.temperature) {
+      merged.whiteBalance.temperature = {
+        ...(merged.whiteBalance.temperature ?? {}),
+        ...next.whiteBalance.temperature,
+      };
+    }
   }
   if (next.image) {
     merged.image = { ...(current.image ?? {}), ...next.image };
+  }
+  if (next.recording) {
+    merged.recording = { ...(current.recording ?? {}), ...next.recording };
+  }
+  if (next.devices) {
+    merged.devices = next.devices;
   }
   return merged;
 }
@@ -60,6 +102,8 @@ export interface UiState {
   highlightMap: Record<string, 'none' | 'hover' | 'active' | 'error' | 'replay'>;
   activeNodePath?: string;
   layoutMode: LayoutMode; // 窗口 / 页面布局模式: 模式1~4
+  fzSpeed?: number; // Focus/Zoom 速度控制 (0-100), 默认 50, 用于本地 UI 控制步进大小
+  ptSpeed?: number; // Pan/Tilt 速度控制 (0-100), 默认 50, 用于本地 UI 控制步进大小
 }
 
 export interface ViewState {
@@ -136,6 +180,7 @@ export class PageStore {
   private readonly cli: CliChannel;
   private readonly listeners: Set<() => void> = new Set();
 
+
   constructor(opts: {
     path: string;
     initialCameraState?: CameraState;
@@ -151,6 +196,8 @@ export class PageStore {
         debugMode: 'normal',
         highlightMap: {},
         layoutMode: 'full',
+        fzSpeed: 50,
+        ptSpeed: 50,
       } as UiState);
     this.viewSnapshot = {
       camera: this.cameraState,
@@ -240,6 +287,19 @@ export class PageStore {
 
   applyCameraState(partial: CameraState): void {
     this.cameraState = mergeCameraStates(this.cameraState, partial);
+
+    this.updateViewSnapshot();
+    this.notify();
+  }
+
+  /**
+   * 更新 UI 状态 (Generic)
+   */
+  updateUiState(partial: Partial<UiState>): void {
+    this.uiState = {
+      ...this.uiState,
+      ...partial,
+    };
     this.updateViewSnapshot();
     this.notify();
   }
@@ -247,7 +307,9 @@ export class PageStore {
   /**
    * 运行一个写操作: 调用 OperationRegistry -> 可选 CLI -> 更新 cameraState
    */
-  async runOperation(nodePath: string, kind: string, operationId: string, payload: OperationPayload): Promise<void> {
+  async runOperation(nodePath: string, kind: string, operationId: string | undefined, payload: OperationPayload): Promise<void> {
+    if (!operationId) return;
+
     const ctx: OperationContext = {
       pagePath: this.path,
       nodePath,
@@ -278,6 +340,7 @@ export class PageStore {
         if (req) cliRequests.push(req);
       }
     }
+
     for (const request of cliRequests) {
       await this.cli.send(request);
     }

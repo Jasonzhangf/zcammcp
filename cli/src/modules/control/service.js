@@ -10,10 +10,10 @@ class ControlService {
     'down': 'down',
     'left': 'left',
     'right': 'right',
-    'up-left': 'upleft',
-    'up-right': 'upright',
-    'down-left': 'downleft',
-    'down-right': 'downright'
+    'up-left': 'leftup',
+    'up-right': 'rightup',
+    'down-left': 'leftdown',
+    'down-right': 'rightdown'
   };
 
   // ===== PTZ云台控制 =====
@@ -44,9 +44,10 @@ class ControlService {
       throw new Error(`无效的方向: ${direction}。支持的方向: ${Object.keys(this.directionMap).join(', ')}`);
     }
 
-    const speedNum = parseInt(speed);
-    if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
-      throw new Error('速度必须是1-9之间的数字');
+    // Allow float speed
+    const speedNum = parseFloat(speed);
+    if (isNaN(speedNum) || speedNum <= 0) {
+      throw new Error('速度必须是大于0的数字');
     }
 
     return await api.get(`/ctrl/pt?action=${validDirection}&fspeed=${speedNum}`);
@@ -68,6 +69,14 @@ class ControlService {
     }
 
     return await api.get(`/ctrl/pt?action=pt&pan_speed=${pan}&tilt_speed=${tilt}`);
+  }
+
+  /**
+   * PTZ模拟移动 (支持浮点数)
+   * API: /ctrl/pt?action=pt&pan_speed={pan}&tilt_speed={tilt}
+   */
+  static async ptzAnalogMove(api, panSpeed, tiltSpeed) {
+    return await api.get(`/ctrl/pt?action=pt&pan_speed=${panSpeed}&tilt_speed=${tiltSpeed}`);
   }
 
   /**
@@ -180,12 +189,26 @@ class ControlService {
       throw new Error(`无效的变焦方向: ${direction}。支持的方向: ${validDirections.join(', ')}`);
     }
 
-    const speedNum = parseInt(speed);
-    if (isNaN(speedNum) || speedNum < 1 || speedNum > 9) {
-      throw new Error('变焦速度必须是1-9之间的数字');
+    // Support both integer (1-9) and float (0-1) speed values
+    let speedValue;
+    if (typeof speed === 'number') {
+      speedValue = speed;
+    } else {
+      const speedNum = parseFloat(speed);
+      if (isNaN(speedNum)) {
+        throw new Error('变焦速度必须是数字');
+      }
+      speedValue = speedNum;
     }
 
-    return await api.get(`/ctrl/lens?action=zoom${direction.toLowerCase()}&fspeed=${speedNum}`);
+    // Validate range: either 1-9 (integer) or 0-1 (float)
+    if ((speedValue >= 1 && speedValue <= 9) || (speedValue >= 0 && speedValue <= 1)) {
+      // Valid range
+    } else {
+      throw new Error('变焦速度必须是1-9之间的整数或0-1之间的浮点数');
+    }
+
+    return await api.get(`/ctrl/lens?action=zoom${direction.toLowerCase()}&fspeed=${speedValue}`);
   }
 
   /**
@@ -214,7 +237,7 @@ class ControlService {
 
   /**
    * 精确变焦值控制
-   * API: /ctrl/lens?action=zoom&value={value}
+   * API: /ctrl/lens?action=zoomstop 然后 /ctrl/set?lens_zoom_pos={value}
    */
   static async zoomValue(api, value) {
     const valueNum = parseInt(value);
@@ -222,7 +245,16 @@ class ControlService {
       throw new Error('变焦值必须是0-99999之间的数字');
     }
 
-    return await api.get(`/ctrl/lens?action=zoom&value=${valueNum}`);
+    // 先停止 zoom 电机
+    try {
+      await this.zoomStop(api);
+    } catch (stopErr) {
+      // 如果 zoomstop 失败，记录警告但继续执行
+      console.warn('[Control Service] zoomstop failed:', stopErr.message);
+    }
+
+    // 然后设置 zoom 位置
+    return await api.get(`/ctrl/set?lens_zoom_pos=${valueNum}`);
   }
 
   /**
@@ -282,19 +314,27 @@ class ControlService {
   }
 
   /**
-   * 近焦
+   * 近焦（支持浮点速度）
    * API: /ctrl/lens?action=focusnear&fspeed={speed}
    */
-  static async focusNear(api, speed = '5') {
-    return await this.focus(api, 'near', speed);
+  static async focusNear(api, speed = '0.5') {
+    const speedNum = parseFloat(speed);
+    if (isNaN(speedNum) || speedNum <= 0 || speedNum > 1.0) {
+      throw new Error('对焦速度必须是0-1.0之间的浮点数');
+    }
+    return await api.get(`/ctrl/lens?action=focusnear&fspeed=${speedNum.toFixed(2)}`);
   }
 
   /**
-   * 远焦
+   * 远焦（支持浮点速度）
    * API: /ctrl/lens?action=focusfar&fspeed={speed}
    */
-  static async focusFar(api, speed = '5') {
-    return await this.focus(api, 'far', speed);
+  static async focusFar(api, speed = '0.5') {
+    const speedNum = parseFloat(speed);
+    if (isNaN(speedNum) || speedNum <= 0 || speedNum > 1.0) {
+      throw new Error('对焦速度必须是0-1.0之间的浮点数');
+    }
+    return await api.get(`/ctrl/lens?action=focusfar&fspeed=${speedNum.toFixed(2)}`);
   }
 
   /**

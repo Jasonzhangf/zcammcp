@@ -63,6 +63,8 @@ export class RealCliChannel implements CliChannelInterface {
       };
     }
 
+    console.log('[RealCliChannel] Sending command:', payload);
+
     try {
       const result = (await api.runCliCommand(payload)) as CliBridgeResult;
       const ok = Boolean(result?.ok);

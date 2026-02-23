@@ -25,6 +25,10 @@ function sendElectronCommand(command: WindowCommand): void {
       void window.electronAPI.sendWindowCommand?.('toggleSize');
     }
   }
+
+  if (command === 'switchToPtz') {
+    void window.electronAPI.sendWindowCommand?.('switchToPtz');
+  }
 }
 
 function pushWindowPatch(patch: Record<string, unknown>): void {
@@ -50,6 +54,12 @@ export function WindowControls() {
     pushWindowPatch({ layoutSize: store.state.layoutSize });
   };
 
+  const handleSwitchToPtz = () => {
+    applyWindowCommand(store, 'switchToPtz');
+    sendElectronCommand('switchToPtz');
+    pushWindowPatch({ layoutSize: 'ptz' });
+  };
+
   const handleClose = () => {
     if (typeof window === 'undefined') return;
     if (window.electronAPI?.close) {
@@ -59,8 +69,9 @@ export function WindowControls() {
     }
   };
 
-  const layoutLabel = scene.layoutSize === 'normal' ? 'A' : 'B';
-  const layoutTitle = scene.layoutSize === 'normal' ? '布局方案 A' : '布局方案 B';
+  const layoutLabel = scene.layoutSize === 'normal' ? 'A' : scene.layoutSize === 'studio' ? 'B' : 'P';
+  const layoutTitle =
+    scene.layoutSize === 'normal' ? '布局方案 A' : scene.layoutSize === 'studio' ? '布局方案 B' : '布局方案 P（PTZ）';
   const toggleTitle = isBall ? '恢复主窗口' : '缩小成球';
 
   return (
@@ -73,6 +84,15 @@ export function WindowControls() {
         onClick={handleModeToggle}
       >
         {isBall ? '▢' : '⚪'}
+      </button>
+      <button
+        type="button"
+        className="control-btn"
+        title="切换到PTZ模式"
+        aria-label="切换到PTZ模式"
+        onClick={handleSwitchToPtz}
+      >
+        C
       </button>
       <button
         type="button"

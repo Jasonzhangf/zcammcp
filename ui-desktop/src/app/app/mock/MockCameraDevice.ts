@@ -73,42 +73,56 @@ export class MockCameraDevice {
 
   async handleRequest(request: CliRequest): Promise<void> {
     const { kind, value, auto, sliderMeta } = parseRequest(request);
+    const safeNum = (v: number | string | undefined, def: number) => {
+      if (typeof v === 'number') return v;
+      if (typeof v === 'string') {
+        const parsed = Number(v);
+        return Number.isFinite(parsed) ? parsed : def;
+      }
+      return def;
+    };
+
     switch (kind) {
       case 'pan':
-        this.scheduleMotor('pan', clamp(value ?? 0, PTZ_PAN_RANGE.min, PTZ_PAN_RANGE.max), sliderMeta);
+        this.scheduleMotor('pan', clamp(safeNum(value, 0), PTZ_PAN_RANGE.min, PTZ_PAN_RANGE.max), sliderMeta);
         break;
       case 'tilt':
-        this.scheduleMotor('tilt', clamp(value ?? 0, PTZ_TILT_RANGE.min, PTZ_TILT_RANGE.max), sliderMeta);
+        this.scheduleMotor('tilt', clamp(safeNum(value, 0), PTZ_TILT_RANGE.min, PTZ_TILT_RANGE.max), sliderMeta);
         break;
       case 'zoom':
-        this.scheduleMotor('zoom', clamp(value ?? PTZ_ZOOM_RANGE.min, PTZ_ZOOM_RANGE.min, PTZ_ZOOM_RANGE.max), sliderMeta);
+        this.scheduleMotor('zoom', clamp(safeNum(value, PTZ_ZOOM_RANGE.min), PTZ_ZOOM_RANGE.min, PTZ_ZOOM_RANGE.max), sliderMeta);
         break;
       case 'focus':
-        this.scheduleMotor('focus', clamp(value ?? PTZ_FOCUS_RANGE.min, PTZ_FOCUS_RANGE.min, PTZ_FOCUS_RANGE.max), sliderMeta);
+        this.scheduleMotor('focus', clamp(safeNum(value, PTZ_FOCUS_RANGE.min), PTZ_FOCUS_RANGE.min, PTZ_FOCUS_RANGE.max), sliderMeta);
         break;
       case 'speed':
-        this.schedulePtzSpeed(clamp(value ?? 50, 0, 100));
+        this.schedulePtzSpeed(clamp(safeNum(value, 50), 0, 100));
         break;
       case 'brightness':
       case 'contrast':
       case 'saturation':
-        this.scheduleImageUpdate(kind, clamp(value ?? 50, 0, 100));
+        this.scheduleImageUpdate(kind, clamp(safeNum(value, 50), 0, 100));
         break;
       case 'whitebalance':
         if (typeof auto === 'boolean') {
           this.scheduleAwb(auto);
-        } else if (typeof value === 'number') {
-          this.scheduleWhiteBalanceTemperature(clamp(value, 2000, 10_000));
+        } else if (value !== undefined) {
+          const numVal = safeNum(value, 5600);
+          this.scheduleWhiteBalanceTemperature(clamp(numVal, 2000, 10_000));
         }
         break;
+      case 'iso':
       case 'gain':
-        this.scheduleIso(Math.max(100, Math.round(value ?? 100)));
+        // ISO allows string values
+        this.scheduleIso(value ?? 'Auto');
         break;
       case 'exposure':
+      case 'shutter_time': // Handle 'shutter_time' kind from image adjust
         if (typeof auto === 'boolean') {
           this.scheduleAe(auto);
-        } else if (typeof value === 'number') {
-          this.scheduleShutter(Math.max(1, Math.round(value)));
+        } else if (value !== undefined) {
+          const numVal = safeNum(value, 60);
+          this.scheduleShutter(Math.max(1, Math.round(numVal)));
         }
         break;
       default:
@@ -224,10 +238,15 @@ export class MockCameraDevice {
     });
   }
 
-  private scheduleIso(value: number): void {
+  private scheduleIso(value: string | number): void {
     this.scheduleSimple(() => {
       const exposure = this.state.exposure ?? (this.state.exposure = {});
-      exposure.iso = { value, view: String(value) };
+      const strValue = String(value);
+      exposure.iso = {
+        value: strValue,
+        view: strValue,
+        options: ['Auto', '100', '200', '400', '800', '1000', '1250', '1600', '2000', '2500', '3200', '4000', '5000', '6400', '8000', '10000', '12800']
+      };
       this.emit();
     });
   }
@@ -277,10 +296,19 @@ export class MockCameraDevice {
   }
 }
 
-function parseRequest(request: CliRequest): { kind: string; value?: number; auto?: boolean; sliderMeta?: SliderMeta } {
+function parseRequest(request: CliRequest): { kind: string; value?: number | string; auto?: boolean; sliderMeta?: SliderMeta } {
+  // Handle custom /ctrl/set?iso=... commands
+  if (request.command.startsWith('/ctrl/set')) {
+    const url = new URL('http://dummy' + request.command);
+    const iso = url.searchParams.get('iso');
+    if (iso) {
+      return { kind: 'gain', value: iso, sliderMeta: undefined };
+    }
+  }
+
   const args = request.args ?? [];
   const kind = args[2] ?? '';
-  let value: number | undefined;
+  let value: number | string | undefined;
   let auto: boolean | undefined;
   for (let i = 3; i < args.length; i += 2) {
     const flag = args[i];
@@ -293,6 +321,19 @@ function parseRequest(request: CliRequest): { kind: string; value?: number; auto
     }
     if (flag === '--auto' && typeof raw !== 'undefined') {
       auto = raw === 'true';
+    }
+  }
+
+  // Fallback: If no value found by flags, check standard positional for 'image adjust'
+  if (value === undefined && args.length >= 4 && !args[3].startsWith('-')) {
+    const numeric = Number(args[3]);
+    // ISO can be string, handle in handleRequest, but here we try number parsing
+    if (Number.isFinite(numeric)) {
+      value = numeric;
+    } else {
+      // For ISO/string values, we might just store it?
+      // But parseRequest returns { value: number | string }.
+      value = args[3];
     }
   }
   const sliderMeta = parseSliderMeta(request);

@@ -1,11 +1,13 @@
 import type { UiSceneStore, WindowMode, LayoutSize } from '../state/UiSceneStore.js';
 
-export type WindowCommand = 'shrinkToBall' | 'restoreFromBall' | 'toggleSize';
+export type WindowCommand = 'shrinkToBall' | 'restoreFromBall' | 'toggleSize' | 'switchToPtz';
 
 // Simple pure helper for mapping layout size transitions. This will
 // be expanded later if we need more sophisticated rules.
 export function nextLayoutSize(current: LayoutSize): LayoutSize {
-  return current === 'normal' ? 'studio' : 'normal';
+  if (current === 'normal') return 'studio';
+  if (current === 'studio') return 'normal'; // Toggle A <-> B
+  return 'normal'; // Default back to normal
 }
 
 // Core command handler. For now this only mutates UiSceneStore.state
@@ -24,5 +26,9 @@ export function applyWindowCommand(store: UiSceneStore, command: WindowCommand):
 
   if (command === 'toggleSize') {
     store.setState({ ...store.state, layoutSize: nextLayoutSize(store.state.layoutSize) });
+  }
+
+  if (command === 'switchToPtz') {
+    store.setState({ ...store.state, layoutSize: 'ptz' });
   }
 }

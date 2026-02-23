@@ -35,6 +35,12 @@ const profiles: Record<string, SliderProfile> = {
     normalizedSpeed: 2,
     intervalMs: 50,
   },
+  focus_manual: {
+    id: 'focus_manual',
+    // 100 / 150 = 0.666...% per tick (15s for full range)
+    normalizedSpeed: 0.666666,
+    intervalMs: 100,
+  },
   // 通用的百分比加速 profile（给需要“越按越快”的场景用）
   percentageAcceleration: {
     id: 'percentageAcceleration',

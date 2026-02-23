@@ -76,6 +76,16 @@ function runCliCommand(payload = {}) {
       return reject(new Error(`CLI entry not found at ${CLI_ENTRY}`));
     }
     const args = buildCliArgs(payload.args, payload.expectJson !== false);
+
+    // Inject default target host/port if not present
+    // This ensures local UI connects to local service by default
+    if (!args.includes('--host')) {
+      args.push('--host', '127.0.0.1');
+    }
+    if (!args.includes('--port')) {
+      args.push('--port', '17988');
+    }
+
     if (args.length === 0) {
       return reject(new Error('CLI args are required'));
     }
@@ -85,12 +95,18 @@ function runCliCommand(payload = {}) {
         ? payload.timeoutMs
         : DEFAULT_TIMEOUT;
 
+    console.log('[CLI Service] Spawning zcam CLI process...');
+    console.log('[CLI Service] Command:', NODE_BIN, [CLI_ENTRY, ...args].join(' '));
+    console.log('[CLI Service] CWD:', CLI_ROOT);
+
     const child = spawn(NODE_BIN, [CLI_ENTRY, ...args], {
       cwd: CLI_ROOT,
       env: { ...process.env, ...payload.env },
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
+
+    console.log('[CLI Service] zcam CLI process spawned, PID:', child.pid);
 
     let stdout = '';
     let stderr = '';
@@ -112,11 +128,14 @@ function runCliCommand(payload = {}) {
 
     child.on('error', (err) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      console.error('[CLI Service] zcam CLI process error:', err);
       reject(err);
     });
 
     child.on('close', (code) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      console.log('[CLI Service] zcam CLI process exited with code:', code);
+      console.log('[CLI Service] stdout length:', stdout.length, 'stderr length:', stderr.length);
       resolve({
         ok: code === 0,
         code,
@@ -134,9 +153,53 @@ function updateLastResult(patch) {
 
 function deriveCameraKeys(args) {
   if (!Array.isArray(args) || args.length === 0) return [];
+
+  // UVC commands: uvc set <key>
   if (args[0] === 'uvc' && args[1] === 'set' && typeof args[2] === 'string') {
     return [args[2]];
   }
+
+  // Image adjust commands: image adjust <key>
+  if (args[0] === 'image' && args[1] === 'adjust' && typeof args[2] === 'string') {
+    if (args[2] === 'iso') return ['iso'];
+    if (args[2] === 'shutter_time') return ['exposure'];
+    return [args[2]];
+  }
+
+  // Control set commands: ctrl set <key>
+  if (args[0] === 'ctrl' && args[1] === 'set' && typeof args[2] === 'string') {
+    return [args[2]];
+  }
+
+  // Control commands: control <subsystem> <action> [...]
+  if (args[0] === 'control') {
+    // control zoom pos <value> -> lens_zoom_pos
+    if (args[1] === 'zoom' && args[2] === 'pos') {
+      return ['lens_zoom_pos'];
+    }
+    // control focus pos <value> -> lens_focus_pos
+    if (args[1] === 'focus' && args[2] === 'pos') {
+      return ['lens_focus_pos'];
+    }
+    // control ptz move/stop/home -> pan, tilt
+    if (args[1] === 'ptz') {
+      // control ptz zoomstop/focusstop -> no refresh needed
+      if (args[2] === 'zoomstop' || args[2] === 'focusstop') {
+        return []; // Stop commands don't change position
+      }
+      // control ptz focusnear/focusfar -> lens_focus_pos
+      if (args[2] === 'focusnear' || args[2] === 'focusfar') {
+        return ['lens_focus_pos'];
+      }
+      // control ptz zoomin/zoomout -> lens_zoom_pos
+      if (args[2] === 'zoomin' || args[2] === 'zoomout') {
+        return ['lens_zoom_pos'];
+      }
+      // Other ptz commands (move, stop, home) -> pan, tilt
+      return ['pan', 'tilt'];
+    }
+  }
+
   return [];
 }
 
@@ -155,7 +218,7 @@ function notifyCameraState(keys) {
   };
   return new Promise((resolve, reject) => {
     const req = http.request(options, (res) => {
-      res.on('data', () => {});
+      res.on('data', () => { });
       res.on('end', resolve);
     });
     req.on('error', reject);
@@ -181,10 +244,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && req.url === '/run') {
+      console.log('[CLI Service] Received POST /run request');
       const body = await parseBody(req);
+      console.log('[CLI Service] Parsed body, args:', body.args);
       const startedAt = Date.now();
       try {
+        console.log('[CLI Service] Calling runCliCommand...');
         const result = await runCliCommand(body);
+        console.log('[CLI Service] runCliCommand completed, ok:', result.ok);
         updateLastResult({ ...result, startedAt });
         const keys = deriveCameraKeys(body.args);
         notifyCameraState(keys).catch((err) => {
@@ -192,6 +259,7 @@ const server = http.createServer(async (req, res) => {
         });
         return respondJson(res, { ok: true, result });
       } catch (err) {
+        console.error('[CLI Service] runCliCommand error:', err);
         updateLastResult({ ok: false, error: err.message, startedAt });
         return respondJson(res, { ok: false, error: err.message }, 500);
       }
@@ -205,12 +273,22 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`[CLI Service] listening on http://${HOST}:${PORT}`);
+  console.log(`[CLI Service] PID: ${process.pid}`);
+  console.log(`[CLI Service] CLI_ROOT: ${CLI_ROOT}`);
+  console.log(`[CLI Service] CLI_ENTRY: ${CLI_ENTRY}`);
+});
+
+server.on('error', (err) => {
+  console.error('[CLI Service] Server error:', err);
+  process.exit(1);
 });
 
 process.on('SIGTERM', () => {
+  console.log('[CLI Service] Received SIGTERM, shutting down...');
   server.close(() => process.exit(0));
 });
 
 process.on('SIGINT', () => {
+  console.log('[CLI Service] Received SIGINT, shutting down...');
   server.close(() => process.exit(0));
 });

@@ -6,7 +6,10 @@ import { useRootScale } from '../hooks/useRootScale.js';
 
 export function PageShell({ scene }: { scene: SceneConfig }) {
   const scale = useRootScale();
-  const rootStyle = scale < 1 ? { transform: `scale(${scale})` } : undefined;
+
+  // Only apply scaling in 'studio' mode. 'normal' layout should be responsive.
+  const shouldScale = scene.layoutSize === 'studio';
+  const rootStyle = shouldScale && scale < 1 ? { transform: `scale(${scale})` } : undefined;
   return (
     <div
       className="zcam-root-scale page-shell"
@@ -17,7 +20,7 @@ export function PageShell({ scene }: { scene: SceneConfig }) {
       <div className="zcam-header" data-path="ui.window.header">
         <div className="zcam-header-left">
           <div className="zcam-badge">Z</div>
-          <div className="zcam-title">ZCAM 閻╁憡婧€閹貉冨煑</div>
+          <div className="zcam-title">ZCAM 相机控制</div>
         </div>
         <div className="zcam-header-right">
           <DebugControls />

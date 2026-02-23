@@ -16,7 +16,11 @@ export const imageOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
       return {
-        cliRequest: buildUvcCliRequest('brightness', v, { meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `uvc-brightness-${Date.now()}`,
+          command: `image adjust brightness ${v}`,
+          args: ['image', 'adjust', 'brightness', String(v)],
+        }
       };
     },
   },
@@ -26,7 +30,11 @@ export const imageOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
       return {
-        cliRequest: buildUvcCliRequest('contrast', v, { meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `uvc-contrast-${Date.now()}`,
+          command: `image adjust contrast ${v}`,
+          args: ['image', 'adjust', 'contrast', String(v)],
+        }
       };
     },
   },
@@ -36,7 +44,11 @@ export const imageOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
       return {
-        cliRequest: buildUvcCliRequest('saturation', v, { meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `uvc-saturation-${Date.now()}`,
+          command: `image adjust saturation ${v}`,
+          args: ['image', 'adjust', 'saturation', String(v)],
+        }
       };
     },
   },

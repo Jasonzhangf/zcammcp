@@ -47,6 +47,9 @@ test('WindowControls toggles layout variants via layout button', () => {
   assert.equal(store.state.layoutSize, 'studio');
 
   fireEvent.click(getByTitle('布局方案 B'));
+  assert.equal(store.state.layoutSize, 'ptz');
+
+  fireEvent.click(getByTitle('布局方案 P（PTZ）'));
   assert.equal(store.state.layoutSize, 'normal');
 });
 

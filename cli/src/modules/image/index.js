@@ -297,6 +297,36 @@ adjustCmd
     }
   });
 
+adjustCmd
+  .command('iso <value>')
+  .description('设置ISO感光度 (100 - 25600)')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (value, options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await imageService.setIso(api, value);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
+adjustCmd
+  .command('shutter_time <value>')
+  .description('设置快门速度 (度数或秒数)')
+  .option('-j, --json', 'JSON格式输出')
+  .action(async (value, options, cmd) => {
+    try {
+      const globalOptions = cmd.parent.parent.parent;
+      const api = createAPI(globalOptions);
+      const result = await imageService.setShutter(api, value);
+      formatOutput(result, options.json || globalOptions.json);
+    } catch (error) {
+      handleErrors(error, cmd.parent.parent.parent);
+    }
+  });
+
 imageCmd.addCommand(adjustCmd);
 
 // ===== 视频设置子命令 =====

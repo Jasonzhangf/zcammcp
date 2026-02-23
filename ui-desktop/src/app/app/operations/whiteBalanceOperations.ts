@@ -10,8 +10,16 @@ export const whiteBalanceOperations: OperationDefinition[] = [
     cliCommand: 'wb.awb',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const enabled = Boolean(payload.value);
+      // When AWB is enabled, set wb=Auto; when disabled, set wb=Manual
+      const wbValue = enabled ? 'Auto' : 'Manual';
+
+      // Use direct HTTP request format
       return {
-        cliRequest: buildUvcCliRequest('whitebalance', undefined, { auto: enabled, meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `wb-mode-${Date.now()}`,
+          command: `/ctrl/set?wb=${wbValue}`,
+          args: [],
+        },
       };
     },
   },
@@ -19,10 +27,32 @@ export const whiteBalanceOperations: OperationDefinition[] = [
     id: 'whiteBalance.setTemperature',
     cliCommand: 'wb.temperature',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
-      const value = Number(payload.value ?? 3200);
-      const clamped = Number.isFinite(value) ? Math.max(2000, Math.min(10000, value)) : 5600;
+      const defaults = { min: 2000, max: 10000, step: 100 };
+      const range = ctx.cameraState.whiteBalance?.temperature;
+      const min = range?.min ?? defaults.min;
+      const max = range?.max ?? defaults.max;
+      const step = range?.step ?? defaults.step;
+
+      let value = Number(payload.value ?? 3200);
+      if (!Number.isFinite(value)) value = 5600;
+
+      // Clamp
+      value = Math.max(min, Math.min(max, value));
+
+      // Snap to step
+      if (step > 0) {
+        value = Math.round(value / step) * step;
+      }
+
+      // Re-clamp in case snapping went out of bounds (though unlikely with round)
+      value = Math.max(min, Math.min(max, value));
+
       return {
-        cliRequest: buildUvcCliRequest('whitebalance', clamped, { meta: extractSliderMeta(payload) }),
+        cliRequest: {
+          id: `uvc-wb-kelvin-${Date.now()}`,
+          command: `image whitebalance manual kelvin ${value}`,
+          args: ['image', 'whitebalance', 'manual', 'kelvin', String(value)],
+        }
       };
     },
   },

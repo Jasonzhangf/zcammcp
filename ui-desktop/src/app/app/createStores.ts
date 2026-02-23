@@ -2,6 +2,7 @@ import { OperationRegistry } from '../framework/operations/OperationRegistry.js'
 import { MockCliChannel } from '../framework/transport/CliChannel.js';
 import { RealCliChannel } from '../framework/transport/RealCliChannel.js';
 import { HttpCliChannel } from '../framework/transport/HttpCliChannel.js';
+import { DirectUvcChannel } from '../framework/transport/DirectUvcChannel.js';
 import { PageStore, type CameraState } from '../framework/state/PageStore.js';
 import { UiSceneStore, type UiSceneState } from '../framework/state/UiSceneStore.js';
 import { ContainerStore } from '../framework/state/ContainerStore.js';
@@ -10,6 +11,8 @@ import { ptzOperations, PTZ_FOCUS_RANGE, PTZ_ZOOM_RANGE } from '../app/operation
 import { exposureOperations } from '../app/operations/exposureOperations.js';
 import { whiteBalanceOperations } from '../app/operations/whiteBalanceOperations.js';
 import { imageOperations } from '../app/operations/imageOperations.js';
+import { deviceOperations } from '../app/operations/deviceOperations.js';
+
 import { MockCameraDevice } from './mock/MockCameraDevice.js';
 import { loadMockCameraState } from './mock/MockCameraPersistence.js';
 
@@ -22,7 +25,7 @@ export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBu
   const useMock = options?.useMockApi ?? shouldUseMockApi();
   const ops = new OperationRegistry();
 
-  for (const def of [...ptzOperations, ...exposureOperations, ...whiteBalanceOperations, ...imageOperations]) {
+  for (const def of [...ptzOperations, ...exposureOperations, ...whiteBalanceOperations, ...imageOperations, ...deviceOperations]) {
     ops.register(def);
   }
 
@@ -30,14 +33,14 @@ export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBu
     ptz: {
       pan: { value: 0, view: '0' },
       tilt: { value: 0, view: '0' },
-      zoom: { value: PTZ_ZOOM_RANGE.min, view: String(PTZ_ZOOM_RANGE.min) },    
+      zoom: { value: PTZ_ZOOM_RANGE.min, view: String(PTZ_ZOOM_RANGE.min) },
       speed: { value: 50, view: '50' },
-      focus: { value: PTZ_FOCUS_RANGE.min, view: String(PTZ_FOCUS_RANGE.min) }, 
+      focus: { value: PTZ_FOCUS_RANGE.min, view: String(PTZ_FOCUS_RANGE.min) },
     },
     exposure: {
       aeEnabled: true,
       shutter: { value: 60, view: '1/60' },
-      iso: { value: 800, view: '800' },
+      iso: { value: '800', view: '800' },
     },
     whiteBalance: {
       awbEnabled: true,
@@ -93,20 +96,35 @@ export function createContainerStore(): ContainerStore {
 }
 
 function createCliChannel(useMock: boolean, initialCameraState: CameraState): {
-  cli: MockCliChannel | RealCliChannel | HttpCliChannel;
+  cli: MockCliChannel | RealCliChannel | HttpCliChannel | DirectUvcChannel;
   mockDevice?: MockCameraDevice;
 } {
+  // 1. Mock模式 - 使用本地模拟
   if (useMock) {
     const device = new MockCameraDevice(initialCameraState);
     const cli = new MockCliChannel(device);
     return { cli, mockDevice: device };
   }
+
   if (typeof window !== 'undefined') {
+    // 2. 真实模式 - 检查是否使用直接UVC通道
+    const useDirectUvc = shouldUseDirectUvc();
+
+    if (useDirectUvc && window.electronAPI?.sendUvcRequest) {
+      console.log('[CreateStores] Using DirectUvcChannel (direct HTTP to 17988)');
+      return { cli: new DirectUvcChannel() };
+    }
+
     if (window.electronAPI?.runCliCommand) {
+      console.log('[CreateStores] Using RealCliChannel (via CLI Service 6291)');
       return { cli: new RealCliChannel() };
     }
+
+    // 浏览器环境 - HTTP CLI
+    console.log('[CreateStores] Using HttpCliChannel');
     return { cli: new HttpCliChannel() };
   }
+
   return { cli: new MockCliChannel() };
 }
 
@@ -120,7 +138,28 @@ export function shouldUseMockApi(): boolean {
       return env.VITE_ZCAM_USE_MOCK_API.toLowerCase() === 'true';
     }
   } catch {
-    // ignore when import.meta not available
+    // ignore
   }
+  return false;
+}
+
+export function shouldUseDirectUvc(): boolean {
+  // 从window全局变量读取
+  if (typeof window !== 'undefined' && typeof window.__ZCAM_USE_DIRECT_UVC__ !== 'undefined') {
+    return Boolean(window.__ZCAM_USE_DIRECT_UVC__);
+  }
+
+  // 从环境变量读取
+  try {
+    const env = (import.meta as unknown as { env?: Record<string, unknown> })?.env;
+    if (env && typeof env.VITE_ZCAM_USE_DIRECT_UVC === 'string') {
+      return env.VITE_ZCAM_USE_DIRECT_UVC.toLowerCase() === 'true';
+    }
+  } catch {
+    // ignore
+  }
+
+  // 默认使用DirectUVC（性能更好）
   return true;
 }
+

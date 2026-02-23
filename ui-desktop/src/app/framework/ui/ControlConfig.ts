@@ -7,7 +7,7 @@ export interface SliderControlConfig {
   nodePath: string;
   kind: string;
   label: string;
-  operationId: string;
+  operationId?: string;
   valueRange: {
     min: number;
     max: number;
@@ -22,13 +22,41 @@ export interface SliderControlConfig {
   keyBindings?: string[];
   keyInputMode?: 'focus' | 'global';
   keyAcceptWhenBlurred?: boolean;
-  readValue(view: ViewState): number;
-  formatValue?(value: number): string;
+  readValue?: (view: ViewState) => number;
+  readValueRange?: (view: ViewState) => { min: number; max: number; step: number };
+  formatValue?: (value: number, range?: { min: number; max: number; step: number }) => string;
   valueMapper?: {
     toDisplay?(value: number): number;
     toActual?(value: number): number;
   };
   profileKey?: string;
+  onValueChange?: (value: number, store: any, context?: { simulationOnly?: boolean }) => void;
+
+  // New: +/- button operation configs
+  incrementOperation?: {
+    onPress: string;    // operation ID on button press
+    onRelease: string;  // operation ID on button release
+  };
+  decrementOperation?: {
+    onPress: string;
+    onRelease: string;
+  };
+
+  // New: disable optimistic UI for button operations
+  // When true, button operations will immediately sync with backend values
+  // instead of using optimistic UI + 10s timeout
+  buttonOperationsDisableOptimistic?: boolean;
+
+  // New: visually invert the slider progress bar (100% -> 0%)
+  // Useful when Min value corresponds to "Full" or "Far" conceptually, or vice versa
+  displayInverted?: boolean;
+
+  // New: Simulate value changes locally while performing button operations
+  // If true, holding +/- buttons will trigger both the operation AND local value simulation (via startHold)
+  simulateValueOnOperation?: boolean;
+
+  // New: Force compact mode (hide track rail/fill, show only value)
+  hideTrack?: boolean;
 }
 
 export interface ToggleControlConfig {

@@ -5,13 +5,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.invoke('window:close'),
   shrinkToBall: () => ipcRenderer.invoke('window:shrinkToBall'),
   restoreFromBall: () => ipcRenderer.invoke('window:restoreFromBall'),
+  moveBall: (payload) => ipcRenderer.invoke('window:moveBall', payload),
   toggleSize: () => ipcRenderer.invoke('window:toggleSize'),
+  setBounds: (bounds) => ipcRenderer.invoke('window:setBounds', bounds),
   sendWindowCommand: (cmd) => ipcRenderer.invoke('window:sendCommand', cmd),
   pushState: (channel, payload) => ipcRenderer.invoke('state:push', { channel, payload }),
   runCliCommand: (payload) => ipcRenderer.invoke('cli:run', payload),
+  sendUvcRequest: (request) => ipcRenderer.invoke('uvc:request', request),
   onWindowState: (callback) => {
     if (typeof callback !== 'function') {
-      return () => {};
+      return () => { };
     }
     const handler = (_event, state) => callback(state);
     ipcRenderer.on('window:state', handler);
@@ -19,7 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onCameraState: (callback) => {
     if (typeof callback !== 'function') {
-      return () => {};
+      return () => { };
     }
     const handler = (_event, state) => callback(state);
     ipcRenderer.on('camera:state', handler);
@@ -27,7 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   registerTestHandler: (handler) => {
     if (typeof handler !== 'function') {
-      return () => {};
+      return () => { };
     }
     const listener = async (_event, message) => {
       const requestId = message?.requestId;
