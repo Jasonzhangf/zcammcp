@@ -164,6 +164,17 @@
 - 在 `StatusCard.tsx` 添加 `useEffect` 发送 heartbeat
 - 新增 `ui-cycle-heartbeat-test.js` 覆盖成功/超时路径
 
+### 4.3 TODO#3: cycle --json 输出格式 (2026-02-24)
+- 在 `cli/src/modules/ui-window.js` 添加 `--json` 选项支持
+- 输出稳定 JSON 格式用于 CI 聚合：
+  - 成功：`{ok:true, loop, timeoutMs, totalMs, results[{loop, status, durationMs}]}`
+  - 失败：`{ok:false, ...results[{error}]}`
+- 通过命令层级遍历检查 `--json` 标志（cycle->window->ui）
+- 在 `cli/src/index.js` 添加 `isJsonMode` 检查，抑制冗余日志
+- E2E 测试：`cli/tests/e2e/ui-cycle-json.test.js` (5/5 passing)
+- 单元测试：`cli/tests/unit/ui-window.test.js` (14/14 passing)
+- 失败时 CLI 退出码为 1，便于 CI 判定
+
 ## 5. 开发与提交流程建议
 
 1. **功能开发优先级**：
