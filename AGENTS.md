@@ -101,3 +101,133 @@ ui-desktop/
 5. [ ] 控件层增加更多自动化规则（例如 slider 是否超出范围、modal 是否关闭）。
 
 > 下一步：根据实际需求，优先完成 TODO #1/#2，逐步完善“自动回环测试系统”。
+
+## Landing the Plane (Session Completion)
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   bd sync
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds
+
+## VI. 任务管理与 Beads 工作流
+
+本项目使用 `bd` (beads) 进行任务管理，遵循以下规则：
+
+### 6.1 分支策略
+- **main 分支**：受保护分支，必须通过测试矩阵才能推送
+- **功能分支**：每个 feature 必须建立独立分支，命名格式：
+  - `feature/<功能名>` - 新功能开发
+  - `epic/<主题名>` - 大型史诗任务
+  - `fix/<问题描述>` - 问题修复
+  - `refactor/<重构描述>` - 代码重构
+
+### 6.2 推送门限 (Push Gate)
+```bash
+# pre-push hook 强制执行
+# 推送前本地必须通过测试矩阵
+./scripts/run-push-gate-tests.sh
+```
+
+**矩阵检查项：**
+1. CLI 单元测试
+2. UI Desktop 单元测试  
+3. UI Cycle 端到端测试
+
+**规则：**
+- ✓ 功能分支：可推送远端，但合并到 main 前必须通过矩阵
+- ✗ main 分支：未通过测试矩阵禁止推送
+- 测试报告有效期：30 分钟
+
+### 6.3 代码分析
+代码分析优先使用 `lsp-code-analysis` skill：
+```bash
+# 1. 更新 LSP 索引
+./scripts/update-lsp-index.sh
+
+# 2. 启动 LSP 服务
+lsp server start /Volumes/extension/code/zcammcp
+
+# 3. 使用语义导航
+lsp definition <file> <line> <column>
+lsp references <file> <line> <column>
+lsp symbols <file>
+```
+
+### 6.4 Beads 命令速查
+```bash
+# 查看任务状态
+bd status
+bd list
+
+# 创建任务
+bd create --title "任务标题" --body "详细描述"
+
+# 创建史诗任务
+bd epic create --title "UI CLI 化重构" --body "..."
+
+# 添加子任务
+bd epic add-child <epic-id> <child-id>
+
+# 查看依赖图
+bd graph
+
+# 标记任务状态
+bd set-state <id> in_progress
+bd close <id>
+
+# 同步到 git
+bd sync
+```
+
+## VII. 技能引用 (Skills)
+
+本项目可用 Codex Skills：
+
+- **lsp-code-analysis**：语义代码分析，用于导航、重构、符号查找
+  - 路径：`/Users/fanzhang/.codex/skills/lsp-code-analysis/SKILL.md`
+
+- **frontend-code-review**：前端代码审查，检查性能、代码质量
+  - 路径：`/Users/fanzhang/.codex/skills/frontend-code-review/SKILL.md`
+
+- **reviewing-code**：通用代码审查
+  - 路径：`/Users/fanzhang/.codex/skills/reviewing-code/SKILL.md`
+
+使用技能时，先阅读 SKILL.md 了解工作流程。
+
+## VIII. 当前 Epic：UI CLI 化重构
+
+**分支**: `epic/ui-cli-refactor`
+
+### 目标
+1. **UI CLI 化**：UI 每个功能都能通过 CLI 控制
+2. **状态管理分离**：UI 与状态管理解耦
+3. **生命周期管理**：控件生命周期可观测、可测试
+4. **性能优化**：单线程约束下的渲染优化
+
+### 子任务
+见 beads 任务列表 (`bd list`)
+
+### 开发流程
+1. 在此分支开发功能
+2. 运行 `./scripts/run-push-gate-tests.sh` 通过测试矩阵
+3. 提交并推送：`git push origin epic/ui-cli-refactor`
+4. 功能完成后创建 PR 合并到 main
