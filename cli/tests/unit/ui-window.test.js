@@ -41,6 +41,16 @@ describe('UI Window Module - Runtime Tests', () => {
     };
   }
 
+  function clearRequireCache() {
+    // Clear caches for all modules that might retain state
+    const keysToDelete = Object.keys(require.cache).filter(key => 
+      key.includes('ui-window') || 
+      key.includes('commander') ||
+      key.includes('chalk')
+    );
+    keysToDelete.forEach(key => delete require.cache[key]);
+  }
+
   function setupMocks() {
     mockResponses = [];
     exitCodes = [];
@@ -70,13 +80,13 @@ describe('UI Window Module - Runtime Tests', () => {
     console.log = originalConsoleLog;
     console.error = originalConsoleError;
     Date.now = originalDateNow;
-    
-    const modulePath = require.resolve('../../src/modules/ui-window.js');
-    delete require.cache[modulePath];
   }
 
   describe('cycle --json runtime execution', () => {
-    beforeEach(setupMocks);
+    beforeEach(function() {
+      clearRequireCache();
+      setupMocks();
+    });
     afterEach(restoreMocks);
 
     it('should output correct JSON for 2 loops with per-loop durationMs', async () => {
@@ -250,7 +260,10 @@ describe('UI Window Module - Runtime Tests', () => {
   });
 
   describe('cycle without --json flag', () => {
-    beforeEach(setupMocks);
+    beforeEach(function() {
+      clearRequireCache();
+      setupMocks();
+    });
     afterEach(restoreMocks);
 
     it.skip('should output human-readable text (not JSON) when --json is not specified', async () => {
