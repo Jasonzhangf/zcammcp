@@ -94,7 +94,7 @@ ui-desktop/
 
 ## V. TODO / Roadmap
 
-1. [ ] `cycle` 命令增加滚动条规则（默认开启）。
+1. [x] `cycle` 命令增加滚动条规则（默认开启）。
 2. [ ] `cycle` 增加恢复后控件 heartbeat 检查（比如 `statusCard` 的 `updated`）。
 3. [ ] `cycle --json` 输出，便于 CI 聚合结果。
 4. [ ] 扩大消息系统：贴边、全屏、Dock 等窗口行为也通过命令控制。
