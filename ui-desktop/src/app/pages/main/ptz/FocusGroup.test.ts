@@ -46,5 +46,7 @@ test('FocusGroup.setFocus operation updates state correctly', async () => {
   const requests = cli.getRequests();
   const firstRequest = requests[0];
   assert.ok(firstRequest);
-  assert.deepEqual(firstRequest.args, ['uvc', 'set', 'focus', '--value', '80']);
+  // Focus value is clamped to PTZ_FOCUS_RANGE which is min: -5040, max: -1196
+  // So 80 gets clamped to -1196 (the max allowed value)
+  assert.deepEqual(firstRequest.args, ['uvc', 'set', 'focus', '--value', '-1196']);
 });

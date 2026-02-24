@@ -6,7 +6,8 @@ export type WindowCommand = 'shrinkToBall' | 'restoreFromBall' | 'toggleSize' | 
 // be expanded later if we need more sophisticated rules.
 export function nextLayoutSize(current: LayoutSize): LayoutSize {
   if (current === 'normal') return 'studio';
-  if (current === 'studio') return 'normal'; // Toggle A <-> B
+  if (current === 'studio') return 'ptz';
+  if (current === 'ptz') return 'normal';
   return 'normal'; // Default back to normal
 }
 

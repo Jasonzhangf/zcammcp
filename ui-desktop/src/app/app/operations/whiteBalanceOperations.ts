@@ -13,14 +13,14 @@ export const whiteBalanceOperations: OperationDefinition[] = [
       // When AWB is enabled, set wb=Auto; when disabled, set wb=Manual
       const wbValue = enabled ? 'Auto' : 'Manual';
 
-      // Use direct HTTP request format
-      return {
-        cliRequest: {
-          id: `wb-mode-${Date.now()}`,
-          command: `/ctrl/set?wb=${wbValue}`,
-          args: [],
-        },
-      };
+     // Use direct HTTP request format
+     return {
+       cliRequest: {
+         id: `wb-mode-${Date.now()}`,
+         command: `/ctrl/set?wb=${wbValue}`,
+          args: ['uvc', 'set', 'whitebalance', '--auto', String(enabled)],
+       },
+     };
     },
   },
   {
@@ -48,11 +48,11 @@ export const whiteBalanceOperations: OperationDefinition[] = [
       value = Math.max(min, Math.min(max, value));
 
       return {
-        cliRequest: {
-          id: `uvc-wb-kelvin-${Date.now()}`,
-          command: `image whitebalance manual kelvin ${value}`,
-          args: ['image', 'whitebalance', 'manual', 'kelvin', String(value)],
-        }
+       cliRequest: {
+         id: `uvc-wb-kelvin-${Date.now()}`,
+         command: `image whitebalance manual kelvin ${value}`,
+          args: ['uvc', 'set', 'whitebalance', '--value', String(value)],
+       }
       };
     },
   },

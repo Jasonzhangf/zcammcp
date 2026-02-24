@@ -1,0 +1,18 @@
+{
+  "commit": "0f3b67f",
+  "timestamp": 1771888183,
+  "datetime": "2026-02-23 23:09:43 UTC",
+  "passed": false,
+  "summary": "Tests failed: 2",
+  "failures": [
+    "CLI coverage summary missing",
+    "UI coverage summary missing"
+  ],
+  "reports": {
+    "cli": "/Volumes/extension/code/zcammcp/.test-reports/cli-test.log",
+    "ui": "/Volumes/extension/code/zcammcp/.test-reports/ui-test.log",
+    "e2e": "/Volumes/extension/code/zcammcp/.test-reports/e2e-test.log",
+    "cli-coverage": "/Volumes/extension/code/zcammcp/.test-reports/cli-coverage.log",
+    "ui-coverage": "/Volumes/extension/code/zcammcp/.test-reports/ui-coverage.log"
+  }
+}

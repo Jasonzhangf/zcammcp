@@ -16,11 +16,11 @@ export const imageOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
       return {
-        cliRequest: {
-          id: `uvc-brightness-${Date.now()}`,
-          command: `image adjust brightness ${v}`,
-          args: ['image', 'adjust', 'brightness', String(v)],
-        }
+       cliRequest: {
+         id: `uvc-brightness-${Date.now()}`,
+         command: `image adjust brightness ${v}`,
+          args: ['uvc', 'set', 'brightness', '--value', String(v)],
+       }
       };
     },
   },
@@ -30,11 +30,11 @@ export const imageOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
       return {
-        cliRequest: {
-          id: `uvc-contrast-${Date.now()}`,
-          command: `image adjust contrast ${v}`,
-          args: ['image', 'adjust', 'contrast', String(v)],
-        }
+       cliRequest: {
+         id: `uvc-contrast-${Date.now()}`,
+         command: `image adjust contrast ${v}`,
+          args: ['uvc', 'set', 'contrast', '--value', String(v)],
+       }
       };
     },
   },
@@ -44,11 +44,11 @@ export const imageOperations: OperationDefinition[] = [
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const v = clamp01(Number(payload.value ?? 50));
       return {
-        cliRequest: {
-          id: `uvc-saturation-${Date.now()}`,
-          command: `image adjust saturation ${v}`,
-          args: ['image', 'adjust', 'saturation', String(v)],
-        }
+       cliRequest: {
+         id: `uvc-saturation-${Date.now()}`,
+         command: `image adjust saturation ${v}`,
+          args: ['uvc', 'set', 'saturation', '--value', String(v)],
+       }
       };
     },
   },
