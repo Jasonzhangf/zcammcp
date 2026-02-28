@@ -4,10 +4,9 @@ import test from 'node:test';
 import { UiSceneStore } from '../state/UiSceneStore.js';
 import { applyWindowCommand, nextLayoutSize } from './WindowCommands.js';
 
-test('nextLayoutSize cycles through normal/studio/ptz', () => {
+test('nextLayoutSize toggles between normal and studio', () => {
   assert.equal(nextLayoutSize('normal'), 'studio');
-  assert.equal(nextLayoutSize('studio'), 'ptz');
-  assert.equal(nextLayoutSize('ptz'), 'normal');
+  assert.equal(nextLayoutSize('studio'), 'normal');
 });
 
 test('applyWindowCommand: shrinkToBall sets windowMode to ball', () => {
@@ -33,9 +32,6 @@ test('applyWindowCommand: toggleSize uses nextLayoutSize', () => {
 
   applyWindowCommand(store, 'toggleSize');
   assert.equal(store.state.layoutSize, 'studio');
-
-  applyWindowCommand(store, 'toggleSize');
-  assert.equal(store.state.layoutSize, 'ptz');
 
   applyWindowCommand(store, 'toggleSize');
   assert.equal(store.state.layoutSize, 'normal');
