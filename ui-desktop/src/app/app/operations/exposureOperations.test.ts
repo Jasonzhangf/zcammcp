@@ -23,7 +23,7 @@ test('exposure.setAeEnabled / setShutter / setIso', async () => {
     exposure: {
       aeEnabled: false,
       shutter: { value: 30, view: '30' },
-      iso: { value: '400', view: '400' },
+      iso: { value: 400, view: '400' },
     },
   };
 
@@ -59,11 +59,11 @@ test('exposure.setAeEnabled / setShutter / setIso', async () => {
     { value: 800 } satisfies OperationPayload,
   );
 
-  assert.equal(store.cameraState.exposure?.iso?.value, '400');
+  assert.equal(store.cameraState.exposure?.iso?.value, 400);
 
   const requests = cli.getRequests();
   assert.equal(requests.length, 3);
   assert.deepEqual(requests[0].args, ['uvc', 'set', 'exposure', '--auto', 'true']);
-  assert.deepEqual(requests[1].args, ['image', 'adjust', 'shutter_time', '60']);
-  assert.deepEqual(requests[2].args, ['image', 'adjust', 'iso', '800']);
+  assert.deepEqual(requests[1].args, ['uvc', 'set', 'exposure', '--value', '60']);
+  assert.deepEqual(requests[2].args, ['uvc', 'set', 'gain', '--value', '800']);
 });
