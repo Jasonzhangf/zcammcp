@@ -354,13 +354,8 @@ export const ptzOperations: OperationDefinition[] = [
     id: 'ptz.stop',
     cliCommand: 'control.ptz.stop',
     async handler(ctx: OperationContext): Promise<OperationResult> {
-      return {
-        cliRequest: {
-          id: `ptz.stop.${Date.now()}`,
-          command: 'control',
-          args: ['control', 'ptz', 'stop']
-        }
-      };
+      ptzManager.scheduleStop();
+      return {};
     },
   },
   {

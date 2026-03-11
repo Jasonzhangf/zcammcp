@@ -40,11 +40,9 @@ export class DirectUvcChannel implements CliChannelInterface {
         try {
             // 将CLI命令转换为UVC HTTP请求
             const uvcRequest = this.translateToUvcRequest(request);
-            console.log('[DirectUvcChannel] Translated to UVC request:', uvcRequest);
 
             // 通过Electron IPC发送
             const result = await this.electronAPI.sendUvcRequest(uvcRequest);
-            console.log('[DirectUvcChannel] Received response:', result);
 
             // 转换为CLI响应格式
             return this.translateToCliResponse(request.id, result);

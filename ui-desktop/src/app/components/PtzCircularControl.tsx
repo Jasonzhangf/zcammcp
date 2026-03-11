@@ -164,9 +164,6 @@ export function PtzCircularControl({ onStartMove, onStopMove, onJoystickMove, di
             setJoystickOffset({ x: 0, y: 0 });
             clearJoystickStopTimeout();
             onStopMove();
-            joystickStopTimeoutRef.current = setTimeout(() => {
-                onStopMove();
-            }, 1200);
         } else {
             clearJoystickStopTimeout();
             onStopMove();
