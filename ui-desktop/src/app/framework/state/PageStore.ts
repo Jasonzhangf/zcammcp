@@ -51,6 +51,30 @@ export interface CameraState {
     duration: number;
     remain: number;
   };
+
+  // SRT Status
+  srt?: {
+    url?: string;
+    status?: string;
+    bw?: number;
+    passphrase?: string;
+    pbkeyLen?: number;
+    latency?: number;
+    ttl?: number;
+    mode?: number;
+    autoRestart?: number;
+    code?: number;
+  };
+
+  // RTMP Status
+  rtmp?: {
+    url?: string;
+    key?: string;
+    bw?: number;
+    status?: string;
+    autoRestart?: number;
+    code?: number;
+  };
 }
 
 
@@ -87,6 +111,12 @@ function mergeCameraStates(current: CameraState, next: CameraState): CameraState
   }
   if (next.recording) {
     merged.recording = { ...(current.recording ?? {}), ...next.recording };
+  }
+  if (next.srt) {
+    merged.srt = { ...(current.srt ?? {}), ...next.srt };
+  }
+  if (next.rtmp) {
+    merged.rtmp = { ...(current.rtmp ?? {}), ...next.rtmp };
   }
   if (next.devices) {
     merged.devices = next.devices;

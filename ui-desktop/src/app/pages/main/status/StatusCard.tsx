@@ -1,7 +1,7 @@
 // StatusCard.tsx
 // 映射路径: zcam.camera.pages.main.status
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
@@ -14,6 +14,22 @@ export const statusCardNode: ContainerNode = {
   selectable: true,
   children: [],
 };
+
+function useStableValue<T>(value: T, delay: number = 200): T {
+  const [stableValue, setStableValue] = useState(value);
+
+  useEffect(() => {
+    if (value === stableValue) return;
+    const handler = setTimeout(() => {
+      setStableValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay, stableValue]);
+
+  return stableValue;
+}
 
 export function StatusCard() {
   const view = useViewState();
@@ -28,13 +44,27 @@ export function StatusCard() {
 
   const wbText = cam.whiteBalance?.temperature?.view ?? '---';
   const awbMode = cam.whiteBalance?.awbEnabled ? 'AWB' : 'MANUAL';
-  const zoomVal = cam.ptz?.zoom?.value;
-  const panVal = cam.ptz?.pan?.value;
-  const tiltVal = cam.ptz?.tilt?.value;
+  
+  // Use stable values to prevent jumping due to conflict between polling (1.5s) and optimistic updates (100ms)
+  const rawZoom = cam.ptz?.zoom?.value;
+  const rawPan = cam.ptz?.pan?.value;
+  const rawTilt = cam.ptz?.tilt?.value;
+
+  const zoomVal = useStableValue(rawZoom);
+  const panVal = useStableValue(rawPan);
+  const tiltVal = useStableValue(rawTilt);
 
   const panDisplay = typeof panVal === 'number' ? Math.round(panVal) : '--';
   const tiltDisplay = typeof tiltVal === 'number' ? Math.round(tiltVal) : '--';
   const zoomDisplay = typeof zoomVal === 'number' ? Math.round(zoomVal) : '--';
+
+  const srtStatus = cam.srt?.status ?? 'idle';
+  const rtmpStatus = cam.rtmp?.status ?? 'idle';
+  const srtUrl = cam.srt?.url;
+  const rtmpUrl = cam.rtmp?.url;
+
+  const isSrtActive = srtStatus !== 'idle';
+  const isRtmpActive = rtmpStatus !== 'idle';
 
   /* 
     Recording Status Logic
@@ -187,10 +217,16 @@ export function StatusCard() {
               className="zcam-status-chip-group zcam-status-chip-group-right"
               data-path="zcam.camera.pages.main.status.streaming"
             >
-              <span className="zcam-chip zcam-chip-active">
-                <span className="zcam-chip-label-active">STREAM ●</span> RTMP
-              </span>
-              <span className="zcam-chip">1080p60 / 8Mbps</span>
+              <div className={`zcam-chip ${isSrtActive ? 'zcam-chip-active' : ''}`}>
+                <span className={isSrtActive ? 'zcam-chip-label-active' : ''}>SRT {isSrtActive ? '●' : '○'}</span>
+                {' '}
+                {isSrtActive ? (srtUrl || srtStatus) : srtStatus}
+              </div>
+              <div className={`zcam-chip ${isRtmpActive ? 'zcam-chip-active' : ''}`}>
+                <span className={isRtmpActive ? 'zcam-chip-label-active' : ''}>RTMP {isRtmpActive ? '●' : '○'}</span>
+                {' '}
+                {isRtmpActive ? (rtmpUrl || rtmpStatus) : rtmpStatus}
+              </div>
             </div>
           </div>
         </div>
@@ -215,4 +251,3 @@ function formatRemain(minutes: number): string {
   }
   return `${m}min`;
 }
-

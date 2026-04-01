@@ -19,7 +19,7 @@ const WS_RECONNECT_INTERVAL = 3000;
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain,stream_status'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain,stream_status,srt,rtmp'
 )
   .split(',')
   .map((k) => k.trim())
@@ -55,6 +55,24 @@ function ensureFetch() {
 const fetchImpl = ensureFetch();
 
 async function fetchProperty(key) {
+  if (key === 'srt' || key === 'rtmp') {
+    const url = new URL(`/ctrl/${key}`, UVC_BASE_URL);
+    url.searchParams.set('action', 'query');
+    try {
+      const res = await fetchImpl(url.toString(), { method: 'GET' });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { raw: text };
+      }
+      return normalizeValue(key, data);
+    } catch (err) {
+      return normalizeValue(key, { error: err.message });
+    }
+  }
+
   if (key === 'remain') {
     const url = new URL('/ctrl/rec', UVC_BASE_URL);
     url.searchParams.set('action', 'remain');
@@ -351,6 +369,8 @@ function projectCameraState(values) {
 
       return { status, duration, remain };
     })(),
+    srt: values['srt']?.raw || null,
+    rtmp: values['rtmp']?.raw || null,
   };
 }
 
