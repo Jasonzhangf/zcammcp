@@ -12,6 +12,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pushState: (channel, payload) => ipcRenderer.invoke('state:push', { channel, payload }),
   runCliCommand: (payload) => ipcRenderer.invoke('cli:run', payload),
   sendUvcRequest: (request) => ipcRenderer.invoke('uvc:request', request),
+  toggleDevicePanel: () => ipcRenderer.invoke('devicePanel:toggle'),
+  hideDevicePanel: () => ipcRenderer.invoke('devicePanel:hide'),
+  updateDevicePanel: (payload) => ipcRenderer.invoke('devicePanel:update', payload),
   onWindowState: (callback) => {
     if (typeof callback !== 'function') {
       return () => { };
@@ -27,6 +30,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event, state) => callback(state);
     ipcRenderer.on('camera:state', handler);
     return () => ipcRenderer.removeListener('camera:state', handler);
+  },
+  onDeviceSwitchRequest: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => { };
+    }
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('device:switchRequest', handler);
+    return () => ipcRenderer.removeListener('device:switchRequest', handler);
   },
   registerTestHandler: (handler) => {
     if (typeof handler !== 'function') {

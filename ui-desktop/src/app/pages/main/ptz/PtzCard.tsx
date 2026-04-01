@@ -9,6 +9,7 @@ import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 import { useUiSceneState } from '../../../hooks/useUiSceneStore.js';
 import { focusGroupNode, FocusGroup, focusSliderConfig } from './FocusGroup.js';
+import { DeviceListCard } from '../devices/DeviceListCard.js';
 import { PTZ_FOCUS_RANGE, PTZ_PAN_RANGE, PTZ_TILT_RANGE, PTZ_ZOOM_RANGE } from '../../../app/operations/ptzOperations.js';
 import {
   Direction,
@@ -155,7 +156,11 @@ interface AxisStepMeta {
   direction: 1 | -1;
 }
 
-export function PtzCard() {
+interface PtzCardProps {
+  showFloatingDevices?: boolean;
+}
+
+export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
   const store = usePageStore();
   const view = useViewState();
   const uiScene = useUiSceneState();
@@ -583,7 +588,12 @@ export function PtzCard() {
 
   return (
     <div className="zcam-card" data-path="zcam.camera.pages.main.ptz">
-      <div className="zcam-card-header">
+      <div className="zcam-card-header zcam-ptz-header-with-device">
+        {showFloatingDevices ? (
+          <div className="zcam-ptz-device-dock-anchor">
+            <DeviceListCard mode="ptzFloating" />
+          </div>
+        ) : null}
         <span className="zcam-card-title">PTZ</span>
         <span className="zcam-card-header-right">
           <span className="zcam-control-select" data-path="zcam.camera.pages.main.ptz.shortcutSelect" />

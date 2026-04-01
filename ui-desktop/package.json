@@ -44,6 +44,17 @@
       "dist-web/**/*",
       "state-host/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../service/uvcservices/ImvtCameraService.exe",
+        "to": "service/uvcservices/ImvtCameraService.exe"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.utilities"

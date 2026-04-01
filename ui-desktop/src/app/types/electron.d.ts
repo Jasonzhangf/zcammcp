@@ -72,9 +72,16 @@ export interface ElectronAPI {
   pushState?: (channel: string, payload: unknown) => Promise<void>;
   runCliCommand?: (payload: CliBridgeRequest) => Promise<CliBridgeResult>;
   sendUvcRequest?: (request: UvcRequest) => Promise<UvcResponse>;
+  toggleDevicePanel?: () => Promise<{ ok: boolean; open: boolean }>;
+  hideDevicePanel?: () => Promise<{ ok: boolean; open: boolean }>;
+  updateDevicePanel?: (payload: {
+    devices: Array<{ id: string; name?: string; serialPort?: string }>;
+    activeDeviceId: string | null;
+  }) => Promise<{ ok: boolean }>;
   devReport?: (report: unknown) => void;
   onWindowState?: (callback: (state: WindowStatePayload) => void) => () => void;
   onCameraState?: (callback: (snapshot: CameraStateSnapshot) => void) => () => void;
+  onDeviceSwitchRequest?: (callback: (payload: { id?: string }) => void) => () => void;
   registerTestHandler?: (handler: (command: TestCommandMessage) => Promise<TestHandlerResult> | TestHandlerResult) => () => void;
 }
 

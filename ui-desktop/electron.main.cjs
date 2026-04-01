@@ -8,7 +8,7 @@ const { StateHost } = require('./state-host/state-host.cjs');
 
 const INITIAL_WIDTH = 1200;
 const INITIAL_HEIGHT = 960;
-const PTZ_ONLY_WIDTH = 410;
+const PTZ_ONLY_WIDTH = 408;
 const PTZ_ONLY_HEIGHT = 660;
 const LAYOUT_VARIANTS = ['normal', 'studio'];
 
@@ -26,6 +26,10 @@ const CAMERA_STATE_SCRIPT =
   process.env.ZCAM_CAMERA_STATE_SCRIPT || path.resolve(__dirname, '..', 'service', 'camera-state', 'camera-state.cjs');
 const UVC_SERVICE_HOST = process.env.ZCAM_UVC_HOST || '127.0.0.1';
 const UVC_SERVICE_PORT = parseInt(process.env.ZCAM_UVC_PORT || '17988', 10);
+const IMVT_CAMERA_SERVICE_NAME = 'ImvtCameraService.exe';
+const DEVICE_PANEL_WIDTH = parseInt(process.env.ZCAM_DEVICE_PANEL_WIDTH || '130', 10);
+const DEVICE_PANEL_MIN_HEIGHT = parseInt(process.env.ZCAM_DEVICE_PANEL_MIN_HEIGHT || '220', 10);
+const DEVICE_PANEL_MAX_HEIGHT = parseInt(process.env.ZCAM_DEVICE_PANEL_MAX_HEIGHT || '420', 10);
 
 
 const TEST_COMMAND_TIMEOUT_MS = parseInt(process.env.ZCAM_TEST_COMMAND_TIMEOUT || '8000', 10);
@@ -38,12 +42,15 @@ let cliServiceProcess = null;
 let cameraStateProcess = null;
 let cameraPollTimer = null;
 let cameraStateSnapshot = null;
+let imvtCameraServiceProcess = null;
+let devicePanelWindow = null;
+let devicePanelData = { devices: [], activeDeviceId: null };
 const pendingTestCommands = new Map();
 
 const stateHost = new StateHost();
 const windowState = {
   mode: 'main',
-  layoutSize: 'normal',
+  layoutSize: 'ptz',
   ballVisible: false,
   lastBounds: null,
 };
@@ -110,10 +117,242 @@ function notifyCameraRenderers(state) {
   }
 }
 
+function resolveImvtCameraServiceExePath() {
+  const envPath = process.env.ZCAM_IMVT_SERVICE_EXE;
+  if (envPath && fs.existsSync(envPath)) {
+    return envPath;
+  }
+  const packagedPath = path.join(process.resourcesPath, 'service', 'uvcservices', IMVT_CAMERA_SERVICE_NAME);
+  const devPath = path.resolve(__dirname, '..', 'service', 'uvcservices', IMVT_CAMERA_SERVICE_NAME);
+  if (app.isPackaged && fs.existsSync(packagedPath)) {
+    return packagedPath;
+  }
+  if (fs.existsSync(devPath)) {
+    return devPath;
+  }
+  return app.isPackaged ? packagedPath : devPath;
+}
+
+function startImvtCameraService() {
+  if (process.platform !== 'win32') {
+    return null;
+  }
+  if (imvtCameraServiceProcess) {
+    return imvtCameraServiceProcess;
+  }
+  const exePath = resolveImvtCameraServiceExePath();
+  if (!fs.existsSync(exePath)) {
+    console.error('[IMVT] service exe not found:', exePath);
+    return null;
+  }
+  try {
+    console.log('[IMVT] starting service:', exePath);
+    imvtCameraServiceProcess = spawn(exePath, [], {
+      cwd: path.dirname(exePath),
+      windowsHide: true,
+      stdio: 'ignore',
+    });
+    imvtCameraServiceProcess.on('exit', (code, signal) => {
+      console.log('[IMVT] service exited, code:', code, 'signal:', signal);
+      imvtCameraServiceProcess = null;
+    });
+    imvtCameraServiceProcess.on('error', (err) => {
+      console.error('[IMVT] service error:', err);
+      imvtCameraServiceProcess = null;
+    });
+    return imvtCameraServiceProcess;
+  } catch (err) {
+    console.error('[IMVT] failed to start service:', err);
+    imvtCameraServiceProcess = null;
+    return null;
+  }
+}
+
+function stopImvtCameraService() {
+  if (!imvtCameraServiceProcess) return;
+  try {
+    imvtCameraServiceProcess.kill();
+  } catch {
+    // ignore
+  }
+  imvtCameraServiceProcess = null;
+}
+
+function getDevicePanelBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return null;
+  }
+  const mainBounds = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(mainBounds);
+  const workArea = display?.workArea || { x: 0, y: 0, width: 1920, height: 1080 };
+  const x = Math.max(workArea.x, Math.round(mainBounds.x - DEVICE_PANEL_WIDTH));
+  const y = Math.max(workArea.y, Math.round(mainBounds.y + 38));
+  const mainBottom = Math.round(mainBounds.y + mainBounds.height);
+  const workAreaBottom = workArea.y + workArea.height;
+  const maxHeight = Math.max(0, workAreaBottom - y);
+  const desiredHeight = Math.max(0, mainBottom - y);
+  const height = Math.min(desiredHeight, maxHeight);
+  return { x, y, width: DEVICE_PANEL_WIDTH, height };
+}
+
+function buildDevicePanelHtml() {
+  return `<!doctype html><html><head><meta charset="UTF-8"><style>
+    html,body{margin:0;padding:0;background:rgba(18,18,18,.98);color:#f5f5f5;font:12px Arial}
+    .wrap{height:100vh;display:flex;flex-direction:column;border:1px solid #2f2f2f;border-radius:8px;overflow:hidden}
+    .head{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #2a2a2a}
+    .title{font-weight:600}
+    .dot{width:8px;height:8px;border-radius:50%;background:#666}
+    .dot.on{background:#52c41a;box-shadow:0 0 4px rgba(82,196,26,.5)}
+    .close{margin-left:auto;width:18px;height:18px;border:1px solid #3a3a3a;border-radius:4px;background:#1f1f1f;color:#cfcfcf;cursor:pointer}
+    .list{padding:8px;overflow:auto;display:flex;flex-direction:column;gap:6px;scrollbar-width:none;-ms-overflow-style:none}
+    .list::-webkit-scrollbar{display:none;width:0;height:0}
+    *::-webkit-scrollbar{display:none;width:0;height:0}
+    .item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:6px;background:#1a1a1a;border:1px solid #2a2a2a;cursor:pointer}
+    .item.active{background:#262626;border-color:#ff7a45;box-shadow:0 0 0 1px rgba(255,122,69,.3)}
+    .name{font-size:12px;font-weight:600}
+    .sub{font-size:10px;color:#888}
+  </style></head><body><div class="wrap"><div class="head"><span class="title">Devices</span><span id="statusDot" class="dot"></span><button id="closeBtn" class="close">×</button></div><div id="list" class="list"></div></div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    let state = { devices: [], activeDeviceId: null };
+    const listEl = document.getElementById('list');
+    const dot = document.getElementById('statusDot');
+    document.getElementById('closeBtn').addEventListener('click', () => ipcRenderer.invoke('devicePanel:hide'));
+    function render(){
+      listEl.innerHTML = '';
+      const devices = Array.isArray(state.devices) ? state.devices : [];
+      const active = state.activeDeviceId;
+      const activeDevice = devices.find(d => d && d.id === active);
+      dot.className = activeDevice ? 'dot on' : 'dot';
+      if (devices.length === 0) {
+        const empty = document.createElement('div');
+        empty.textContent = 'No devices found';
+        empty.style.padding='20px'; empty.style.color='#666'; empty.style.textAlign='center';
+        listEl.appendChild(empty);
+        return;
+      }
+      devices.forEach((device) => {
+        if (!device || !device.id) return;
+        const item = document.createElement('div');
+        item.className = 'item' + (device.id === active ? ' active' : '');
+        const info = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = device.name || device.id;
+        const sub = document.createElement('div');
+        sub.className = 'sub';
+        sub.textContent = device.serialPort || '';
+        info.appendChild(name); info.appendChild(sub);
+        const dotEl = document.createElement('span');
+        dotEl.className = 'dot' + (device.id === active ? ' on' : '');
+        item.appendChild(info); item.appendChild(dotEl);
+        item.addEventListener('click', async () => {
+          await ipcRenderer.invoke('devicePanel:switchDevice', device.id);
+        });
+        listEl.appendChild(item);
+      });
+    }
+    ipcRenderer.on('devicePanel:data', (_e, payload) => { state = payload || { devices: [], activeDeviceId: null }; render(); });
+    ipcRenderer.invoke('devicePanel:getData').then((payload) => { state = payload || state; render(); });
+  </script></body></html>`;
+}
+
+function pushDevicePanelData(payload = {}) {
+  const devices = Array.isArray(payload.devices) ? payload.devices : devicePanelData.devices;
+  const activeDeviceId = typeof payload.activeDeviceId === 'string' || payload.activeDeviceId === null
+    ? payload.activeDeviceId
+    : devicePanelData.activeDeviceId;
+  devicePanelData = { devices, activeDeviceId };
+  if (devicePanelWindow && !devicePanelWindow.isDestroyed()) {
+    devicePanelWindow.webContents.send('devicePanel:data', devicePanelData);
+  }
+  return devicePanelData;
+}
+
+function closeDevicePanel() {
+  if (!devicePanelWindow || devicePanelWindow.isDestroyed()) return;
+  devicePanelWindow.close();
+  devicePanelWindow = null;
+}
+
+function canShowDevicePanel() {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (windowState.mode !== 'main') return false;
+  if (windowState.layoutSize !== 'ptz') return false;
+  if (mainWindow.isMinimized()) return false;
+  if (!mainWindow.isVisible()) return false;
+  return true;
+}
+
+function syncDevicePanelBounds() {
+  if (!devicePanelWindow || devicePanelWindow.isDestroyed()) return;
+  const bounds = getDevicePanelBounds();
+  if (!bounds) return;
+  devicePanelWindow.setBounds(bounds);
+}
+
+function openDevicePanel() {
+  if (!canShowDevicePanel()) {
+    closeDevicePanel();
+    return { ok: false, open: false };
+  }
+  if (devicePanelWindow && !devicePanelWindow.isDestroyed()) {
+    syncDevicePanelBounds();
+    devicePanelWindow.show();
+    devicePanelWindow.focus();
+    pushDevicePanelData(devicePanelData);
+    return { ok: true, open: true };
+  }
+  const bounds = getDevicePanelBounds();
+  if (!bounds) {
+    return { ok: false, open: false };
+  }
+  devicePanelWindow = new BrowserWindow({
+    parent: mainWindow,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    show: false,
+    skipTaskbar: true,
+    alwaysOnTop: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  devicePanelWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(buildDevicePanelHtml())}`);
+  devicePanelWindow.once('ready-to-show', () => {
+    if (!devicePanelWindow || devicePanelWindow.isDestroyed()) return;
+    devicePanelWindow.show();
+    pushDevicePanelData(devicePanelData);
+  });
+  devicePanelWindow.on('closed', () => {
+    devicePanelWindow = null;
+  });
+  return { ok: true, open: true };
+}
+
+function toggleDevicePanel() {
+  if (!canShowDevicePanel()) {
+    closeDevicePanel();
+    return { ok: false, open: false };
+  }
+  if (devicePanelWindow && !devicePanelWindow.isDestroyed() && devicePanelWindow.isVisible()) {
+    closeDevicePanel();
+    return { ok: true, open: false };
+  }
+  return openDevicePanel();
+}
+
 function createMainWindow() {
   const mainWindowState = windowStateKeeper({
-    defaultWidth: INITIAL_WIDTH,
-    defaultHeight: INITIAL_HEIGHT,
+    defaultWidth: windowState.layoutSize === 'ptz' ? PTZ_ONLY_WIDTH : INITIAL_WIDTH,
+    defaultHeight: windowState.layoutSize === 'ptz' ? PTZ_ONLY_HEIGHT : INITIAL_HEIGHT,
   });
 
   mainWindow = new BrowserWindow({
@@ -121,8 +360,8 @@ function createMainWindow() {
     y: mainWindowState.y,
     // width: mainWindowState.width,
     // height: mainWindowState.height,
-    width: INITIAL_WIDTH,
-    height: INITIAL_HEIGHT,
+    width: windowState.layoutSize === 'ptz' ? PTZ_ONLY_WIDTH : INITIAL_WIDTH,
+    height: windowState.layoutSize === 'ptz' ? PTZ_ONLY_HEIGHT : INITIAL_HEIGHT,
     show: false,
     frame: false,
     skipTaskbar: false,
@@ -155,7 +394,24 @@ function createMainWindow() {
   });
 
   mainWindow.on('closed', () => {
+    closeDevicePanel();
     mainWindow = null;
+  });
+
+  mainWindow.on('hide', () => {
+    closeDevicePanel();
+  });
+
+  mainWindow.on('minimize', () => {
+    closeDevicePanel();
+  });
+
+  mainWindow.on('move', () => {
+    syncDevicePanelBounds();
+  });
+
+  mainWindow.on('resize', () => {
+    syncDevicePanelBounds();
   });
 }
 
@@ -225,6 +481,7 @@ function shrinkToBall() {
   }
   lastNormalBounds = mainWindow.getBounds();
   console.log('[Window] shrinkToBall -> storing bounds', lastNormalBounds);
+  closeDevicePanel();
   createBallWindow(lastNormalBounds);
   mainWindow.hide();
   const state = pushWindowState({ mode: 'ball', ballVisible: true, lastBounds: lastNormalBounds });
@@ -239,6 +496,7 @@ function restoreFromBall() {
     ballWindow.close();
     ballWindow = null;
   }
+  closeDevicePanel();
   if (lastNormalBounds) mainWindow.setBounds(lastNormalBounds);
   mainWindow.setAlwaysOnTop(false);
   mainWindow.setResizable(true);
@@ -260,14 +518,28 @@ function toggleWindowSize() {
     return { ok: false, error: 'main window not ready' };
   }
   const current = windowState.layoutSize || 'normal';
-  // AB Mode: Toggle between normal and studio
-  // If current is PTZ, switch back to normal
   const nextLayout = current === 'normal' ? 'studio' : 'normal';
-
-  if (current === 'ptz' && lastMainBoundsBeforePtz) {
-    mainWindow.setBounds(lastMainBoundsBeforePtz);
+  if (current === 'ptz' || nextLayout !== 'ptz') {
+    closeDevicePanel();
   }
-  
+
+  if (current === 'ptz') {
+    if (lastMainBoundsBeforePtz) {
+      mainWindow.setBounds(lastMainBoundsBeforePtz);
+    } else {
+      const currentBounds = mainWindow.getBounds();
+      const display = screen.getDisplayMatching(currentBounds);
+      const { workArea } = display;
+      const width = Math.min(workArea.width, INITIAL_WIDTH);
+      const height = Math.min(workArea.height, INITIAL_HEIGHT);
+      let x = Math.round(workArea.x + (workArea.width - width) / 2);
+      let y = Math.round(workArea.y + (workArea.height - height) / 2);
+      x = Math.max(workArea.x, Math.min(workArea.x + workArea.width - width, x));
+      y = Math.max(workArea.y, Math.min(workArea.y + workArea.height - height, y));
+      mainWindow.setBounds({ x, y, width, height });
+    }
+  }
+
   const state = pushWindowState({ layoutSize: nextLayout, lastBounds: mainWindow.getBounds() });
   return { ok: true, state };
 }
@@ -279,6 +551,7 @@ function switchToPtz() {
   const current = windowState.layoutSize || 'normal';
   if (current === 'ptz') return { ok: true, state: windowState };
 
+  closeDevicePanel();
   lastMainBoundsBeforePtz = mainWindow.getBounds();
   const prev = lastMainBoundsBeforePtz;
   const display = screen.getDisplayMatching(prev);
@@ -597,6 +870,7 @@ function stopCameraStateSync() {
 
 // IPC handlers
 ipcMain.handle('window:minimize', () => {
+  closeDevicePanel();
   if (mainWindow) mainWindow.minimize();
 });
 
@@ -658,6 +932,30 @@ ipcMain.handle('uvc:request', async (_, uvcRequest) => {
     console.error('[UVC] request failed', err);
     return { ok: false, error: err.message || String(err) };
   }
+});
+
+ipcMain.handle('devicePanel:toggle', () => toggleDevicePanel());
+
+ipcMain.handle('devicePanel:hide', () => {
+  closeDevicePanel();
+  return { ok: true, open: false };
+});
+
+ipcMain.handle('devicePanel:update', (_, payload) => {
+  const data = pushDevicePanelData(payload || {});
+  return { ok: true, data };
+});
+
+ipcMain.handle('devicePanel:getData', () => devicePanelData);
+
+ipcMain.handle('devicePanel:switchDevice', async (_, deviceId) => {
+  const id = typeof deviceId === 'string' ? deviceId : '';
+  if (!id || !mainWindow || mainWindow.isDestroyed()) {
+    return { ok: false };
+  }
+  mainWindow.webContents.send('device:switchRequest', { id });
+  closeDevicePanel();
+  return { ok: true };
 });
 
 
@@ -764,6 +1062,7 @@ stateHost
   });
 
 app.whenReady().then(() => {
+  startImvtCameraService();
   createMainWindow();
   pushWindowState({});
 });
@@ -787,6 +1086,7 @@ app.on('before-quit', () => {
       .then(() => console.log('[App] UVC Service shutdown signal sent'))
       .catch(err => console.log('[App] UVC shutdown warning (expected if down):', err.message));
   }
+  stopImvtCameraService();
 });
 
 app.on('window-all-closed', () => {

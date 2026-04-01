@@ -85,6 +85,22 @@ function attachCameraStateBridge(store: PageStore) {
   });
 }
 
+function attachDeviceSwitchBridge(store: PageStore) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const api = window.electronAPI;
+  const subscribe = api?.onDeviceSwitchRequest;
+  if (!api || !subscribe) {
+    return;
+  }
+  subscribe((payload) => {
+    const deviceId = typeof payload?.id === 'string' ? payload.id : '';
+    if (!deviceId) return;
+    void store.runOperation('zcam.camera.pages.main.devices', 'device-interaction', 'device.switch', { value: deviceId });
+  });
+}
+
 function mapCameraSnapshot(snapshot: any): CameraState | null {
   if (!snapshot) return null;
   const camera = snapshot.camera ?? snapshot;
@@ -264,6 +280,7 @@ if (rootEl) {
   } else {
     attachCameraStateBridge(pageStore);
   }
+  attachDeviceSwitchBridge(pageStore);
   attachWindowStateBridge(uiSceneStore);
   installTestHarness({ store: pageStore });
 
