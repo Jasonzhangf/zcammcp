@@ -549,7 +549,7 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
     setViewMode(prev => prev === 'pad' ? 'wheel' : 'pad');
   }, []);
 
-  const handleHome = useCallback(() => {
+  const handleHome = useCallback(async () => {
     if (isInteractionDisabled) return;
 
     stopSimulation();
@@ -571,17 +571,20 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
     panTargetRef.current = 0;
     tiltTargetRef.current = 0;
 
-    setSimState({ pan: 0, tilt: 0, zoom: 0 });
+    setSimState((prev) => ({ ...(prev || {}), pan: 0, tilt: 0 , zoom: 0}));
     store.applyCameraState({
       ptz: {
         pan: { value: 0, view: '0' },
         tilt: { value: 0, view: '0' },
-        zoom: { value: 0, view: '0' },
       },
     });
 
-    void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.stop', 'ptz.stop', {});
-    void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {});
+    try {
+      await store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.zoom', 'lens.zoomStop', {});
+    } catch {}
+    try {
+      await store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {});
+    } catch {}
 
     startKeeper();
   }, [isInteractionDisabled, startKeeper, stopKeeper, stopSimulation, store]);
