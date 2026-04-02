@@ -8,7 +8,13 @@
 
 const http = require('http');
 const { URL } = require('url');
-const WebSocket = require('ws');
+let WebSocket = null;
+try {
+  const wsModule = require('ws');
+  WebSocket = wsModule && wsModule.default ? wsModule.default : wsModule;
+} catch {
+  WebSocket = null;
+}
 
 const CAMERA_STATE_HOST = process.env.ZCAM_CAMERA_STATE_HOST || '127.0.0.1';
 const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292', 10);
@@ -16,6 +22,7 @@ const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERV
 const UVC_BASE_URL = process.env.ZCAM_UVC_BASE || 'http://127.0.0.1:17988';
 const UVC_WS_URL = process.env.ZCAM_UVC_WS || 'ws://127.0.0.1:17988/ws';
 const WS_RECONNECT_INTERVAL = 3000;
+const DEVICE_LIST_RETRY_INTERVAL = 1200;
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
@@ -39,6 +46,8 @@ let pollingTimer = null;
 let wsClient = null;
 let recordingPollTimer = null;
 let wsReconnectTimer = null;
+let deviceListFetchInFlight = null;
+let lastDeviceListFetchAt = 0;
 
 function ensureFetch() {
   if (typeof globalThis.fetch === 'function') {
@@ -138,6 +147,29 @@ async function fetchDeviceList() {
   } catch (err) {
     console.error('[CameraState] Failed to fetch device list:', err.message);
   }
+}
+
+async function ensureDeviceListAvailable(force = false) {
+  const hasDevices = Array.isArray(state.devices?.list) && state.devices.list.length > 0;
+  if (hasDevices && !force) {
+    return;
+  }
+  if (deviceListFetchInFlight) {
+    return deviceListFetchInFlight;
+  }
+  const now = Date.now();
+  if (!force && now - lastDeviceListFetchAt < DEVICE_LIST_RETRY_INTERVAL) {
+    return;
+  }
+  lastDeviceListFetchAt = now;
+  deviceListFetchInFlight = fetchDeviceList()
+    .catch((err) => {
+      console.error('[CameraState] ensure device list failed:', err.message || err);
+    })
+    .finally(() => {
+      deviceListFetchInFlight = null;
+    });
+  return deviceListFetchInFlight;
 }
 
 function normalizeValue(key, payload) {
@@ -414,7 +446,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && req.url?.startsWith('/state')) {
+      await ensureDeviceListAvailable();
       return respondJson(res, { ok: true, state: getStateSnapshot() });
+    }
+
+    if (req.method === 'GET' && req.url?.startsWith('/devices')) {
+      await ensureDeviceListAvailable();
+      return respondJson(res, { ok: true, devices: state.devices });
     }
 
     if (req.method === 'POST' && req.url === '/refresh') {
@@ -480,10 +518,17 @@ function startPolling() {
     refreshKeys(DEFAULT_KEYS).catch((err) => {
       console.error('[CameraState] background refresh failed', err);
     });
+    ensureDeviceListAvailable().catch((err) => {
+      console.error('[CameraState] background device refresh failed', err);
+    });
   }, CAMERA_STATE_POLL_INTERVAL);
 }
 
 function connectWebSocket() {
+  if (!WebSocket) {
+    console.warn('[CameraState] ws module not found, websocket sync disabled');
+    return;
+  }
   if (wsClient) {
     try {
       wsClient.close();

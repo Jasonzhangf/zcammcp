@@ -10,7 +10,7 @@
     "build:web": "vite build",
     "build:electron": "echo 'skip electron build (using plain CJS files)'",
     "electron": "node ./scripts/run-electron.mjs",
-    "package": "npm run build && npm run build:web && npm run build:electron && electron-builder",
+    "package": "npm run build && npm run build:web && npm run build:electron && node ./scripts/package-electron.cjs",
     "test": "node --test dist/src/app/**/*.test.js",
     "test:ts": "ts-node src/app/**/*.test.ts",
     "ci": "npm run build && npm test",
@@ -34,11 +34,14 @@
   },
   "build": {
     "appId": "com.zcam.ui-desktop",
-    "productName": "ZCAM 相机控制",
+    "productName": "ZCAM PTZ 控制台",
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release"
     },
     "files": [
+      "electron.main.cjs",
+      "electron.preload.cjs",
       "dist/**/*",
       "assets/**/*",
       "dist-web/**/*",
@@ -48,6 +51,14 @@
       {
         "from": "../service/uvcservices/ImvtCameraService.exe",
         "to": "service/uvcservices/ImvtCameraService.exe"
+      },
+      {
+        "from": "../service/camera-state/camera-state.cjs",
+        "to": "service/camera-state/camera-state.cjs"
+      },
+      {
+        "from": "../service/cli-daemon/cli-service.cjs",
+        "to": "service/cli-daemon/cli-service.cjs"
       }
     ],
     "win": {

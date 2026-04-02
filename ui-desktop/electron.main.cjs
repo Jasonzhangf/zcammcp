@@ -17,13 +17,20 @@ const CLI_NODE_BIN = process.env.ZCAM_NODE_BIN || process.execPath;
 const CLI_DEFAULT_TIMEOUT = parseInt(process.env.ZCAM_CLI_TIMEOUT || '10000', 10);
 const CLI_SERVICE_HOST = process.env.ZCAM_CLI_SERVICE_HOST || '127.0.0.1';
 const CLI_SERVICE_PORT = parseInt(process.env.ZCAM_CLI_SERVICE_PORT || '6291', 10);
-const CLI_SERVICE_SCRIPT =
-  process.env.ZCAM_CLI_SERVICE_SCRIPT || path.resolve(__dirname, '..', 'service', 'cli-daemon', 'cli-service.cjs');
+function resolveBundledServicePath(relativePath) {
+  const packagedPath = path.join(process.resourcesPath, relativePath);
+  const devPath = path.resolve(__dirname, '..', relativePath);
+  if (app.isPackaged && fs.existsSync(packagedPath)) {
+    return packagedPath;
+  }
+  return devPath;
+}
+
+const CLI_SERVICE_SCRIPT = process.env.ZCAM_CLI_SERVICE_SCRIPT || resolveBundledServicePath(path.join('service', 'cli-daemon', 'cli-service.cjs'));
 const CAMERA_STATE_HOST = process.env.ZCAM_CAMERA_STATE_HOST || '127.0.0.1';
 const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292', 10);
 const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERVAL || '1500', 10);
-const CAMERA_STATE_SCRIPT =
-  process.env.ZCAM_CAMERA_STATE_SCRIPT || path.resolve(__dirname, '..', 'service', 'camera-state', 'camera-state.cjs');
+const CAMERA_STATE_SCRIPT = process.env.ZCAM_CAMERA_STATE_SCRIPT || resolveBundledServicePath(path.join('service', 'camera-state', 'camera-state.cjs'));
 const UVC_SERVICE_HOST = process.env.ZCAM_UVC_HOST || '127.0.0.1';
 const UVC_SERVICE_PORT = parseInt(process.env.ZCAM_UVC_PORT || '17988', 10);
 const IMVT_CAMERA_SERVICE_NAME = 'ImvtCameraService.exe';
@@ -390,7 +397,7 @@ function createMainWindow() {
     mainWindow.show();
     mainWindow.focus();
     // 强制打开调试工具方便查看日志
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // mainWindow.webContents.openDevTools({ mode: 'detach' });
   });
 
   mainWindow.on('closed', () => {
@@ -620,7 +627,11 @@ function startCliService() {
   cliServiceProcess = spawn(CLI_NODE_BIN, [CLI_SERVICE_SCRIPT], {
     cwd: path.dirname(CLI_SERVICE_SCRIPT),
     windowsHide: true,
-    stdio: 'inherit',  // ✅ 改为 'inherit' 让日志输出到父进程
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+    },
+    stdio: 'inherit',
   });
 
   console.log('[Electron] CLI Service process spawned, PID:', cliServiceProcess.pid);
@@ -783,7 +794,16 @@ function startCameraStateService() {
   cameraStateProcess = spawn(CLI_NODE_BIN, [CAMERA_STATE_SCRIPT], {
     cwd: path.dirname(CAMERA_STATE_SCRIPT),
     windowsHide: true,
-    stdio: 'inherit',  // ✅ 改为 'inherit' 让日志输出到父进程
+    env: {
+      ...process.env,
+      ELECTRON_RUN_AS_NODE: '1',
+      ZCAM_CAMERA_STATE_HOST: CAMERA_STATE_HOST,
+      ZCAM_CAMERA_STATE_PORT: String(CAMERA_STATE_PORT),
+      ZCAM_CAMERA_STATE_INTERVAL: String(CAMERA_STATE_POLL_INTERVAL),
+      ZCAM_UVC_BASE: process.env.ZCAM_UVC_BASE || `http://${UVC_SERVICE_HOST}:${UVC_SERVICE_PORT}`,
+      ZCAM_UVC_WS: process.env.ZCAM_UVC_WS || `ws://${UVC_SERVICE_HOST}:${UVC_SERVICE_PORT}/ws`,
+    },
+    stdio: 'inherit',
   });
 
   console.log('[Electron] Camera State Service spawned, PID:', cameraStateProcess.pid);
