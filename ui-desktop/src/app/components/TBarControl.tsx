@@ -101,6 +101,8 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
     const zoomLastSentVelocityRef = useRef<number>(0);
     const zoomSimValueRef = useRef<number>(actualValue);
     const zoomSimLastTsRef = useRef<number>(0);
+    const [zoomSignalDirection, setZoomSignalDirection] = useState<'up' | 'down' | null>(null);
+    const [zoomSignalStrength, setZoomSignalStrength] = useState(0);
 
     const computeTargetZoomFromPointer = useCallback((e: React.PointerEvent): number => {
         if (!trackRef.current) return clamp(zoomTargetValueRef.current, min, max);
@@ -132,6 +134,17 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         const curved = Math.pow(normalized, gamma);
         return Math.sign(raw) * curved;
     }, [max, min]);
+
+    const updateZoomSignal = useCallback((velocity: number) => {
+        const abs = Math.abs(velocity);
+        if (abs < 0.02) {
+            setZoomSignalDirection(null);
+            setZoomSignalStrength(0);
+            return;
+        }
+        setZoomSignalDirection(velocity > 0 ? 'up' : 'down');
+        setZoomSignalStrength(clamp((abs - 0.02) / 0.98, 0, 1));
+    }, []);
 
     const updateVisualFromPointer = useCallback((e: React.PointerEvent) => {
         if (!trackRef.current) return;
@@ -209,6 +222,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
 
         zoomTargetValueRef.current = computeTargetZoomFromPointer(e);
         zoomVelocityRef.current = computeZoomVelocityFromTarget(zoomTargetValueRef.current);
+        updateZoomSignal(zoomVelocityRef.current);
 
         zoomSimValueRef.current = pendingValue ?? actualValue;
         zoomSimLastTsRef.current = Date.now();
@@ -252,6 +266,7 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
         stopSimulatingZoom,
         stopZoomVelocityLoop,
         store,
+        updateZoomSignal,
         updateVisualFromPointer,
     ]);
 
@@ -454,11 +469,13 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             updateVisualFromPointer(e);
             const target = computeTargetZoomFromPointer(e);
             zoomTargetValueRef.current = target;
-            zoomVelocityRef.current = computeZoomVelocityFromTarget(target);
+            const velocity = computeZoomVelocityFromTarget(target);
+            zoomVelocityRef.current = velocity;
+            updateZoomSignal(velocity);
         } else {
             updateValueFromPointer(e);
         }
-    }, [computeTargetZoomFromPointer, computeZoomVelocityFromTarget, isZoom, updateVisualFromPointer]);
+    }, [computeTargetZoomFromPointer, computeZoomVelocityFromTarget, isZoom, updateVisualFromPointer, updateZoomSignal]);
 
     const handlePointerUp = useCallback((e: React.PointerEvent) => {
         if (!isDraggingRef.current) return;
@@ -469,6 +486,8 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
             stopZoomVelocityLoop();
             sendZoomStop();
             setVisualPercentage(null);
+            setZoomSignalDirection(null);
+            setZoomSignalStrength(0);
             startPendingTimeout();
         } else {
             // Simplified Logic: Directly use the last committed value
@@ -715,13 +734,13 @@ export function TBarControl({ config, disabled = false, styleVariant = 'skeuomor
 
                 <div className="zcam-tbar-inner">
                     <div
-                        className={`zcam-tbar-track-area${isZoom ? ' zcam-tbar-track-area-zoom' : ''}`}
+                        className={`zcam-tbar-track-area${isZoom ? ' zcam-tbar-track-area-zoom' : ''}${isZoom && zoomSignalDirection ? ` zcam-tbar-track-area-zoom-${zoomSignalDirection}` : ''}`}
                         ref={trackRef}
                         onPointerDown={handlePointerDown}
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
                         onPointerCancel={handlePointerUp}
-                        style={{ touchAction: 'none' }} // Critical for pointer events
+                        style={{ touchAction: 'none', '--zcam-zoom-signal-strength': zoomSignalStrength } as React.CSSProperties}
                     >
                         {/* Background Rail */}
                         <div className="zcam-tbar-rail" />
