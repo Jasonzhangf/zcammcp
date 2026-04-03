@@ -273,6 +273,27 @@ body {
   overflow: visible;
 }
 
+.zcam-ptz-header-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zcam-ptz-refresh-btn {
+  -webkit-app-region: no-drag;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  color: #ffffff;
+  border-color: #5a5a5a;
+}
+
+.zcam-ptz-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .zcam-ptz-device-dock-anchor {
   position: static;
   margin-right: 6px;
@@ -288,6 +309,12 @@ body {
   align-items: center;
   padding: 2px;
   -webkit-app-region: no-drag;
+}
+
+.zcam-device-float-toggle-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .zcam-device-float-toggle {
@@ -306,6 +333,12 @@ body {
   -webkit-app-region: no-drag;
 }
 
+.zcam-device-float-toggle-wide {
+  width: auto;
+  min-width: 78px;
+  padding: 0 8px;
+}
+
 .zcam-device-float-toggle:hover {
   border-color: #ff7a45;
   background: #212121;
@@ -318,7 +351,7 @@ body {
   font-weight: 600;
 }
 
-.zcam-device-float-open .zcam-device-float-toggle {
+.zcam-device-float-toggle-active {
   border-color: #ff7a45;
   color: #ffffff;
   background: #242424;
@@ -339,6 +372,10 @@ body {
   flex-direction: column;
   z-index: 120;
   -webkit-app-region: no-drag;
+}
+
+.zcam-device-float-panel-presets {
+  right: calc(100% + 242px);
 }
 
 .zcam-device-float-panel-header {
@@ -1236,7 +1273,7 @@ body {
   position: absolute;
   top: 10px;
   bottom: 10px;
-  width: 100%;
+  width: calc(100% + 2px);
   left: 50%;
   transform: translateX(-50%);
   opacity: 0;
@@ -1257,11 +1294,11 @@ body {
   top: 10px;
   bottom: 50%;
   background: linear-gradient(to top, rgba(255, 181, 145, 0.45) 0%, rgba(255, 87, 34, 0.95) 100%);
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolyline points='0,10 5,4.8 10,10' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='butt' stroke-linejoin='round'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolygon points='0,11 5,4 10,11 10,13.6 5,6.8 0,13.6' fill='black'/%3E%3C/svg%3E");
   -webkit-mask-repeat: repeat-y;
   -webkit-mask-size: 100% 20px;
   -webkit-mask-position: center 0;
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolyline points='0,10 5,4.8 10,10' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='butt' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolygon points='0,11 5,4 10,11 10,13.6 5,6.8 0,13.6' fill='black'/%3E%3C/svg%3E");
   mask-repeat: repeat-y;
   mask-size: 100% 20px;
   mask-position: center 0;
@@ -1271,11 +1308,11 @@ body {
   top: 50%;
   bottom: 10px;
   background: linear-gradient(to top, rgba(255, 87, 34, 0.95) 0%, rgba(255, 181, 145, 0.45) 100%);
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolyline points='0,6 5,11.2 10,6' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='butt' stroke-linejoin='round'/%3E%3C/svg%3E");
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolygon points='0,5 5,12 10,5 10,2.4 5,9.2 0,2.4' fill='black'/%3E%3C/svg%3E");
   -webkit-mask-repeat: repeat-y;
   -webkit-mask-size: 100% 20px;
   -webkit-mask-position: center 0;
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolyline points='0,6 5,11.2 10,6' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='butt' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 16'%3E%3Cpolygon points='0,5 5,12 10,5 10,2.4 5,9.2 0,2.4' fill='black'/%3E%3C/svg%3E");
   mask-repeat: repeat-y;
   mask-size: 100% 20px;
   mask-position: center 0;

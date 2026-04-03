@@ -164,6 +164,7 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
   const store = usePageStore();
   const view = useViewState();
   const uiScene = useUiSceneState();
+  const electronAPI = typeof window !== 'undefined' ? window.electronAPI : undefined;
   const containerState = useContainerState('group.ptz');
   const controlsLocked = Boolean(containerState?.data?.['lockControls']);
   const zoomVal = view.camera.ptz?.zoom?.value ?? PTZ_ZOOM_RANGE.min;
@@ -172,6 +173,7 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
   const tiltVal = view.camera.ptz?.tilt?.value ?? 0;
   const [activeDirection, setActiveDirection] = useState<DpadDirection | null>(null);
   const [viewMode, setViewMode] = useState<'pad' | 'wheel'>('wheel');
+  const [restartingService, setRestartingService] = useState(false);
   // Local state for simulation display to ensuring ABSOLUTE isolation from backend updates
   const [simState, setSimState] = useState<{ pan?: number; tilt?: number; zoom?: number } | null>(null);
 
@@ -179,6 +181,16 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
   const tiltDisplay = (simState?.tilt !== undefined) ? Math.round(simState.tilt) : Math.round(tiltVal);
   const zoomDisplay = (simState?.zoom !== undefined) ? Math.round(simState.zoom) : Math.round(zoomVal);
   const focusDisplay = Math.round(focusVal);
+
+  const handleRestartImvtService = useCallback(async () => {
+    if (!electronAPI?.restartImvtService || restartingService) return;
+    setRestartingService(true);
+    try {
+      await electronAPI.restartImvtService();
+    } finally {
+      setRestartingService(false);
+    }
+  }, [electronAPI, restartingService]);
 
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdDirectionRef = useRef<DpadDirection | null>(null);
@@ -597,10 +609,38 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
             <DeviceListCard mode="ptzFloating" />
           </div>
         ) : null}
-        <span className="zcam-card-title">PTZ</span>
-        <span className="zcam-card-header-right">
-          <span className="zcam-control-select" data-path="zcam.camera.pages.main.ptz.shortcutSelect" />
-        </span>
+        {showFloatingDevices ? (
+          <span className="zcam-card-header-right zcam-ptz-header-right">
+            <span className="zcam-card-title">PTZ</span>
+            <button
+              type="button"
+              className="zcam-header-btn zcam-ptz-refresh-btn"
+              onClick={() => void handleRestartImvtService()}
+              disabled={restartingService}
+              title={restartingService ? '刷新中...' : '刷新'}
+              aria-label={restartingService ? '刷新中...' : '刷新'}
+            >
+              ↻
+            </button>
+          </span>
+        ) : (
+          <>
+            <span className="zcam-card-title">PTZ</span>
+            <span className="zcam-card-header-right zcam-ptz-header-right">
+              <button
+                type="button"
+                className="zcam-header-btn zcam-ptz-refresh-btn"
+                onClick={() => void handleRestartImvtService()}
+                disabled={restartingService}
+                title={restartingService ? '刷新中...' : '刷新'}
+                aria-label={restartingService ? '刷新中...' : '刷新'}
+              >
+                ↻
+              </button>
+              <span className="zcam-control-select" data-path="zcam.camera.pages.main.ptz.shortcutSelect" />
+            </span>
+          </>
+        )}
       </div>
       <div className="zcam-card-body">
         <div className="zcam-ptz-layout" data-path="zcam.camera.pages.main.ptz.layout">

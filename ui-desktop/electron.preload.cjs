@@ -12,9 +12,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pushState: (channel, payload) => ipcRenderer.invoke('state:push', { channel, payload }),
   runCliCommand: (payload) => ipcRenderer.invoke('cli:run', payload),
   sendUvcRequest: (request) => ipcRenderer.invoke('uvc:request', request),
+  restartImvtService: () => ipcRenderer.invoke('imvt:restartService'),
   toggleDevicePanel: () => ipcRenderer.invoke('devicePanel:toggle'),
   hideDevicePanel: () => ipcRenderer.invoke('devicePanel:hide'),
   updateDevicePanel: (payload) => ipcRenderer.invoke('devicePanel:update', payload),
+  togglePresetPanel: () => ipcRenderer.invoke('presetPanel:toggle'),
+  hidePresetPanel: () => ipcRenderer.invoke('presetPanel:hide'),
+  updatePresetPanel: (payload) => ipcRenderer.invoke('presetPanel:update', payload),
   onWindowState: (callback) => {
     if (typeof callback !== 'function') {
       return () => { };

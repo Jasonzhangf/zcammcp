@@ -8,16 +8,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setSizeLarge: () => ipcRenderer.invoke('window:setSize', 'L'),
   shrinkToBall: () => ipcRenderer.invoke('window:shrinkToBall'),
   restoreFromBall: () => ipcRenderer.invoke('window:restoreFromBall'),
-  onWindowMode: (handler) => {
-    const fn = (_event, mode) => handler(mode);
+  onWindowMode: (handler: (arg0: any) => any) => {
+    const fn = (_event: any, mode: any) => handler(mode);
     ipcRenderer.on('window:mode', fn);
     return () => ipcRenderer.off('window:mode', fn);
   },
-  devReport: (report) => {
+  devReport: (report: any) => {
     ipcRenderer.send('control:dev-report', report);
   },
-  onDevCommand: (cb) => {
-    const fn = (_event, cmd) => cb(cmd);
+  onDevCommand: (cb: (arg0: any) => any) => {
+    const fn = (_event: any, cmd: any) => cb(cmd);
     ipcRenderer.on('control:dev-command', fn);
     return () => ipcRenderer.off('control:dev-command', fn);
   },

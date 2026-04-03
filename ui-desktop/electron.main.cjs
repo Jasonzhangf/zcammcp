@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const http = require('http');
 const windowStateKeeper = require('electron-window-state');
 const { StateHost } = require('./state-host/state-host.cjs');
+const { buildPresetPanelHtml: buildPresetPanelHtmlTemplate } = require('./electron.preset-panel.cjs');
 
 const INITIAL_WIDTH = 1200;
 const INITIAL_HEIGHT = 960;
@@ -37,6 +38,7 @@ const IMVT_CAMERA_SERVICE_NAME = 'ImvtCameraService.exe';
 const DEVICE_PANEL_WIDTH = parseInt(process.env.ZCAM_DEVICE_PANEL_WIDTH || '130', 10);
 const DEVICE_PANEL_MIN_HEIGHT = parseInt(process.env.ZCAM_DEVICE_PANEL_MIN_HEIGHT || '220', 10);
 const DEVICE_PANEL_MAX_HEIGHT = parseInt(process.env.ZCAM_DEVICE_PANEL_MAX_HEIGHT || '420', 10);
+const PRESET_PANEL_WIDTH = parseInt(process.env.ZCAM_PRESET_PANEL_WIDTH || '130', 10);
 
 
 const TEST_COMMAND_TIMEOUT_MS = parseInt(process.env.ZCAM_TEST_COMMAND_TIMEOUT || '8000', 10);
@@ -52,6 +54,8 @@ let cameraStateSnapshot = null;
 let imvtCameraServiceProcess = null;
 let devicePanelWindow = null;
 let devicePanelData = { devices: [], activeDeviceId: null };
+let presetPanelWindow = null;
+let presetPanelData = { presets: [], activePresetId: null };
 const pendingTestCommands = new Map();
 
 const stateHost = new StateHost();
@@ -185,6 +189,12 @@ function stopImvtCameraService() {
   imvtCameraServiceProcess = null;
 }
 
+async function restartImvtCameraService() {
+  stopImvtCameraService();
+  const process = startImvtCameraService();
+  return { ok: Boolean(process), running: Boolean(process) };
+}
+
 function getDevicePanelBounds() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return null;
@@ -200,6 +210,25 @@ function getDevicePanelBounds() {
   const desiredHeight = Math.max(0, mainBottom - y);
   const height = Math.min(desiredHeight, maxHeight);
   return { x, y, width: DEVICE_PANEL_WIDTH, height };
+}
+
+function getPresetPanelBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return null;
+  }
+  const mainBounds = mainWindow.getBounds();
+  const display = screen.getDisplayMatching(mainBounds);
+  const workArea = display?.workArea || { x: 0, y: 0, width: 1920, height: 1080 };
+  const deviceVisible = Boolean(devicePanelWindow && !devicePanelWindow.isDestroyed() && devicePanelWindow.isVisible());
+  const offset = deviceVisible ? DEVICE_PANEL_WIDTH + PRESET_PANEL_WIDTH : PRESET_PANEL_WIDTH;
+  const x = Math.max(workArea.x, Math.round(mainBounds.x - offset));
+  const y = Math.max(workArea.y, Math.round(mainBounds.y + 38));
+  const mainBottom = Math.round(mainBounds.y + mainBounds.height);
+  const workAreaBottom = workArea.y + workArea.height;
+  const maxHeight = Math.max(0, workAreaBottom - y);
+  const desiredHeight = Math.max(0, mainBottom - y);
+  const height = Math.min(desiredHeight, maxHeight);
+  return { x, y, width: PRESET_PANEL_WIDTH, height };
 }
 
 function buildDevicePanelHtml() {
@@ -264,6 +293,10 @@ function buildDevicePanelHtml() {
   </script></body></html>`;
 }
 
+function buildPresetPanelHtml() {
+  return buildPresetPanelHtmlTemplate();
+}
+
 function pushDevicePanelData(payload = {}) {
   const devices = Array.isArray(payload.devices) ? payload.devices : devicePanelData.devices;
   const activeDeviceId = typeof payload.activeDeviceId === 'string' || payload.activeDeviceId === null
@@ -276,10 +309,29 @@ function pushDevicePanelData(payload = {}) {
   return devicePanelData;
 }
 
+function pushPresetPanelData(payload = {}) {
+  const presets = Array.isArray(payload.presets) ? payload.presets : presetPanelData.presets;
+  const activePresetId = typeof payload.activePresetId === 'string' || payload.activePresetId === null
+    ? payload.activePresetId
+    : presetPanelData.activePresetId;
+  presetPanelData = { presets, activePresetId };
+  if (presetPanelWindow && !presetPanelWindow.isDestroyed()) {
+    presetPanelWindow.webContents.send('presetPanel:data', presetPanelData);
+  }
+  return presetPanelData;
+}
+
 function closeDevicePanel() {
   if (!devicePanelWindow || devicePanelWindow.isDestroyed()) return;
   devicePanelWindow.close();
   devicePanelWindow = null;
+  syncPresetPanelBounds();
+}
+
+function closePresetPanel() {
+  if (!presetPanelWindow || presetPanelWindow.isDestroyed()) return;
+  presetPanelWindow.close();
+  presetPanelWindow = null;
 }
 
 function canShowDevicePanel() {
@@ -291,11 +343,25 @@ function canShowDevicePanel() {
   return true;
 }
 
+function canShowPresetPanel() {
+  return canShowDevicePanel();
+}
+
 function syncDevicePanelBounds() {
-  if (!devicePanelWindow || devicePanelWindow.isDestroyed()) return;
-  const bounds = getDevicePanelBounds();
+  if (devicePanelWindow && !devicePanelWindow.isDestroyed()) {
+    const bounds = getDevicePanelBounds();
+    if (bounds) {
+      devicePanelWindow.setBounds(bounds);
+    }
+  }
+  syncPresetPanelBounds();
+}
+
+function syncPresetPanelBounds() {
+  if (!presetPanelWindow || presetPanelWindow.isDestroyed()) return;
+  const bounds = getPresetPanelBounds();
   if (!bounds) return;
-  devicePanelWindow.setBounds(bounds);
+  presetPanelWindow.setBounds(bounds);
 }
 
 function openDevicePanel() {
@@ -337,10 +403,13 @@ function openDevicePanel() {
     if (!devicePanelWindow || devicePanelWindow.isDestroyed()) return;
     devicePanelWindow.show();
     pushDevicePanelData(devicePanelData);
+    syncPresetPanelBounds();
   });
   devicePanelWindow.on('closed', () => {
     devicePanelWindow = null;
+    syncPresetPanelBounds();
   });
+  syncPresetPanelBounds();
   return { ok: true, open: true };
 }
 
@@ -354,6 +423,64 @@ function toggleDevicePanel() {
     return { ok: true, open: false };
   }
   return openDevicePanel();
+}
+
+function openPresetPanel() {
+  if (!canShowPresetPanel()) {
+    closePresetPanel();
+    return { ok: false, open: false };
+  }
+  if (presetPanelWindow && !presetPanelWindow.isDestroyed()) {
+    syncPresetPanelBounds();
+    presetPanelWindow.show();
+    presetPanelWindow.focus();
+    pushPresetPanelData(presetPanelData);
+    return { ok: true, open: true };
+  }
+  const bounds = getPresetPanelBounds();
+  if (!bounds) {
+    return { ok: false, open: false };
+  }
+  presetPanelWindow = new BrowserWindow({
+    parent: mainWindow,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    show: false,
+    skipTaskbar: true,
+    alwaysOnTop: false,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  presetPanelWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(buildPresetPanelHtml())}`);
+  presetPanelWindow.once('ready-to-show', () => {
+    if (!presetPanelWindow || presetPanelWindow.isDestroyed()) return;
+    presetPanelWindow.show();
+    pushPresetPanelData(presetPanelData);
+  });
+  presetPanelWindow.on('closed', () => {
+    presetPanelWindow = null;
+  });
+  return { ok: true, open: true };
+}
+
+function togglePresetPanel() {
+  if (!canShowPresetPanel()) {
+    closePresetPanel();
+    return { ok: false, open: false };
+  }
+  if (presetPanelWindow && !presetPanelWindow.isDestroyed() && presetPanelWindow.isVisible()) {
+    closePresetPanel();
+    return { ok: true, open: false };
+  }
+  return openPresetPanel();
 }
 
 function createMainWindow() {
@@ -402,15 +529,18 @@ function createMainWindow() {
 
   mainWindow.on('closed', () => {
     closeDevicePanel();
+    closePresetPanel();
     mainWindow = null;
   });
 
   mainWindow.on('hide', () => {
     closeDevicePanel();
+    closePresetPanel();
   });
 
   mainWindow.on('minimize', () => {
     closeDevicePanel();
+    closePresetPanel();
   });
 
   mainWindow.on('move', () => {
@@ -489,6 +619,7 @@ function shrinkToBall() {
   lastNormalBounds = mainWindow.getBounds();
   console.log('[Window] shrinkToBall -> storing bounds', lastNormalBounds);
   closeDevicePanel();
+  closePresetPanel();
   createBallWindow(lastNormalBounds);
   mainWindow.hide();
   const state = pushWindowState({ mode: 'ball', ballVisible: true, lastBounds: lastNormalBounds });
@@ -504,6 +635,7 @@ function restoreFromBall() {
     ballWindow = null;
   }
   closeDevicePanel();
+  closePresetPanel();
   if (lastNormalBounds) mainWindow.setBounds(lastNormalBounds);
   mainWindow.setAlwaysOnTop(false);
   mainWindow.setResizable(true);
@@ -528,6 +660,7 @@ function toggleWindowSize() {
   const nextLayout = current === 'normal' ? 'studio' : 'normal';
   if (current === 'ptz' || nextLayout !== 'ptz') {
     closeDevicePanel();
+    closePresetPanel();
   }
 
   if (current === 'ptz') {
@@ -559,6 +692,7 @@ function switchToPtz() {
   if (current === 'ptz') return { ok: true, state: windowState };
 
   closeDevicePanel();
+  closePresetPanel();
   lastMainBoundsBeforePtz = mainWindow.getBounds();
   const prev = lastMainBoundsBeforePtz;
   const display = screen.getDisplayMatching(prev);
@@ -891,10 +1025,19 @@ function stopCameraStateSync() {
 // IPC handlers
 ipcMain.handle('window:minimize', () => {
   closeDevicePanel();
+  closePresetPanel();
   if (mainWindow) mainWindow.minimize();
 });
 
 ipcMain.handle('window:close', () => app.quit());
+
+ipcMain.handle('imvt:restartService', async () => {
+  try {
+    return await restartImvtCameraService();
+  } catch (error) {
+    return { ok: false, error: error?.message || String(error) };
+  }
+});
 
 ipcMain.handle('window:shrinkToBall', () => shrinkToBall());
 
@@ -976,6 +1119,98 @@ ipcMain.handle('devicePanel:switchDevice', async (_, deviceId) => {
   mainWindow.webContents.send('device:switchRequest', { id });
   closeDevicePanel();
   return { ok: true };
+});
+
+ipcMain.handle('presetPanel:toggle', () => togglePresetPanel());
+
+ipcMain.handle('presetPanel:hide', () => {
+  closePresetPanel();
+  return { ok: true, open: false };
+});
+
+ipcMain.handle('presetPanel:update', (_, payload) => {
+  const data = pushPresetPanelData(payload || {});
+  return { ok: true, data };
+});
+
+ipcMain.handle('presetPanel:getData', () => presetPanelData);
+
+ipcMain.handle('presetPanel:selectPreset', async (_, presetId, action, payload) => {
+  const id = typeof presetId === 'string' ? presetId : '';
+  if (!id) {
+    return { ok: false };
+  }
+  const nextAction = typeof action === 'string' ? action : 'select';
+  const presets = Array.isArray(presetPanelData.presets) ? presetPanelData.presets.slice() : [];
+  const preset = presets.find((item) => item && item.id === id) || null;
+  if (!preset) {
+    return { ok: false };
+  }
+
+  const parsedIndex = Number.parseInt(String(id).replace(/[^\d]/g, ''), 10);
+  const index = Number.isFinite(parsedIndex) && parsedIndex > 0 ? parsedIndex : 1;
+  const actionPayload = payload && typeof payload === 'object' ? payload : {};
+
+  const runPresetRequest = async () => {
+    if (nextAction === 'load' || nextAction === 'recall') {
+      return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=recall&index=${index}` });
+    }
+    if (nextAction === 'add' || nextAction === 'store') {
+      return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=set&index=${index}` });
+    }
+    if (nextAction === 'delete') {
+      return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=del&index=${index}` });
+    }
+    if (nextAction === 'rename') {
+      const name = typeof actionPayload.name === 'string' ? actionPayload.name.trim() : '';
+      if (!name) return { ok: false, error: 'invalid name' };
+      return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=set_name&index=${index}&new_name=${encodeURIComponent(name)}` });
+    }
+    if (nextAction === 'speed') {
+      const speed = Number.parseInt(String(actionPayload.speed ?? ''), 10);
+      if (!Number.isFinite(speed) || speed < 1 || speed > 9) return { ok: false, error: 'invalid speed' };
+      return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=preset_speed&index=${index}&preset_speed=${speed}` });
+    }
+    if (nextAction === 'unit') {
+      const unit = String(actionPayload.unit ?? '').toLowerCase();
+      if (unit !== 'percent' && unit !== 'absolute') return { ok: false, error: 'invalid unit' };
+      return sendUvcRequest({ method: 'GET', url: `/ctrl/set?ptz_common_speed_unit=${unit}` });
+    }
+    if (nextAction === 'record' || nextAction === 'prepare') {
+      return { ok: true };
+    }
+    return { ok: true };
+  };
+
+  let directResult = { ok: true };
+  try {
+    directResult = await runPresetRequest();
+  } catch (error) {
+    directResult = { ok: false, error: error?.message || String(error) };
+  }
+
+  if (nextAction === 'rename' && directResult && directResult.ok) {
+    const name = typeof actionPayload.name === 'string' ? actionPayload.name.trim() : '';
+    const renamed = presets.map((item) => (item && item.id === id ? { ...item, name } : item));
+    pushPresetPanelData({ presets: renamed, activePresetId: id });
+  } else if (nextAction === 'delete' && directResult && directResult.ok) {
+    const reset = presets.map((item) => (item && item.id === id ? { ...item, deletedAt: Date.now() } : item));
+    pushPresetPanelData({ presets: reset, activePresetId: id });
+  } else if (nextAction === 'add' || nextAction === 'store') {
+    const updated = presets.map((item) => (item && item.id === id ? { ...item, updatedAt: Date.now() } : item));
+    pushPresetPanelData({ presets: updated, activePresetId: id });
+  } else if (nextAction === 'select' || nextAction === 'load' || nextAction === 'recall' || nextAction === 'record' || nextAction === 'prepare') {
+    pushPresetPanelData({ activePresetId: id });
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('preset:actionRequest', { id, index, action: nextAction, preset, payload: actionPayload, directResult });
+    } catch {
+      // ignore bridge failures
+    }
+  }
+  return { ok: Boolean(directResult?.ok !== false), action: nextAction, id, index, result: directResult };
 });
 
 
