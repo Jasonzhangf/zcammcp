@@ -617,8 +617,8 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
               className="zcam-header-btn zcam-ptz-refresh-btn"
               onClick={() => void handleRestartImvtService()}
               disabled={restartingService}
-              title={restartingService ? '刷新中...' : '刷新'}
-              aria-label={restartingService ? '刷新中...' : '刷新'}
+              title={restartingService ? 'Refreshing...' : 'Refresh'}
+              aria-label={restartingService ? 'Refreshing...' : 'Refresh'}
             >
               ↻
             </button>
@@ -632,12 +632,11 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
                 className="zcam-header-btn zcam-ptz-refresh-btn"
                 onClick={() => void handleRestartImvtService()}
                 disabled={restartingService}
-                title={restartingService ? '刷新中...' : '刷新'}
-                aria-label={restartingService ? '刷新中...' : '刷新'}
+                title={restartingService ? 'Refreshing...' : 'Refresh'}
+                aria-label={restartingService ? 'Refreshing...' : 'Refresh'}
               >
                 ↻
               </button>
-              <span className="zcam-control-select" data-path="zcam.camera.pages.main.ptz.shortcutSelect" />
             </span>
           </>
         )}

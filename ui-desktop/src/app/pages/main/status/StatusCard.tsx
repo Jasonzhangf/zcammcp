@@ -58,14 +58,6 @@ export function StatusCard() {
   const tiltDisplay = typeof tiltVal === 'number' ? Math.round(tiltVal) : '--';
   const zoomDisplay = typeof zoomVal === 'number' ? Math.round(zoomVal) : '--';
 
-  const srtStatus = cam.srt?.status ?? 'idle';
-  const rtmpStatus = cam.rtmp?.status ?? 'idle';
-  const srtUrl = cam.srt?.url;
-  const rtmpUrl = cam.rtmp?.url;
-
-  const isSrtActive = srtStatus !== 'idle';
-  const isRtmpActive = rtmpStatus !== 'idle';
-
   /* 
     Recording Status Logic
     remain.raw is expected to be { code: number, desc: string, msg: string }
@@ -120,8 +112,8 @@ export function StatusCard() {
       data-path="zcam.camera.pages.main.status.card"
     >
       <div className="zcam-card-header">
-        <span className="zcam-card-title">状态</span>
-        <span style={{ fontSize: 10, color: '#777' }}>实时相机参数</span>
+        <span className="zcam-card-title">Status</span>
+        <span style={{ fontSize: 10, color: '#777' }}>Live Camera Parameters</span>
       </div>
       <div className="zcam-card-body">
         <div className="zcam-status-grid" data-path="zcam.camera.pages.main.status.summary">
@@ -211,23 +203,9 @@ export function StatusCard() {
                 {' '}
                 {recordingState.isRecording ? recordingState.durationText : '--:--:--'}
               </span>
-              <span className="zcam-chip" style={{ opacity: 1 }}>剩余 {recordingState.remainingText}</span>
+              <span className="zcam-chip" style={{ opacity: 1 }}>Remain {recordingState.remainingText}</span>
             </div>
-            <div
-              className="zcam-status-chip-group zcam-status-chip-group-right"
-              data-path="zcam.camera.pages.main.status.streaming"
-            >
-              <div className={`zcam-chip ${isSrtActive ? 'zcam-chip-active' : ''}`}>
-                <span className={isSrtActive ? 'zcam-chip-label-active' : ''}>SRT {isSrtActive ? '●' : '○'}</span>
-                {' '}
-                {isSrtActive ? (srtUrl || srtStatus) : srtStatus}
-              </div>
-              <div className={`zcam-chip ${isRtmpActive ? 'zcam-chip-active' : ''}`}>
-                <span className={isRtmpActive ? 'zcam-chip-label-active' : ''}>RTMP {isRtmpActive ? '●' : '○'}</span>
-                {' '}
-                {isRtmpActive ? (rtmpUrl || rtmpStatus) : rtmpStatus}
-              </div>
-            </div>
+            <div className="zcam-status-chip-group zcam-status-chip-group-right" />
           </div>
         </div>
       </div>

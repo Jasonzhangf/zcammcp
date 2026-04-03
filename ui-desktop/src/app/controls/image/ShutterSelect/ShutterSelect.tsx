@@ -65,7 +65,7 @@ export function ShutterSelect({ config = defaultShutterSelectConfig }: ShutterSe
   return (
     <>
       <label className="zcam-select" data-path={config.nodePath}>
-        <span className="zcam-select-label">Shutter</span>
+        <span className="zcam-select-label">Shutter Speed</span>
         <button
           type="button"
           className="zcam-select-trigger"

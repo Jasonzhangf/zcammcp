@@ -19,7 +19,7 @@ export function PageShell({ scene }: { scene: SceneConfig }) {
       <div className="zcam-header" data-path="ui.window.header">
         <div className="zcam-header-left">
           <div className="zcam-badge">Z</div>
-          <div className="zcam-title">Z CAM PTZ 控制台</div>
+          <div className="zcam-title">Z CAM PTZ Console</div>
         </div>
         <div className="zcam-header-right">
           <WindowControls />

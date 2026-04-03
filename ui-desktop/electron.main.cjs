@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -8,7 +8,7 @@ const { StateHost } = require('./state-host/state-host.cjs');
 const { buildPresetPanelHtml: buildPresetPanelHtmlTemplate } = require('./electron.preset-panel.cjs');
 
 const INITIAL_WIDTH = 1200;
-const INITIAL_HEIGHT = 960;
+const INITIAL_HEIGHT = 828;
 const PTZ_ONLY_WIDTH = 408;
 const PTZ_ONLY_HEIGHT = 660;
 const LAYOUT_VARIANTS = ['normal', 'studio'];
@@ -601,6 +601,21 @@ function createBallWindow(bounds) {
   ballWindow.once('ready-to-show', () => {
     if (!ballWindow) return;
     ballWindow.show();
+  });
+
+  ballWindow.webContents.on('context-menu', (_event, params) => {
+    if (!ballWindow || ballWindow.isDestroyed()) return;
+    const menu = Menu.buildFromTemplate([
+      {
+        label: 'Exit',
+        click: () => app.quit(),
+      },
+    ]);
+    menu.popup({
+      window: ballWindow,
+      x: Math.round(params?.x ?? 0),
+      y: Math.round(params?.y ?? 0),
+    });
   });
 
   ballWindow.on('closed', () => {

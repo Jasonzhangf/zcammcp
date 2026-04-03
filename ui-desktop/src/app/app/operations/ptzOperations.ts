@@ -254,9 +254,7 @@ export const ptzOperations: OperationDefinition[] = [
         };
       }
 
-      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
-      const normalizedMax = Math.max(0.01, Math.min(1, fzSpeed / 100));
-      const speed = Math.max(0.01, Math.min(1, abs * normalizedMax));
+      const speed = Math.max(0.01, Math.min(1, abs));
       const action = v > 0 ? 'zoomin' : 'zoomout';
 
       return {

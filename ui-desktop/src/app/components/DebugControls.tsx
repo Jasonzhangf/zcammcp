@@ -37,7 +37,7 @@ export function DebugControls() {
     const startTs = recordStartTs;
     const endTs = recordEndTs ?? Date.now();
     if (!startTs) {
-      setLastError('未找到录制起点，请先开始录制');
+      setLastError('Recording start not found. Please start recording first.');
       return;
     }
     try {
@@ -45,12 +45,12 @@ export function DebugControls() {
       setLastReplayCount(result.count);
       setLastError(null);
     } catch (err: any) {
-      setLastError(err?.message ?? '回放失败');
+      setLastError(err?.message ?? 'Replay failed');
     }
   }, [pageStore, recordEndTs, recordStartTs]);
 
   const rangeLabel = useMemo(() => {
-    if (!recordStartTs) return '未录制';
+    if (!recordStartTs) return 'Not Recorded';
     const start = new Date(recordStartTs);
     const end = recordEndTs ? new Date(recordEndTs) : null;
     const format = (d: Date) =>
@@ -59,22 +59,22 @@ export function DebugControls() {
         '0',
       )}:${String(d.getSeconds()).padStart(2, '0')}`;
     if (!end) {
-      return `录制中：自 ${format(start)}`;
+      return `Recording: since ${format(start)}`;
     }
-    return `录制区间：${format(start)} - ${format(end)}`;
+    return `Recorded Range: ${format(start)} - ${format(end)}`;
   }, [recordEndTs, recordStartTs]);
 
-  const layoutDebugLabelTop = '布局调试';
-  const layoutDebugLabelBottom = layoutDebugEnabled ? '已开启' : '未开启';
+  const layoutDebugLabelTop = 'Layout Debug';
+  const layoutDebugLabelBottom = layoutDebugEnabled ? 'On' : 'Off';
 
-  const recordLabelTop = '录制';
-  const recordLabelBottom = isRecording ? '停止' : '开始';
+  const recordLabelTop = 'Record';
+  const recordLabelBottom = isRecording ? 'Stop' : 'Start';
 
-  const clearLabelTop = '清空记录';
-  const clearLabelBottom = '保留状态';
+  const clearLabelTop = 'Clear Logs';
+  const clearLabelBottom = 'Keep State';
 
-  const replayLabelTop = '回放';
-  const replayLabelBottom = '本次录制';
+  const replayLabelTop = 'Replay';
+  const replayLabelBottom = 'Current Record';
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -96,8 +96,8 @@ export function DebugControls() {
       <button
         type="button"
         className={`control-btn debug-menu-toggle ${menuOpen ? 'debug-menu-open' : ''}`}
-        title="调试菜单"
-        aria-label="打开调试菜单"
+        title="Debug Menu"
+        aria-label="Open Debug Menu"
         onClick={() => setMenuOpen(!menuOpen)}
       >
         Debug
@@ -108,8 +108,8 @@ export function DebugControls() {
             <button
               type="button"
               className="control-btn debug-grid-btn"
-              title="开关布局调试（拖拽/缩放区域）"
-              aria-label="开关布局调试"
+              title="Toggle layout debug (drag/resize containers)"
+              aria-label="Toggle layout debug"
               onClick={() => setLayoutDebugEnabled(!layoutDebugEnabled)}
             >
               <span className="debug-btn-line-main">{layoutDebugLabelTop}</span>
@@ -118,8 +118,8 @@ export function DebugControls() {
             <button
               type="button"
               className={`control-btn debug-grid-btn ${isRecording ? 'debug-btn-active' : ''}`}
-              title={isRecording ? '停止录制当前交互' : '开始录制交互（会清空旧日志）'}
-              aria-label={isRecording ? '停止录制交互' : '开始录制交互'}
+              title={isRecording ? 'Stop recording current interactions' : 'Start recording interactions (clears old logs)'}
+              aria-label={isRecording ? 'Stop recording interactions' : 'Start recording interactions'}
               onClick={isRecording ? handleStopRecording : handleStartRecording}
             >
               <span className="debug-btn-line-main">{recordLabelTop}</span>
@@ -128,8 +128,8 @@ export function DebugControls() {
             <button
               type="button"
               className="control-btn debug-grid-btn"
-              title="清空本次录制区间（不改变当前相机状态）"
-              aria-label="清空录制区间"
+              title="Clear current recorded range (without changing camera state)"
+              aria-label="Clear recorded range"
               onClick={() => {
                 clearInteractionLogs();
                 setRecordStartTs(null);
@@ -145,8 +145,8 @@ export function DebugControls() {
             <button
               type="button"
               className="control-btn debug-grid-btn"
-              title="回放当前录制时间段内的交互"
-              aria-label="回放录制交互"
+              title="Replay interactions in current recorded range"
+              aria-label="Replay recorded interactions"
               onClick={handleReplay}
               disabled={!recordStartTs}
             >
@@ -157,7 +157,7 @@ export function DebugControls() {
           <div className="debug-status">
             <span className="debug-range">{rangeLabel}</span>
             {lastReplayCount !== null ? (
-              <span className="debug-replay-count">已回放：{lastReplayCount}</span>
+              <span className="debug-replay-count">Replayed: {lastReplayCount}</span>
             ) : null}
             {lastError ? <span className="debug-error">{lastError}</span> : null}
           </div>

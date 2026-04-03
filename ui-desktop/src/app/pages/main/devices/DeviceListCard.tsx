@@ -30,6 +30,7 @@ export function DeviceListCard({ mode = 'full' }: DeviceListCardProps) {
   const [activePresetId, setActivePresetId] = useState<string | null>(DEFAULT_PRESETS[0]?.id ?? null);
   const floatingRef = useRef<HTMLDivElement | null>(null);
   const electronAPI = typeof window !== 'undefined' ? window.electronAPI : undefined;
+  const showPresetToggle = false;
 
   useEffect(() => {
     if (!isFloatingMode || !electronAPI?.updateDevicePanel) return;
@@ -133,27 +134,29 @@ export function DeviceListCard({ mode = 'full' }: DeviceListCardProps) {
             }
             setCameraPanelOpen((prev) => !prev);
           }}
-          title={cameraPanelOpen ? '收起设备列表' : '展开设备列表'}
-          aria-label={cameraPanelOpen ? '收起设备列表' : '展开设备列表'}
+          title={cameraPanelOpen ? 'Collapse Device List' : 'Expand Device List'}
+          aria-label={cameraPanelOpen ? 'Collapse Device List' : 'Expand Device List'}
         >
           <span className="zcam-device-float-toggle-text">{cameraPanelOpen ? '>> Cameras' : '<< Cameras'}</span>
         </button>
-        <button
-          type="button"
-          className={`zcam-device-float-toggle zcam-device-float-toggle-wide${presetPanelOpen ? ' zcam-device-float-toggle-active' : ''}`}
-          onClick={async () => {
-            if (electronAPI?.togglePresetPanel) {
-              const result = await electronAPI.togglePresetPanel();
-              setPresetPanelOpen(Boolean(result?.open));
-              return;
-            }
-            setPresetPanelOpen((prev) => !prev);
-          }}
-          title={presetPanelOpen ? '收起预置位列表' : '展开预置位列表'}
-          aria-label={presetPanelOpen ? '收起预置位列表' : '展开预置位列表'}
-        >
-          <span className="zcam-device-float-toggle-text">{presetPanelOpen ? '>> Presets' : '<< Presets'}</span>
-        </button>
+        {showPresetToggle ? (
+          <button
+            type="button"
+            className={`zcam-device-float-toggle zcam-device-float-toggle-wide${presetPanelOpen ? ' zcam-device-float-toggle-active' : ''}`}
+            onClick={async () => {
+              if (electronAPI?.togglePresetPanel) {
+                const result = await electronAPI.togglePresetPanel();
+                setPresetPanelOpen(Boolean(result?.open));
+                return;
+              }
+              setPresetPanelOpen((prev) => !prev);
+            }}
+            title={presetPanelOpen ? 'Collapse Preset List' : 'Expand Preset List'}
+            aria-label={presetPanelOpen ? 'Collapse Preset List' : 'Expand Preset List'}
+          >
+            <span className="zcam-device-float-toggle-text">{presetPanelOpen ? '>> Presets' : '<< Presets'}</span>
+          </button>
+        ) : null}
       </div>
       {cameraPanelOpen && !electronAPI?.toggleDevicePanel && (
         <div className="zcam-device-float-panel">
@@ -169,8 +172,8 @@ export function DeviceListCard({ mode = 'full' }: DeviceListCardProps) {
               type="button"
               className="zcam-device-float-close"
               onClick={() => setCameraPanelOpen(false)}
-              title="关闭设备列表"
-              aria-label="关闭设备列表"
+              title="Close Device List"
+              aria-label="Close Device List"
             >
               ×
             </button>
@@ -191,8 +194,8 @@ export function DeviceListCard({ mode = 'full' }: DeviceListCardProps) {
               type="button"
               className="zcam-device-float-close"
               onClick={() => setPresetPanelOpen(false)}
-              title="关闭预置位列表"
-              aria-label="关闭预置位列表"
+              title="Close Preset List"
+              aria-label="Close Preset List"
             >
               ×
             </button>

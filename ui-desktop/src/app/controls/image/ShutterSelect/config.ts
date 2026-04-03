@@ -22,7 +22,7 @@ export const defaultShutterSelectConfig: ShutterSelectConfig = {
   nodePath: 'zcam.camera.pages.main.exposure.shutter',
   kind: 'exposure.shutter',
   operationId: 'exposure.setShutter',
-  title: '快门速度',
+  title: 'Shutter Speed',
   options: [30, 40, 50, 60, 80, 100, 120, 160, 200, 250, 320, 500].map((v) => ({
     label: `1/${v}`,
     value: v,

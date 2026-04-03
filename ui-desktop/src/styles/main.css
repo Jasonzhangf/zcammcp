@@ -1684,6 +1684,10 @@ body {
   color: #ccc;
 }
 
+.zcam-select-label {
+  white-space: nowrap;
+}
+
 .zcam-select select {
   background: #111;
   color: #fff;
