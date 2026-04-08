@@ -30,7 +30,7 @@ export function DeviceListCard({ mode = 'full' }: DeviceListCardProps) {
   const [activePresetId, setActivePresetId] = useState<string | null>(DEFAULT_PRESETS[0]?.id ?? null);
   const floatingRef = useRef<HTMLDivElement | null>(null);
   const electronAPI = typeof window !== 'undefined' ? window.electronAPI : undefined;
-  const showPresetToggle = false;
+  const showPresetToggle = true;
 
   useEffect(() => {
     if (!isFloatingMode || !electronAPI?.updateDevicePanel) return;
@@ -47,10 +47,23 @@ export function DeviceListCard({ mode = 'full' }: DeviceListCardProps) {
   useEffect(() => {
     if (!isFloatingMode || !electronAPI?.updatePresetPanel) return;
     void electronAPI.updatePresetPanel({
-      presets: DEFAULT_PRESETS,
       activePresetId: activePresetId ?? null,
     });
   }, [activePresetId, electronAPI, isFloatingMode]);
+
+  useEffect(() => {
+    if (!isFloatingMode) return;
+    const offDevice = electronAPI?.onDevicePanelState?.((payload) => {
+      setCameraPanelOpen(Boolean(payload?.open));
+    });
+    const offPreset = electronAPI?.onPresetPanelState?.((payload) => {
+      setPresetPanelOpen(Boolean(payload?.open));
+    });
+    return () => {
+      offDevice?.();
+      offPreset?.();
+    };
+  }, [electronAPI, isFloatingMode]);
 
   useEffect(() => {
     if (!isFloatingMode || !(cameraPanelOpen || presetPanelOpen) || electronAPI?.toggleDevicePanel) return;

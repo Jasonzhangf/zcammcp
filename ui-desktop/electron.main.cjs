@@ -8,7 +8,7 @@ const { StateHost } = require('./state-host/state-host.cjs');
 const { buildPresetPanelHtml: buildPresetPanelHtmlTemplate } = require('./electron.preset-panel.cjs');
 
 const INITIAL_WIDTH = 1200;
-const INITIAL_HEIGHT = 828;
+const INITIAL_HEIGHT = 800;
 const PTZ_ONLY_WIDTH = 408;
 const PTZ_ONLY_HEIGHT = 660;
 const LAYOUT_VARIANTS = ['normal', 'studio'];
@@ -34,6 +34,11 @@ const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERV
 const CAMERA_STATE_SCRIPT = process.env.ZCAM_CAMERA_STATE_SCRIPT || resolveBundledServicePath(path.join('service', 'camera-state', 'camera-state.cjs'));
 const UVC_SERVICE_HOST = process.env.ZCAM_UVC_HOST || '127.0.0.1';
 const UVC_SERVICE_PORT = parseInt(process.env.ZCAM_UVC_PORT || '17988', 10);
+const PRESET_SLOT_COUNT = parseInt(process.env.ZCAM_PRESET_SLOT_COUNT || '10', 10);
+const PRESET_TOTAL_COUNT = parseInt(process.env.ZCAM_PRESET_TOTAL_COUNT || '100', 10);
+const PRESET_REFRESH_MIN_INTERVAL_MS = parseInt(process.env.ZCAM_PRESET_REFRESH_MIN_INTERVAL_MS || '3000', 10);
+const PRESET_FETCH_GAP_MS = parseInt(process.env.ZCAM_PRESET_FETCH_GAP_MS || '120', 10);
+const PRESET_THUMB_BASE = String(process.env.ZCAM_PRESET_THUMB_BASE || '').trim();
 const IMVT_CAMERA_SERVICE_NAME = 'ImvtCameraService.exe';
 const DEVICE_PANEL_WIDTH = parseInt(process.env.ZCAM_DEVICE_PANEL_WIDTH || '130', 10);
 const DEVICE_PANEL_MIN_HEIGHT = parseInt(process.env.ZCAM_DEVICE_PANEL_MIN_HEIGHT || '220', 10);
@@ -55,7 +60,12 @@ let imvtCameraServiceProcess = null;
 let devicePanelWindow = null;
 let devicePanelData = { devices: [], activeDeviceId: null };
 let presetPanelWindow = null;
-let presetPanelData = { presets: [], activePresetId: null };
+let presetMenuWindow = null;
+let presetPanelData = { presets: [], activePresetId: null, totalCount: PRESET_TOTAL_COUNT };
+let presetRefreshInFlight = null;
+let presetRefreshLastAt = 0;
+let presetPanelInitialized = false;
+const presetLoadedPages = new Set();
 const pendingTestCommands = new Map();
 
 const stateHost = new StateHost();
@@ -189,9 +199,32 @@ function stopImvtCameraService() {
   imvtCameraServiceProcess = null;
 }
 
-async function restartImvtCameraService() {
+async function forceKillImvtCameraService() {
   stopImvtCameraService();
+  if (process.platform !== 'win32') {
+    return;
+  }
+  await new Promise((resolve) => {
+    try {
+      const killer = spawn('taskkill', ['/IM', IMVT_CAMERA_SERVICE_NAME, '/F', '/T'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      killer.on('close', () => resolve());
+      killer.on('error', () => resolve());
+    } catch {
+      resolve();
+    }
+  });
+  await new Promise((resolve) => setTimeout(resolve, 220));
+}
+
+async function restartImvtCameraService() {
+  await forceKillImvtCameraService();
   const process = startImvtCameraService();
+  if (process) {
+    await new Promise((resolve) => setTimeout(resolve, 320));
+  }
   return { ok: Boolean(process), running: Boolean(process) };
 }
 
@@ -314,11 +347,261 @@ function pushPresetPanelData(payload = {}) {
   const activePresetId = typeof payload.activePresetId === 'string' || payload.activePresetId === null
     ? payload.activePresetId
     : presetPanelData.activePresetId;
-  presetPanelData = { presets, activePresetId };
+  const totalCount = Number.isFinite(Number(payload.totalCount)) && Number(payload.totalCount) > 0
+    ? Number(payload.totalCount)
+    : presetPanelData.totalCount;
+  presetPanelData = { presets, activePresetId, totalCount };
   if (presetPanelWindow && !presetPanelWindow.isDestroyed()) {
     presetPanelWindow.webContents.send('presetPanel:data', presetPanelData);
   }
   return presetPanelData;
+}
+
+function emitPanelState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    mainWindow.webContents.send('devicePanel:state', {
+      open: Boolean(devicePanelWindow && !devicePanelWindow.isDestroyed() && devicePanelWindow.isVisible()),
+    });
+    mainWindow.webContents.send('presetPanel:state', {
+      open: Boolean(presetPanelWindow && !presetPanelWindow.isDestroyed() && presetPanelWindow.isVisible()),
+    });
+  } catch {
+    // ignore bridge failures
+  }
+}
+
+function parsePresetIndexFromId(id) {
+  const parsedIndex = Number.parseInt(String(id || '').replace(/[^\d]/g, ''), 10);
+  if (!Number.isFinite(parsedIndex) || parsedIndex <= 0) return 0;
+  return parsedIndex - 1;
+}
+
+function presetIdFromIndex(index) {
+  const no = String(index + 1).padStart(3, '0');
+  return `preset-${no}`;
+}
+
+function presetPageFromId(id) {
+  const index = parsePresetIndexFromId(id);
+  if (index < 0) return 1;
+  return Math.floor(index / 10) + 1;
+}
+
+function buildPresetPlaceholder(index) {
+  const no = String(index + 1).padStart(3, '0');
+  return {
+    id: presetIdFromIndex(index),
+    name: `Preset ${no}`,
+    previewUrl: '',
+    previewUrls: [],
+    exists: false,
+    unit: -1,
+    speed: -1,
+    time: -1,
+    status: 0,
+  };
+}
+
+function ensurePresetPanelSeedData() {
+  const safeCount = Number.isFinite(PRESET_TOTAL_COUNT) && PRESET_TOTAL_COUNT > 0 ? PRESET_TOTAL_COUNT : 100;
+  const current = Array.isArray(presetPanelData.presets) ? presetPanelData.presets.slice() : [];
+  if (current.length >= safeCount) {
+    return current;
+  }
+  const byId = new Map(current.map((item) => [item?.id, item]));
+  const merged = [];
+  for (let index = 0; index < safeCount; index += 1) {
+    const id = presetIdFromIndex(index);
+    const exists = byId.get(id);
+    merged.push(exists ? exists : buildPresetPlaceholder(index));
+  }
+  pushPresetPanelData({ presets: merged, totalCount: safeCount });
+  return merged;
+}
+
+function presetThumbnailUrl(index, cacheBuster) {
+  const no = String(index).padStart(3, '0');
+  const bust = Number.isFinite(Number(cacheBuster)) ? `&t=${Number(cacheBuster)}` : '';
+  return `http://${UVC_SERVICE_HOST}:${UVC_SERVICE_PORT}/app_data/preset/thm_${no}.jpg?act=thm${bust}`;
+}
+
+function presetThumbnailUrls(index, cacheBuster) {
+  const no = String(index).padStart(3, '0');
+  const bust = Number.isFinite(Number(cacheBuster)) ? `&t=${Number(cacheBuster)}` : '';
+  const list = [];
+  if (PRESET_THUMB_BASE.length > 0) {
+    const base = PRESET_THUMB_BASE.endsWith('/') ? PRESET_THUMB_BASE.slice(0, -1) : PRESET_THUMB_BASE;
+    list.push(`${base}/app_data/preset/thm_${no}.jpg?act=thm${bust}`);
+  }
+  list.push(presetThumbnailUrl(index, cacheBuster));
+  return Array.from(new Set(list));
+}
+
+function normalizePresetInfo(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return { name: '', unit: -1, speed: -1, time: -1, status: 0 };
+  }
+  const info = raw;
+  return {
+    name: typeof info.name === 'string' ? info.name : '',
+    unit: Number.isFinite(Number(info.unit)) ? Number(info.unit) : -1,
+    speed: Number.isFinite(Number(info.speed)) ? Number(info.speed) : -1,
+    time: Number.isFinite(Number(info.time)) ? Number(info.time) : -1,
+    status: Number.isFinite(Number(info.status)) ? Number(info.status) : 0,
+  };
+}
+
+function isPresetInfoExisting(info) {
+  return info.unit >= 0 || info.speed >= 0 || info.time >= 0 || (typeof info.name === 'string' && info.name.trim().length > 0);
+}
+
+async function fetchPresetInfo(index) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const data = await sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=get_info&index=${index}` });
+      const isTimeoutPayload = data && typeof data === 'object' && (
+        data.error === true
+        || Number(data.code) === 500
+        || String(data.message || '').toLowerCase().includes('timeout')
+        || String(data.error || '').toLowerCase().includes('timeout')
+      );
+      if (isTimeoutPayload) {
+        throw new Error('preset get_info timeout');
+      }
+      return normalizePresetInfo(data);
+    } catch {
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, 240));
+      }
+    }
+  }
+  return normalizePresetInfo(null);
+}
+
+async function refreshPresetPanelData(activePresetId, options = {}) {
+  const force = options.force === true;
+  const now = Date.now();
+  if (presetRefreshInFlight) {
+    return presetRefreshInFlight;
+  }
+  if (!force && now - presetRefreshLastAt < PRESET_REFRESH_MIN_INTERVAL_MS && presetPanelData.presets.length > 0) {
+    return presetPanelData;
+  }
+  presetRefreshInFlight = (async () => {
+  const safeCount = Number.isFinite(PRESET_SLOT_COUNT) && PRESET_SLOT_COUNT > 0 ? PRESET_SLOT_COUNT : 10;
+  const list = [];
+  for (let index = 0; index < safeCount; index += 1) {
+    const info = await fetchPresetInfo(index);
+    const exists = isPresetInfoExisting(info);
+    list.push({
+      id: presetIdFromIndex(index),
+      name: exists ? (info.name || `Preset ${String(index + 1).padStart(3, '0')}`) : `Preset ${String(index + 1).padStart(3, '0')}`,
+      previewUrl: exists ? presetThumbnailUrl(index) : '',
+      previewUrls: exists ? presetThumbnailUrls(index) : [],
+      exists,
+      unit: info.unit,
+      speed: info.speed,
+      time: info.time,
+      status: info.status,
+    });
+    if (PRESET_FETCH_GAP_MS > 0 && index < safeCount - 1) {
+      await new Promise((resolve) => setTimeout(resolve, PRESET_FETCH_GAP_MS));
+    }
+  }
+  const nextActive = typeof activePresetId === 'string' && activePresetId.length > 0 ? activePresetId : (list[0]?.id || null);
+    presetRefreshLastAt = Date.now();
+    return pushPresetPanelData({ presets: list, activePresetId: nextActive });
+  })();
+  try {
+    return await presetRefreshInFlight;
+  } finally {
+    presetRefreshInFlight = null;
+  }
+}
+
+async function refreshPresetPanelPage(page, options = {}) {
+  const safeCount = Number.isFinite(PRESET_TOTAL_COUNT) && PRESET_TOTAL_COUNT > 0 ? PRESET_TOTAL_COUNT : 100;
+  const safePage = Math.max(1, Number.parseInt(String(page || 1), 10) || 1);
+  const force = options.force === true;
+  if (!force && presetLoadedPages.has(safePage)) {
+    return presetPanelData;
+  }
+  if (presetRefreshInFlight) {
+    return presetRefreshInFlight;
+  }
+  const startIndex = (safePage - 1) * 10;
+  const endExclusive = Math.min(startIndex + 10, safeCount);
+  presetRefreshInFlight = (async () => {
+    const current = ensurePresetPanelSeedData().slice();
+    for (let index = startIndex; index < endExclusive; index += 1) {
+      const info = await fetchPresetInfo(index);
+      const exists = isPresetInfoExisting(info);
+      current[index] = {
+        id: presetIdFromIndex(index),
+        name: exists ? (info.name || `Preset ${String(index + 1).padStart(3, '0')}`) : `Preset ${String(index + 1).padStart(3, '0')}`,
+        previewUrl: exists ? presetThumbnailUrl(index) : '',
+        previewUrls: exists ? presetThumbnailUrls(index) : [],
+        exists,
+        unit: info.unit,
+        speed: info.speed,
+        time: info.time,
+        status: info.status,
+      };
+      if (PRESET_FETCH_GAP_MS > 0 && index < endExclusive - 1) {
+        await new Promise((resolve) => setTimeout(resolve, PRESET_FETCH_GAP_MS));
+      }
+    }
+    presetLoadedPages.add(safePage);
+    const nextActive = typeof options.activePresetId === 'string'
+      ? options.activePresetId
+      : (typeof presetPanelData.activePresetId === 'string' ? presetPanelData.activePresetId : null);
+    presetRefreshLastAt = Date.now();
+    return pushPresetPanelData({ presets: current, activePresetId: nextActive, totalCount: safeCount });
+  })();
+  try {
+    return await presetRefreshInFlight;
+  } finally {
+    presetRefreshInFlight = null;
+  }
+}
+
+async function refreshSinglePreset(index, activePresetId, options = {}) {
+  const cacheBuster = Number.isFinite(Number(options.cacheBuster)) ? Number(options.cacheBuster) : undefined;
+  const safeIndex = Number.isFinite(Number(index)) && Number(index) >= 0 ? Number(index) : 0;
+  const preserveExistingOnMissing = options.preserveExistingOnMissing === true;
+  const current = Array.isArray(presetPanelData.presets) ? presetPanelData.presets.slice() : [];
+  const targetId = presetIdFromIndex(safeIndex);
+  const foundAt = current.findIndex((item) => item && item.id === targetId);
+  const prevItem = foundAt >= 0 ? current[foundAt] : null;
+  const info = await fetchPresetInfo(safeIndex);
+  const exists = isPresetInfoExisting(info);
+  if (!exists && preserveExistingOnMissing && prevItem && prevItem.exists === true) {
+    const nextActive = typeof activePresetId === 'string' && activePresetId.length > 0
+      ? activePresetId
+      : (presetPanelData.activePresetId || prevItem.id);
+    return pushPresetPanelData({ presets: current, activePresetId: nextActive });
+  }
+  const nextItem = {
+    id: targetId,
+    name: exists ? (info.name || `Preset ${String(safeIndex + 1).padStart(3, '0')}`) : `Preset ${String(safeIndex + 1).padStart(3, '0')}`,
+    previewUrl: exists ? presetThumbnailUrl(safeIndex, cacheBuster) : '',
+    previewUrls: exists ? presetThumbnailUrls(safeIndex, cacheBuster) : [],
+    exists,
+    unit: info.unit,
+    speed: info.speed,
+    time: info.time,
+    status: info.status,
+  };
+  if (foundAt >= 0) {
+    current[foundAt] = { ...(current[foundAt] || {}), ...nextItem };
+  } else {
+    current.push(nextItem);
+  }
+  const nextActive = typeof activePresetId === 'string' && activePresetId.length > 0
+    ? activePresetId
+    : (presetPanelData.activePresetId || nextItem.id);
+  return pushPresetPanelData({ presets: current, activePresetId: nextActive });
 }
 
 function closeDevicePanel() {
@@ -326,12 +609,127 @@ function closeDevicePanel() {
   devicePanelWindow.close();
   devicePanelWindow = null;
   syncPresetPanelBounds();
+  emitPanelState();
 }
 
 function closePresetPanel() {
+  closePresetMenu();
   if (!presetPanelWindow || presetPanelWindow.isDestroyed()) return;
   presetPanelWindow.close();
   presetPanelWindow = null;
+  emitPanelState();
+}
+
+function closePresetMenu() {
+  if (!presetMenuWindow || presetMenuWindow.isDestroyed()) return;
+  presetMenuWindow.close();
+  presetMenuWindow = null;
+}
+
+function buildPresetMenuHtml(presetId = '', presetExists = true) {
+  const safeId = String(presetId).replace(/'/g, '&#39;');
+  const hasPreset = presetExists === true;
+  const addButton = hasPreset ? '' : '<button class="btn" id="addBtn">Add</button>';
+  return `<!doctype html><html><head><meta charset="UTF-8"><style>
+    html,body{margin:0;padding:0;background:transparent;overflow:hidden}
+    .menu{width:60px;border:1px solid #3a3a3a;border-radius:6px;background:#171717;box-shadow:0 10px 24px rgba(0,0,0,.55);overflow:hidden}
+    .btn{width:100%;height:30px;border:0;border-bottom:1px solid #2a2a2a;background:transparent;color:#d3d3d3;font-size:9px;text-align:center;padding:0;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:clip}
+    .btn:last-child{border-bottom:0}
+    .btn:hover{background:#242424;color:#fff}
+    .btn:disabled{color:#6d6d6d;cursor:default}
+  </style></head><body><div class="menu">
+    ${addButton}
+    <button class="btn" id="loadBtn">Load</button>
+    <button class="btn" id="replaceBtn">Replace</button>
+    <button class="btn" id="renameBtn">Rename</button>
+    <button class="btn" id="deleteBtn">Delete</button>
+  </div><script>
+    const { ipcRenderer } = require('electron');
+    const presetId = '${safeId}';
+    const presetExists = ${hasPreset ? 'true' : 'false'};
+    let modalLock = false;
+    async function run(action, payload){
+      await ipcRenderer.invoke('presetPanel:selectPreset', presetId, action, payload);
+      window.close();
+    }
+    if (!presetExists) {
+      document.getElementById('loadBtn').disabled = true;
+      document.getElementById('replaceBtn').disabled = true;
+      document.getElementById('renameBtn').disabled = true;
+      document.getElementById('deleteBtn').disabled = true;
+      const addBtn = document.getElementById('addBtn');
+      if (addBtn) {
+        addBtn.addEventListener('click', () => run('add'));
+      }
+    }
+    document.getElementById('loadBtn').addEventListener('click', () => run('load'));
+    document.getElementById('replaceBtn').addEventListener('click', async () => {
+      modalLock = true;
+      const ok = await ipcRenderer.invoke('presetPanel:confirmReplace');
+      modalLock = false;
+      if (!ok) return;
+      run('replace');
+    });
+    document.getElementById('renameBtn').addEventListener('click', async () => {
+      modalLock = true;
+      const nextName = await ipcRenderer.invoke('presetPanel:promptRename');
+      modalLock = false;
+      if (!nextName || !nextName.trim()) return;
+      run('rename', { name: nextName.trim() });
+    });
+    document.getElementById('deleteBtn').addEventListener('click', () => run('delete'));
+    window.addEventListener('blur', () => {
+      if (modalLock) return;
+      window.close();
+    });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') window.close(); });
+  </script></body></html>`;
+}
+
+function openPresetMenu(payload = {}) {
+  const presetId = typeof payload.presetId === 'string' ? payload.presetId : '';
+  if (!presetId) return { ok: false };
+  if (!presetPanelWindow || presetPanelWindow.isDestroyed()) return { ok: false };
+  const presets = Array.isArray(presetPanelData.presets) ? presetPanelData.presets : [];
+  const preset = presets.find((item) => item && item.id === presetId) || null;
+  const presetExists = Boolean(preset && preset.exists === true);
+  closePresetMenu();
+  const cursorX = Number.isFinite(Number(payload.x)) ? Number(payload.x) : 0;
+  const cursorY = Number.isFinite(Number(payload.y)) ? Number(payload.y) : 0;
+  const display = screen.getDisplayNearestPoint({ x: cursorX, y: cursorY });
+  const area = display?.workArea || { x: 0, y: 0, width: 1920, height: 1080 };
+  const menuWidth = 60;
+  const menuHeight = presetExists ? 124 : 154;
+  const x = Math.max(area.x, Math.min(cursorX, area.x + area.width - menuWidth));
+  const y = Math.max(area.y, Math.min(cursorY, area.y + area.height - menuHeight));
+  presetMenuWindow = new BrowserWindow({
+    parent: presetPanelWindow,
+    x,
+    y,
+    width: menuWidth,
+    height: menuHeight,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    show: false,
+    skipTaskbar: false,
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  presetMenuWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(buildPresetMenuHtml(presetId, presetExists))}`);
+  presetMenuWindow.once('ready-to-show', () => {
+    if (!presetMenuWindow || presetMenuWindow.isDestroyed()) return;
+    presetMenuWindow.show();
+    presetMenuWindow.focus();
+  });
+  presetMenuWindow.on('closed', () => {
+    presetMenuWindow = null;
+  });
+  return { ok: true };
 }
 
 function canShowDevicePanel() {
@@ -374,6 +772,7 @@ function openDevicePanel() {
     devicePanelWindow.show();
     devicePanelWindow.focus();
     pushDevicePanelData(devicePanelData);
+    emitPanelState();
     return { ok: true, open: true };
   }
   const bounds = getDevicePanelBounds();
@@ -404,10 +803,12 @@ function openDevicePanel() {
     devicePanelWindow.show();
     pushDevicePanelData(devicePanelData);
     syncPresetPanelBounds();
+    emitPanelState();
   });
   devicePanelWindow.on('closed', () => {
     devicePanelWindow = null;
     syncPresetPanelBounds();
+    emitPanelState();
   });
   syncPresetPanelBounds();
   return { ok: true, open: true };
@@ -434,7 +835,14 @@ function openPresetPanel() {
     syncPresetPanelBounds();
     presetPanelWindow.show();
     presetPanelWindow.focus();
+    ensurePresetPanelSeedData();
     pushPresetPanelData(presetPanelData);
+    if (!presetPanelInitialized) {
+      presetPanelInitialized = true;
+      const targetPage = presetPageFromId(presetPanelData.activePresetId || 'preset-001');
+      void refreshPresetPanelPage(targetPage, { activePresetId: presetPanelData.activePresetId });
+    }
+    emitPanelState();
     return { ok: true, open: true };
   }
   const bounds = getPresetPanelBounds();
@@ -463,10 +871,18 @@ function openPresetPanel() {
   presetPanelWindow.once('ready-to-show', () => {
     if (!presetPanelWindow || presetPanelWindow.isDestroyed()) return;
     presetPanelWindow.show();
+    ensurePresetPanelSeedData();
     pushPresetPanelData(presetPanelData);
+    if (!presetPanelInitialized) {
+      presetPanelInitialized = true;
+      const targetPage = presetPageFromId(presetPanelData.activePresetId || 'preset-001');
+      void refreshPresetPanelPage(targetPage, { activePresetId: presetPanelData.activePresetId });
+    }
+    emitPanelState();
   });
   presetPanelWindow.on('closed', () => {
     presetPanelWindow = null;
+    emitPanelState();
   });
   return { ok: true, open: true };
 }
@@ -525,6 +941,10 @@ function createMainWindow() {
     mainWindow.focus();
     // 强制打开调试工具方便查看日志
     // mainWindow.webContents.openDevTools({ mode: 'detach' });
+  });
+
+  mainWindow.on('system-context-menu', (event) => {
+    event.preventDefault();
   });
 
   mainWindow.on('closed', () => {
@@ -884,14 +1304,24 @@ async function sendUvcRequest(uvcRequest) {
       res.on('data', (chunk) => {
         data += chunk;
       });
-      res.on('end', () => {
+      res.on('end', async () => {
         try {
           const result = data ? JSON.parse(data) : {};
+          const errorText = typeof result?.error === 'string' ? result.error : '';
+          if (errorText.toLowerCase().includes('link down')) {
+            console.warn('[UVC] Link down detected, restarting IMVT service');
+            await restartImvtCameraService();
+          }
           console.log('[UVC] Response:', result);
           resolve(result);
         } catch (err) {
+          const raw = String(data || '');
+          if (raw.toLowerCase().includes('link down')) {
+            console.warn('[UVC] Link down detected from raw response, restarting IMVT service');
+            await restartImvtCameraService();
+          }
           console.error('[UVC] Failed to parse response:', err);
-          resolve({ ok: false, error: 'Invalid JSON response' });
+          resolve({ ok: false, error: raw || 'Invalid JSON response' });
         }
       });
     });
@@ -1149,6 +1579,177 @@ ipcMain.handle('presetPanel:update', (_, payload) => {
 });
 
 ipcMain.handle('presetPanel:getData', () => presetPanelData);
+ipcMain.handle('presetPanel:ensurePage', async (_, payload) => {
+  const page = Number.parseInt(String(payload?.page ?? 1), 10);
+  const data = await refreshPresetPanelPage(page, { activePresetId: presetPanelData.activePresetId });
+  return { ok: true, data };
+});
+ipcMain.handle('presetPanel:openMenu', (_, payload) => openPresetMenu(payload || {}));
+ipcMain.handle('presetPanel:confirmReplace', async () => {
+  const parentWindow = (presetMenuWindow && !presetMenuWindow.isDestroyed())
+    ? presetMenuWindow
+    : ((presetPanelWindow && !presetPanelWindow.isDestroyed()) ? presetPanelWindow : null);
+  const confirmWindow = new BrowserWindow({
+    parent: parentWindow || undefined,
+    modal: Boolean(parentWindow),
+    width: 280,
+    height: 128,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    show: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  const html = `<!doctype html><html><head><meta charset="UTF-8"><style>
+    html,body{margin:0;padding:0;background:transparent;overflow:hidden}
+    .box{width:100%;height:100%;box-sizing:border-box;border:1px solid #3a3a3a;border-radius:8px;background:#171717;color:#e8e8e8;padding:10px;display:flex;flex-direction:column;gap:10px;font:12px Arial}
+    .title{font-weight:600}
+    .desc{font-size:11px;color:#d3d3d3}
+    .row{display:flex;justify-content:flex-end;gap:6px;margin-top:auto}
+    .btn{height:26px;min-width:64px;border:1px solid #3a3a3a;border-radius:4px;background:#1f1f1f;color:#ddd;cursor:pointer}
+    .btn.primary{border-color:#ff7a45;color:#fff}
+  </style></head><body><div class="box">
+    <div class="title">Replace</div>
+    <div class="desc">⚠ Replace this preset with current position?</div>
+    <div class="row">
+      <button id="cancelBtn" class="btn">Cancel</button>
+      <button id="okBtn" class="btn primary">Replace</button>
+    </div>
+  </div><script>
+    const { ipcRenderer } = require('electron');
+    function done(ok){
+      ipcRenderer.send('presetPanel:replaceConfirmResult', { ok });
+      window.close();
+    }
+    document.getElementById('okBtn').addEventListener('click', () => done(true));
+    document.getElementById('cancelBtn').addEventListener('click', () => done(false));
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') done(false);
+      if (e.key === 'Enter') done(true);
+    });
+    window.addEventListener('blur', () => done(false));
+  </script></body></html>`;
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      try { ipcMain.removeListener('presetPanel:replaceConfirmResult', onResult); } catch {}
+      resolve(value);
+    };
+    const onResult = (_event, payload = {}) => {
+      done(Boolean(payload?.ok));
+    };
+    ipcMain.on('presetPanel:replaceConfirmResult', onResult);
+    confirmWindow.once('ready-to-show', () => {
+      if (!confirmWindow.isDestroyed()) {
+        confirmWindow.show();
+        confirmWindow.focus();
+      }
+    });
+    confirmWindow.on('closed', () => {
+      done(false);
+    });
+    confirmWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`);
+  });
+});
+ipcMain.handle('presetPanel:promptRename', async () => {
+  const parentWindow = (presetMenuWindow && !presetMenuWindow.isDestroyed())
+    ? presetMenuWindow
+    : ((presetPanelWindow && !presetPanelWindow.isDestroyed()) ? presetPanelWindow : null);
+  const renameWindow = new BrowserWindow({
+    parent: parentWindow || undefined,
+    modal: Boolean(parentWindow),
+    width: 260,
+    height: 132,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    show: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+  const html = `<!doctype html><html><head><meta charset="UTF-8"><style>
+    html,body{margin:0;padding:0;background:transparent;overflow:hidden}
+    .box{width:100%;height:100%;box-sizing:border-box;border:1px solid #3a3a3a;border-radius:8px;background:#171717;color:#e8e8e8;padding:10px;display:flex;flex-direction:column;gap:10px;font:12px Arial}
+    .title{font-weight:600}
+    .input{height:28px;border:1px solid #3a3a3a;border-radius:4px;background:#111;color:#eee;padding:0 8px;outline:none}
+    .row{display:flex;justify-content:flex-end;gap:6px}
+    .btn{height:26px;min-width:64px;border:1px solid #3a3a3a;border-radius:4px;background:#1f1f1f;color:#ddd;cursor:pointer}
+    .btn.primary{border-color:#ff7a45;color:#fff}
+  </style></head><body><div class="box">
+    <div class="title">Rename</div>
+    <input id="nameInput" class="input" placeholder="Enter preset name" maxlength="64" />
+    <div class="row">
+      <button id="cancelBtn" class="btn">Cancel</button>
+      <button id="okBtn" class="btn primary">OK</button>
+    </div>
+  </div><script>
+    const { ipcRenderer } = require('electron');
+    const input = document.getElementById('nameInput');
+    function submit(){
+      ipcRenderer.send('presetPanel:renameResult', { ok: true, name: (input.value || '').trim() });
+      window.close();
+    }
+    document.getElementById('okBtn').addEventListener('click', submit);
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      ipcRenderer.send('presetPanel:renameResult', { ok: false });
+      window.close();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+      if (e.key === 'Escape') {
+        ipcRenderer.send('presetPanel:renameResult', { ok: false });
+        window.close();
+      }
+    });
+    window.addEventListener('blur', () => {
+      ipcRenderer.send('presetPanel:renameResult', { ok: false });
+      window.close();
+    });
+    setTimeout(() => input.focus(), 10);
+  </script></body></html>`;
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      try { ipcMain.removeListener('presetPanel:renameResult', onResult); } catch {}
+      resolve(value);
+    };
+    const onResult = (_event, payload = {}) => {
+      if (payload && payload.ok && typeof payload.name === 'string') {
+        done(payload.name.trim());
+      } else {
+        done('');
+      }
+    };
+    ipcMain.on('presetPanel:renameResult', onResult);
+    renameWindow.once('ready-to-show', () => {
+      if (!renameWindow.isDestroyed()) {
+        renameWindow.show();
+        renameWindow.focus();
+      }
+    });
+    renameWindow.on('closed', () => {
+      done('');
+    });
+    renameWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`);
+  });
+});
 
 ipcMain.handle('presetPanel:selectPreset', async (_, presetId, action, payload) => {
   const id = typeof presetId === 'string' ? presetId : '';
@@ -1162,16 +1763,18 @@ ipcMain.handle('presetPanel:selectPreset', async (_, presetId, action, payload) 
     return { ok: false };
   }
 
-  const parsedIndex = Number.parseInt(String(id).replace(/[^\d]/g, ''), 10);
-  const index = Number.isFinite(parsedIndex) && parsedIndex > 0 ? parsedIndex : 1;
+  const index = parsePresetIndexFromId(id);
   const actionPayload = payload && typeof payload === 'object' ? payload : {};
 
   const runPresetRequest = async () => {
     if (nextAction === 'load' || nextAction === 'recall') {
       return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=recall&index=${index}` });
     }
-    if (nextAction === 'add' || nextAction === 'store') {
+    if (nextAction === 'add' || nextAction === 'store' || nextAction === 'replace') {
       return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=set&index=${index}` });
+    }
+    if (nextAction === 'stop') {
+      return sendUvcRequest({ method: 'GET', url: '/ctrl/pt?action=stop_all' });
     }
     if (nextAction === 'delete') {
       return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=del&index=${index}` });
@@ -1180,16 +1783,6 @@ ipcMain.handle('presetPanel:selectPreset', async (_, presetId, action, payload) 
       const name = typeof actionPayload.name === 'string' ? actionPayload.name.trim() : '';
       if (!name) return { ok: false, error: 'invalid name' };
       return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=set_name&index=${index}&new_name=${encodeURIComponent(name)}` });
-    }
-    if (nextAction === 'speed') {
-      const speed = Number.parseInt(String(actionPayload.speed ?? ''), 10);
-      if (!Number.isFinite(speed) || speed < 1 || speed > 9) return { ok: false, error: 'invalid speed' };
-      return sendUvcRequest({ method: 'GET', url: `/ctrl/preset?action=preset_speed&index=${index}&preset_speed=${speed}` });
-    }
-    if (nextAction === 'unit') {
-      const unit = String(actionPayload.unit ?? '').toLowerCase();
-      if (unit !== 'percent' && unit !== 'absolute') return { ok: false, error: 'invalid unit' };
-      return sendUvcRequest({ method: 'GET', url: `/ctrl/set?ptz_common_speed_unit=${unit}` });
     }
     if (nextAction === 'record' || nextAction === 'prepare') {
       return { ok: true };
@@ -1204,18 +1797,18 @@ ipcMain.handle('presetPanel:selectPreset', async (_, presetId, action, payload) 
     directResult = { ok: false, error: error?.message || String(error) };
   }
 
-  if (nextAction === 'rename' && directResult && directResult.ok) {
-    const name = typeof actionPayload.name === 'string' ? actionPayload.name.trim() : '';
-    const renamed = presets.map((item) => (item && item.id === id ? { ...item, name } : item));
-    pushPresetPanelData({ presets: renamed, activePresetId: id });
-  } else if (nextAction === 'delete' && directResult && directResult.ok) {
-    const reset = presets.map((item) => (item && item.id === id ? { ...item, deletedAt: Date.now() } : item));
-    pushPresetPanelData({ presets: reset, activePresetId: id });
-  } else if (nextAction === 'add' || nextAction === 'store') {
-    const updated = presets.map((item) => (item && item.id === id ? { ...item, updatedAt: Date.now() } : item));
-    pushPresetPanelData({ presets: updated, activePresetId: id });
-  } else if (nextAction === 'select' || nextAction === 'load' || nextAction === 'recall' || nextAction === 'record' || nextAction === 'prepare') {
+  if (nextAction === 'select' || nextAction === 'load' || nextAction === 'recall' || nextAction === 'record' || nextAction === 'prepare') {
     pushPresetPanelData({ activePresetId: id });
+  } else {
+    pushPresetPanelData({ activePresetId: id });
+  }
+  if (nextAction === 'add' || nextAction === 'store' || nextAction === 'replace' || nextAction === 'delete' || nextAction === 'rename') {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const refreshToken = Date.now();
+    await refreshSinglePreset(index, id, {
+      cacheBuster: refreshToken,
+      preserveExistingOnMissing: nextAction === 'replace',
+    });
   }
 
   if (mainWindow && !mainWindow.isDestroyed()) {

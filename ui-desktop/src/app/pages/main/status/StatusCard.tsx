@@ -64,6 +64,7 @@ export function StatusCard() {
     desc: recording duration (s). If "0", not recording.
     msg: remaining time (s).
   */
+ /*
   const recordingState = useMemo(() => {
     const status = cam.recording?.status;
     const durationSec = cam.recording?.duration;
@@ -82,7 +83,7 @@ export function StatusCard() {
     }
 
     return { isRecording, durationText, remainingText };
-  }, [cam.recording?.status, cam.recording?.duration, cam.recording?.remain]);
+  }, [cam.recording?.status, cam.recording?.duration, cam.recording?.remain]);*/
 
   const containerData = useMemo(
     () => ({
@@ -96,13 +97,8 @@ export function StatusCard() {
         tilt: cam.ptz?.tilt?.value ?? null,
         zoom: cam.ptz?.zoom?.value ?? null,
       },
-      recording: {
-        isRecording: recordingState.isRecording,
-        duration: recordingState.durationText,
-        remaining: recordingState.remainingText
-      }
     }),
-    [awbMode, cam.ptz?.pan?.value, cam.ptz?.tilt?.value, cam.ptz?.zoom?.value, exposureText, wbText, recordingState],
+    [awbMode, cam.ptz?.pan?.value, cam.ptz?.tilt?.value, cam.ptz?.zoom?.value, exposureText, wbText],
   );
   useContainerData('group.status', containerData);
 
@@ -189,24 +185,6 @@ export function StatusCard() {
             </div>
           </div>
 
-          {/* row 4: 文件 / 推流 / 录制 状态 */}
-          <div className="zcam-status-grid-row zcam-status-grid-row-wide">
-            <div
-              className="zcam-status-chip-group"
-              data-path="zcam.camera.pages.main.status.recording"
-            >
-              <span 
-                className={`zcam-chip ${recordingState.isRecording ? 'zcam-chip-active' : ''}`}
-                style={recordingState.isRecording ? { color: '#ef4444' } : undefined}
-              >
-                <span className={recordingState.isRecording ? 'zcam-chip-label-active' : ''}>REC ●</span>
-                {' '}
-                {recordingState.isRecording ? recordingState.durationText : '--:--:--'}
-              </span>
-              <span className="zcam-chip" style={{ opacity: 1 }}>Remain {recordingState.remainingText}</span>
-            </div>
-            <div className="zcam-status-chip-group zcam-status-chip-group-right" />
-          </div>
         </div>
       </div>
     </div>

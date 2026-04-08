@@ -80,7 +80,7 @@ export function WindowControls() {
         aria-label={layoutToggleTitle}
         onClick={handleLayoutModeToggle}
       >
-        {isPtzLayout ? 'A' : 'C'}
+        {isPtzLayout ? 'C' : 'A'}
       </button>
       <button
         type="button"

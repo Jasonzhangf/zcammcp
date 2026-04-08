@@ -25,7 +25,7 @@ try {
 
 const CAMERA_STATE_HOST = process.env.ZCAM_CAMERA_STATE_HOST || '127.0.0.1';
 const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292', 10);
-const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERVAL || '0', 10);
+const CAMERA_STATE_BG_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_BG_INTERVAL || '0', 10);
 const UVC_BASE_URL = process.env.ZCAM_UVC_BASE || 'http://127.0.0.1:17988';
 const UVC_WS_URL = process.env.ZCAM_UVC_WS || 'ws://127.0.0.1:17988/ws';
 const WS_RECONNECT_INTERVAL = 3000;
@@ -39,7 +39,7 @@ const BONJOUR_TYPES = (process.env.ZCAM_BONJOUR_TYPES || '_http._tcp,_zcam._tcp'
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain,stream_status,srt,rtmp'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain,stream_status'
 )
   .split(',')
   .map((k) => k.trim())
@@ -78,7 +78,23 @@ function ensureFetch() {
   }
 }
 
-const fetchImpl = ensureFetch();
+const rawFetch = ensureFetch();
+
+async function fetchImpl(url, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const startedAt = Date.now();
+  console.log(`[CameraState] -> ${method} ${url}`);
+  try {
+    const response = await rawFetch(url, options);
+    const elapsed = Date.now() - startedAt;
+    console.log(`[CameraState] <- ${method} ${url} ${response.status} (${elapsed}ms)`);
+    return response;
+  } catch (err) {
+    const elapsed = Date.now() - startedAt;
+    console.error(`[CameraState] xx ${method} ${url} (${elapsed}ms)`, err?.message || err);
+    throw err;
+  }
+}
 
 async function fetchProperty(key) {
   if (key === 'srt' || key === 'rtmp') {
@@ -642,7 +658,7 @@ async function initialRefresh() {
 }
 
 function startPolling() {
-  if (CAMERA_STATE_POLL_INTERVAL <= 0) {
+  if (CAMERA_STATE_BG_POLL_INTERVAL <= 0) {
     console.log('[CameraState] background polling disabled (interval <= 0)');
     return;
   }
@@ -653,7 +669,7 @@ function startPolling() {
     ensureDeviceListAvailable().catch((err) => {
       console.error('[CameraState] background device refresh failed', err);
     });
-  }, CAMERA_STATE_POLL_INTERVAL);
+  }, CAMERA_STATE_BG_POLL_INTERVAL);
 }
 
 function connectWebSocket() {

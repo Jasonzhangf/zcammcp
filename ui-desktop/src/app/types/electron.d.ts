@@ -95,6 +95,8 @@ export interface ElectronAPI {
   onWindowState?: (callback: (state: WindowStatePayload) => void) => () => void;
   onCameraState?: (callback: (snapshot: CameraStateSnapshot) => void) => () => void;
   onDeviceSwitchRequest?: (callback: (payload: { id?: string }) => void) => () => void;
+  onDevicePanelState?: (callback: (payload: { open?: boolean }) => void) => () => void;
+  onPresetPanelState?: (callback: (payload: { open?: boolean }) => void) => () => void;
   registerTestHandler?: (handler: (command: TestCommandMessage) => Promise<TestHandlerResult> | TestHandlerResult) => () => void;
 }
 

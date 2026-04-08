@@ -612,32 +612,11 @@ export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
         {showFloatingDevices ? (
           <span className="zcam-card-header-right zcam-ptz-header-right">
             <span className="zcam-card-title">PTZ</span>
-            <button
-              type="button"
-              className="zcam-header-btn zcam-ptz-refresh-btn"
-              onClick={() => void handleRestartImvtService()}
-              disabled={restartingService}
-              title={restartingService ? 'Refreshing...' : 'Refresh'}
-              aria-label={restartingService ? 'Refreshing...' : 'Refresh'}
-            >
-              ↻
-            </button>
           </span>
         ) : (
           <>
             <span className="zcam-card-title">PTZ</span>
-            <span className="zcam-card-header-right zcam-ptz-header-right">
-              <button
-                type="button"
-                className="zcam-header-btn zcam-ptz-refresh-btn"
-                onClick={() => void handleRestartImvtService()}
-                disabled={restartingService}
-                title={restartingService ? 'Refreshing...' : 'Refresh'}
-                aria-label={restartingService ? 'Refreshing...' : 'Refresh'}
-              >
-                ↻
-              </button>
-            </span>
+            <span className="zcam-card-header-right zcam-ptz-header-right" />
           </>
         )}
       </div>

@@ -34,7 +34,7 @@
   },
   "build": {
     "appId": "com.zcam.ui-desktop",
-    "productName": "ZCAM PTZ 控制台",
+    "productName": "ZCAM PTZ Controller",
     "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "release"
@@ -42,6 +42,7 @@
     "files": [
       "electron.main.cjs",
       "electron.preload.cjs",
+      "electron.preset-panel.cjs",
       "dist/**/*",
       "assets/**/*",
       "dist-web/**/*",

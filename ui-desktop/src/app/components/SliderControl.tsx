@@ -201,7 +201,7 @@ export function SliderControl({ config, disabled = false }: SliderControlProps) 
 
       // THROTTLE: Only send to backend if 100ms passed
       const now = Date.now();
-      if (now - lastCmdTimeRef.current > 100) {
+      if (now - lastCmdTimeRef.current > 180) {
         commitValue(clampedValue, meta);
       }
       // Else: skip backend send, but UI is already updated via setPendingValue

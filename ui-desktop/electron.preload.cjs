@@ -43,6 +43,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('device:switchRequest', handler);
     return () => ipcRenderer.removeListener('device:switchRequest', handler);
   },
+  onDevicePanelState: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => { };
+    }
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('devicePanel:state', handler);
+    return () => ipcRenderer.removeListener('devicePanel:state', handler);
+  },
+  onPresetPanelState: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => { };
+    }
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('presetPanel:state', handler);
+    return () => ipcRenderer.removeListener('presetPanel:state', handler);
+  },
   registerTestHandler: (handler) => {
     if (typeof handler !== 'function') {
       return () => { };
