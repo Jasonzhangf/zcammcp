@@ -5,7 +5,7 @@ import type { ViewState } from '../../../framework/state/PageStore.js';
 
 export interface ModalOption {
   label: string;
-  value: number;
+  value: string | number;
 }
 
 export interface ShutterSelectConfig {
@@ -14,8 +14,8 @@ export interface ShutterSelectConfig {
   operationId: string;  // e.g. 'exposure.setShutter'
   title: string;        // 模态标题
   options: ModalOption[];
-  readValue(view: ViewState): number | undefined;
-  formatValue?(view: ViewState, value: number | undefined): string;
+  readValue(view: ViewState): string | number | undefined;
+  formatValue?(view: ViewState, value: string | number | undefined): string;
 }
 
 export const defaultShutterSelectConfig: ShutterSelectConfig = {
@@ -28,9 +28,7 @@ export const defaultShutterSelectConfig: ShutterSelectConfig = {
     value: v,
   })),
   readValue(view) {
-    const raw = view.camera.exposure?.shutter?.value;
-    const numeric = Number(raw);
-    return Number.isFinite(numeric) ? numeric : undefined;
+    return view.camera.exposure?.shutter?.value;
   },
   formatValue(view, v) {
     // 优先使用 cameraState 中已有的 view 文本, 回退到选项 label

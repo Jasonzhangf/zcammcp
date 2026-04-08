@@ -1,7 +1,11 @@
 function buildPresetPanelHtml() {
   return `<!doctype html><html><head><meta charset="UTF-8"><style>
     html,body{margin:0;padding:0;height:100%;overflow:hidden;background:rgba(18,18,18,.98);color:#f5f5f5;font:12px Arial}
-    .wrap{height:100vh;box-sizing:border-box;display:flex;flex-direction:column;border:1px solid #2f2f2f;border-radius:8px;overflow:hidden}
+    .wrap{position:relative;height:100vh;box-sizing:border-box;display:flex;flex-direction:column;border:1px solid #2f2f2f;border-radius:8px;overflow:hidden}
+    .wrap.loading .list,.wrap.loading .bottom{pointer-events:none;opacity:.45}
+    .loading-mask{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,10,10,.28);z-index:20}
+    .wrap.loading .loading-mask{display:flex}
+    .loading-chip{padding:6px 10px;border:1px solid #3a3a3a;border-radius:6px;background:#1b1b1b;color:#d0d0d0;font-size:11px}
     .head{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #2a2a2a}
     .title{font-weight:600}
     .dot{width:8px;height:8px;border-radius:50%;background:#666}
@@ -36,12 +40,14 @@ function buildPresetPanelHtml() {
     .op-stop-square{height:33%;aspect-ratio:1/1;background:#ffffff;border-radius:999px;display:block}
     .op:hover{border-color:#ff7a45;color:#fff}
     .op:disabled{color:#6d6d6d;border-color:#2f2f2f;cursor:default}
-  </style></head><body><div class="wrap"><div class="head"><span class="title">Presets</span><span id="statusDot" class="dot"></span><button id="closeBtn" class="close">×</button></div><div id="list" class="list"></div><div class="bottom"><div id="pages" class="pages"></div><div class="ops"><button id="opAdd" class="op" title="Add">+</button><button id="opLoad" class="op" title="Load">▶</button><button id="opStop" class="op" title="Stop"><span class="op-stop-square"></span></button><button id="opDelete" class="op" title="Delete">🗑</button></div></div></div>
+  </style></head><body><div id="panelWrap" class="wrap"><div class="head"><span class="title">Presets</span><span id="statusDot" class="dot"></span><button id="closeBtn" class="close">×</button></div><div id="list" class="list"></div><div class="bottom"><div id="pages" class="pages"></div><div class="ops"><button id="opAdd" class="op" title="Add">+</button><button id="opLoad" class="op" title="Load">▶</button><button id="opStop" class="op" title="Stop"><span class="op-stop-square"></span></button><button id="opDelete" class="op" title="Delete">🗑</button></div></div><div class="loading-mask"><div class="loading-chip">Loading presets...</div></div></div>
   <script>
     const { ipcRenderer } = require('electron');
     let state = { presets: [], activePresetId: null };
     let currentPage = 1;
+    let isLoading = false;
     const pageSize = 10;
+    const panelWrap = document.getElementById('panelWrap');
     const listEl = document.getElementById('list');
     const pagesEl = document.getElementById('pages');
     const dot = document.getElementById('statusDot');
@@ -49,6 +55,12 @@ function buildPresetPanelHtml() {
     const opLoadBtn = document.getElementById('opLoad');
     const opDeleteBtn = document.getElementById('opDelete');
     document.getElementById('closeBtn').addEventListener('click', () => ipcRenderer.invoke('presetPanel:hide'));
+    function setLoading(next){
+      isLoading = Boolean(next);
+      if (panelWrap) {
+        panelWrap.classList.toggle('loading', isLoading);
+      }
+    }
     function getPresetById(id){
       const presets = Array.isArray(state.presets) ? state.presets : [];
       return presets.find((item) => item && item.id === id) || null;
@@ -78,6 +90,7 @@ function buildPresetPanelHtml() {
       await ipcRenderer.invoke('presetPanel:selectPreset', id, action);
     }
     opAddBtn.addEventListener('click', async () => {
+      if (isLoading) return;
       const preset = getCurrentPreset();
       const id = getCurrentPresetId();
       if (!id) return;
@@ -131,9 +144,15 @@ function buildPresetPanelHtml() {
         page.className = 'page' + (i === currentPage ? ' active' : '');
         page.textContent = String(i);
         page.addEventListener('click', async () => {
+          if (isLoading) return;
           currentPage = i;
-          await ipcRenderer.invoke('presetPanel:ensurePage', { page: currentPage });
-          render();
+          setLoading(true);
+          try {
+            await ipcRenderer.invoke('presetPanel:ensurePage', { page: currentPage });
+          } finally {
+            setLoading(false);
+            render();
+          }
         });
         pagesEl.appendChild(page);
       }
@@ -205,6 +224,7 @@ function buildPresetPanelHtml() {
         ctrls.appendChild(btnMenu);
         item.appendChild(thumb); item.appendChild(name); item.appendChild(ctrls);
         item.addEventListener('click', async () => {
+          if (isLoading) return;
           await ipcRenderer.invoke('presetPanel:selectPreset', preset.id, 'select');
         });
         listEl.appendChild(item);
@@ -219,8 +239,13 @@ function buildPresetPanelHtml() {
       if (Number.isFinite(parsed) && parsed > 0) {
         currentPage = Math.floor((parsed - 1) / pageSize) + 1;
       }
-      await ipcRenderer.invoke('presetPanel:ensurePage', { page: currentPage });
-      render();
+      setLoading(true);
+      try {
+        await ipcRenderer.invoke('presetPanel:ensurePage', { page: currentPage });
+      } finally {
+        setLoading(false);
+        render();
+      }
     });
   </script></body></html>`;
 }

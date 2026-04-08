@@ -39,7 +39,7 @@ const BONJOUR_TYPES = (process.env.ZCAM_BONJOUR_TYPES || '_http._tcp,_zcam._tcp'
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain,stream_status'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,sht_operation,shutter_time,shutter_angle,wb,mwb,brightness,contrast,saturation'
 )
   .split(',')
   .map((k) => k.trim())
@@ -479,7 +479,16 @@ function projectCameraState(values) {
       exposure: projectValue('exposure'),
       gain: projectValue('gain'),
       iso: projectValue('iso'),
-      shutter: projectValue('shutter_time'),
+      shutterOperation: projectValue('sht_operation'),
+      shutterTime: projectValue('shutter_time'),
+      shutterAngle: projectValue('shutter_angle'),
+      shutter: (() => {
+        const mode = String(values['sht_operation']?.value || 'Speed').toLowerCase();
+        if (mode === 'angle') {
+          return projectValue('shutter_angle') || projectValue('shutter_time');
+        }
+        return projectValue('shutter_time') || projectValue('shutter_angle');
+      })(),
     },
     whiteBalance: (() => {
       const wbEntry = projectValue('wb');

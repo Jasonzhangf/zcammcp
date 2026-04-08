@@ -1484,6 +1484,22 @@ ipcMain.handle('imvt:restartService', async () => {
   }
 });
 
+ipcMain.handle('cameraState:refresh', async (_, payload) => {
+  try {
+    const requestedKeys = Array.isArray(payload?.keys)
+      ? payload.keys.filter((item) => typeof item === 'string' && item.trim().length > 0)
+      : [];
+    const body = requestedKeys.length > 0 ? { keys: requestedKeys } : {};
+    const refreshed = await requestCameraService('/refresh', 'POST', body);
+    if (refreshed?.state) {
+      pushCameraState(refreshed.state);
+    }
+    return { ok: true, state: refreshed?.state || null };
+  } catch (err) {
+    return { ok: false, error: err?.message || String(err) };
+  }
+});
+
 ipcMain.handle('window:shrinkToBall', () => shrinkToBall());
 
 ipcMain.handle('window:restoreFromBall', () => restoreFromBall());

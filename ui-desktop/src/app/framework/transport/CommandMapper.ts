@@ -139,9 +139,30 @@ export class CommandMapper {
         // uvc set <key> <value>
         // API: /ctrl/set?{key}={value}
         if (action === 'set') {
-            const value = params[0];
+            let value = params[0];
+            let auto: string | undefined;
+            for (let i = 0; i < params.length; i += 1) {
+                const token = params[i];
+                if (token === '--value' && typeof params[i + 1] !== 'undefined') {
+                    value = params[i + 1];
+                    i += 1;
+                    continue;
+                }
+                if (token === '--auto') {
+                    auto = typeof params[i + 1] === 'undefined' ? 'true' : params[i + 1];
+                    if (typeof params[i + 1] !== 'undefined') {
+                        i += 1;
+                    }
+                }
+            }
+            if (typeof auto !== 'undefined') {
+                return {
+                    url: `/ctrl/set?${encodeURIComponent(key)}=${encodeURIComponent(auto === 'true' ? 'Auto' : 'Manual')}`,
+                    method: 'GET',
+                };
+            }
             return {
-                url: `/ctrl/set?${key}=${value}`,
+                url: `/ctrl/set?${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`,
                 method: 'GET',
             };
         }

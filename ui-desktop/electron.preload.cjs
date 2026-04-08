@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pushState: (channel, payload) => ipcRenderer.invoke('state:push', { channel, payload }),
   runCliCommand: (payload) => ipcRenderer.invoke('cli:run', payload),
   sendUvcRequest: (request) => ipcRenderer.invoke('uvc:request', request),
+  refreshCameraState: (payload) => ipcRenderer.invoke('cameraState:refresh', payload),
   restartImvtService: () => ipcRenderer.invoke('imvt:restartService'),
   toggleDevicePanel: () => ipcRenderer.invoke('devicePanel:toggle'),
   hideDevicePanel: () => ipcRenderer.invoke('devicePanel:hide'),

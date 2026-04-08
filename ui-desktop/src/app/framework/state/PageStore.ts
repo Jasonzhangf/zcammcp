@@ -15,6 +15,7 @@ export interface CameraState {
   // 曝光设置
   exposure?: {
     aeEnabled?: boolean;
+    shutterOperation?: { value: string; view: string; options?: string[] };
     shutter?: { value: string | number; view: string; options?: string[] };
     iso?: { value: string; view: string; options?: string[] };
   };

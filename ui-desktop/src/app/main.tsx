@@ -184,6 +184,23 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
     if (typeof camera.exposure.aeEnabled !== 'undefined') {
       next.exposure.aeEnabled = Boolean(camera.exposure.aeEnabled);
     }
+    const normalizeShutterMode = (raw: unknown): 'Speed' | 'Angle' => {
+      const text = String(raw ?? '').trim().toLowerCase();
+      return text === 'angle' ? 'Angle' : 'Speed';
+    };
+    const shutterModeEntry = camera.exposure.shutterOperation
+      ?? camera.exposure.sht_operation
+      ?? camera['sht_operation'];
+    const shutterMode = normalizeShutterMode(
+      typeof shutterModeEntry === 'object' && shutterModeEntry
+        ? (shutterModeEntry.value ?? shutterModeEntry.view ?? shutterModeEntry)
+        : shutterModeEntry
+    );
+    next.exposure.shutterOperation = {
+      value: shutterMode,
+      view: shutterMode,
+      options: ['Speed', 'Angle'],
+    };
     const mapShutter = (entry: any) => {
       const value = entry?.value ?? entry;
       const view = entry?.view ?? String(value);
@@ -192,8 +209,13 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
       const isValid = (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && value.length > 0);
       return isValid ? { value, view, options } : undefined;
     };
-    if (camera.exposure.shutter) {
-      const shutter = mapShutter(camera.exposure.shutter);
+    const shutterTimeEntry = camera.exposure.shutterTime ?? camera.exposure.shutter_time ?? camera['shutter_time'];
+    const shutterAngleEntry = camera.exposure.shutterAngle ?? camera.exposure.shutter_angle ?? camera['shutter_angle'];
+    const selectedEntry = shutterMode === 'Angle'
+      ? (shutterAngleEntry ?? camera.exposure.shutter)
+      : (shutterTimeEntry ?? camera.exposure.shutter);
+    if (selectedEntry) {
+      const shutter = mapShutter(selectedEntry);
       if (shutter) next.exposure.shutter = shutter;
     }
     const mapIso = (entry: any) => {

@@ -72,6 +72,7 @@ export interface ElectronAPI {
   pushState?: (channel: string, payload: unknown) => Promise<void>;
   runCliCommand?: (payload: CliBridgeRequest) => Promise<CliBridgeResult>;
   sendUvcRequest?: (request: UvcRequest) => Promise<UvcResponse>;
+  refreshCameraState?: (payload?: { keys?: string[] }) => Promise<{ ok: boolean; state?: CameraStateSnapshot | null; error?: string }>;
   restartImvtService?: () => Promise<{ ok: boolean; running?: boolean; error?: string }>;
   toggleDevicePanel?: () => Promise<{ ok: boolean; open: boolean }>;
   hideDevicePanel?: () => Promise<{ ok: boolean; open: boolean }>;

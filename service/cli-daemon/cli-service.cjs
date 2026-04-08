@@ -156,6 +156,9 @@ function deriveCameraKeys(args) {
 
   // UVC commands: uvc set <key>
   if (args[0] === 'uvc' && args[1] === 'set' && typeof args[2] === 'string') {
+    if (args[2] === 'sht_operation') {
+      return ['sht_operation', 'shutter_time', 'shutter_angle'];
+    }
     return [args[2]];
   }
 

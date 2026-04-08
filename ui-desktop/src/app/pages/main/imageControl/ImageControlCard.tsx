@@ -191,11 +191,13 @@ export function ImageControlCard() {
             <div className="zcam-subsection-header" data-path="zcam.camera.pages.main.exposure.shutterIso.header">
               <div className="zcam-subsection-title">Shutter / ISO</div>
             </div>
-            <div className="zcam-field-row" data-path="zcam.camera.pages.main.exposure.shutterSpeed">
-              <ShutterSelect />
-            </div>
-            <div className="zcam-field-row" data-path="zcam.camera.pages.main.exposure.iso">
-              <IsoSelect />
+            <div className="zcam-field-row zcam-exposure-inline" data-path="zcam.camera.pages.main.exposure.shutterIso.inline">
+              <div data-path="zcam.camera.pages.main.exposure.shutterSpeed">
+                <ShutterSelect />
+              </div>
+              <div data-path="zcam.camera.pages.main.exposure.iso">
+                <IsoSelect />
+              </div>
             </div>
           </div>
         )}

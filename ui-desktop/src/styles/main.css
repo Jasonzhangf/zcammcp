@@ -1709,9 +1709,54 @@ body {
   color: #fff;
   border: 1px solid #333;
   border-radius: 4px;
-  padding: 3px 8px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 8px;
   text-align: left;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.zcam-select-compact {
+  min-width: 96px;
+}
+
+.zcam-select-compact .zcam-select-trigger,
+.zcam-select-compact .zcam-select-native {
+  width: 96px;
+  min-width: 96px;
+  max-width: 96px;
+}
+
+.zcam-select-native {
+  font-size: 11px;
+  background: #111;
+  color: #888 !important;
+  -webkit-text-fill-color: #888;
+  border: 1px solid #333;
+  border-radius: 4px;
+  height: 24px;
+  box-sizing: border-box;
+  padding: 0 20px 0 8px;
+  line-height: 22px;
+  text-transform: none;
+}
+
+.zcam-select-native option {
+  color: #888;
+}
+
+.zcam-shutter-inline {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.zcam-exposure-inline {
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 20px;
 }
 
 .zcam-grid-trigger {
