@@ -8,12 +8,24 @@
 
 const http = require('http');
 const { URL } = require('url');
+const path = require('path');
 let WebSocket = null;
 try {
   const wsModule = require('ws');
   WebSocket = wsModule && wsModule.default ? wsModule.default : wsModule;
 } catch {
-  WebSocket = null;
+  const tryPaths = [
+    path.resolve(__dirname, '..', '..', 'app.asar', 'node_modules', 'ws'),
+    path.resolve(__dirname, '..', '..', 'app.asar.unpacked', 'node_modules', 'ws'),
+  ];
+  for (const p of tryPaths) {
+    try {
+      const wsModule = require(p);
+      WebSocket = wsModule && wsModule.default ? wsModule.default : wsModule;
+      break;
+    } catch {
+    }
+  }
 }
 let Bonjour = null;
 try {
@@ -672,9 +684,9 @@ function startPolling() {
     return;
   }
   pollingTimer = setInterval(() => {
-    refreshKeys(DEFAULT_KEYS).catch((err) => {
-      console.error('[CameraState] background refresh failed', err);
-    });
+    // refreshKeys(DEFAULT_KEYS).catch((err) => {
+    //   console.error('[CameraState] background refresh failed', err);
+    // });
     ensureDeviceListAvailable().catch((err) => {
       console.error('[CameraState] background device refresh failed', err);
     });

@@ -1370,11 +1370,22 @@ function startCameraStateService() {
   console.log('[Electron] Starting Camera State Service...');
   console.log('[Electron] CAMERA_STATE_SCRIPT:', CAMERA_STATE_SCRIPT);
 
+  const extraNodePaths = [];
+  if (app.isPackaged) {
+    extraNodePaths.push(path.join(process.resourcesPath, 'app.asar', 'node_modules'));
+    extraNodePaths.push(path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules'));
+  }
+  const mergedNodePath = [
+    ...extraNodePaths,
+    ...(process.env.NODE_PATH ? [process.env.NODE_PATH] : []),
+  ].join(path.delimiter);
+
   cameraStateProcess = spawn(CLI_NODE_BIN, [CAMERA_STATE_SCRIPT], {
     cwd: path.dirname(CAMERA_STATE_SCRIPT),
     windowsHide: true,
     env: {
       ...process.env,
+      ...(mergedNodePath ? { NODE_PATH: mergedNodePath } : {}),
       ELECTRON_RUN_AS_NODE: '1',
       ZCAM_CAMERA_STATE_HOST: CAMERA_STATE_HOST,
       ZCAM_CAMERA_STATE_PORT: String(CAMERA_STATE_PORT),
@@ -1481,22 +1492,6 @@ ipcMain.handle('imvt:restartService', async () => {
     return await restartImvtCameraService();
   } catch (error) {
     return { ok: false, error: error?.message || String(error) };
-  }
-});
-
-ipcMain.handle('cameraState:refresh', async (_, payload) => {
-  try {
-    const requestedKeys = Array.isArray(payload?.keys)
-      ? payload.keys.filter((item) => typeof item === 'string' && item.trim().length > 0)
-      : [];
-    const body = requestedKeys.length > 0 ? { keys: requestedKeys } : {};
-    const refreshed = await requestCameraService('/refresh', 'POST', body);
-    if (refreshed?.state) {
-      pushCameraState(refreshed.state);
-    }
-    return { ok: true, state: refreshed?.state || null };
-  } catch (err) {
-    return { ok: false, error: err?.message || String(err) };
   }
 });
 
