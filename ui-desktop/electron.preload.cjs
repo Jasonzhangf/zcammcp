@@ -12,6 +12,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pushState: (channel, payload) => ipcRenderer.invoke('state:push', { channel, payload }),
   runCliCommand: (payload) => ipcRenderer.invoke('cli:run', payload),
   sendUvcRequest: (request) => ipcRenderer.invoke('uvc:request', request),
+  refreshCameraState: (payload) => ipcRenderer.invoke('cameraState:refresh', payload),
+  restartImvtService: () => ipcRenderer.invoke('imvt:restartService'),
+  toggleDevicePanel: () => ipcRenderer.invoke('devicePanel:toggle'),
+  hideDevicePanel: () => ipcRenderer.invoke('devicePanel:hide'),
+  updateDevicePanel: (payload) => ipcRenderer.invoke('devicePanel:update', payload),
+  togglePresetPanel: () => ipcRenderer.invoke('presetPanel:toggle'),
+  hidePresetPanel: () => ipcRenderer.invoke('presetPanel:hide'),
+  updatePresetPanel: (payload) => ipcRenderer.invoke('presetPanel:update', payload),
   onWindowState: (callback) => {
     if (typeof callback !== 'function') {
       return () => { };
@@ -27,6 +35,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const handler = (_event, state) => callback(state);
     ipcRenderer.on('camera:state', handler);
     return () => ipcRenderer.removeListener('camera:state', handler);
+  },
+  onDeviceSwitchRequest: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => { };
+    }
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('device:switchRequest', handler);
+    return () => ipcRenderer.removeListener('device:switchRequest', handler);
+  },
+  onDevicePanelState: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => { };
+    }
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('devicePanel:state', handler);
+    return () => ipcRenderer.removeListener('devicePanel:state', handler);
+  },
+  onPresetPanelState: (callback) => {
+    if (typeof callback !== 'function') {
+      return () => { };
+    }
+    const handler = (_event, payload) => callback(payload);
+    ipcRenderer.on('presetPanel:state', handler);
+    return () => ipcRenderer.removeListener('presetPanel:state', handler);
   },
   registerTestHandler: (handler) => {
     if (typeof handler !== 'function') {

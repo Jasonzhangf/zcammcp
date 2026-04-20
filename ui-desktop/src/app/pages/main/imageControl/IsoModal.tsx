@@ -16,7 +16,7 @@ interface IsoModalProps {
 export const IsoModal: React.FC<IsoModalProps> = ({ open, current, options, anchorRef, onClose, onSelect }) => {
   const displayOptions = options && options.length > 0 ? options : ['Auto', '100', '200', '400', '800', '1600', '3200', '6400'];
   return (
-    <Modal open={open} title="ISO 感光度" anchorRef={anchorRef} onClose={onClose}>
+    <Modal open={open} title="ISO" anchorRef={anchorRef} onClose={onClose}>
       <div className="zcam-option-grid">
         {displayOptions.map((v) => (
           <button
@@ -34,7 +34,7 @@ export const IsoModal: React.FC<IsoModalProps> = ({ open, current, options, anch
       </div>
       <div style={{ marginTop: 8, textAlign: 'center' }}>
         <button type="button" className="zcam-modal-btn" onClick={onClose}>
-          取消
+          Cancel
         </button>
       </div>
     </Modal>

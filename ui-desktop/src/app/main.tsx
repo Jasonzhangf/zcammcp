@@ -85,6 +85,22 @@ function attachCameraStateBridge(store: PageStore) {
   });
 }
 
+function attachDeviceSwitchBridge(store: PageStore) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  const api = window.electronAPI;
+  const subscribe = api?.onDeviceSwitchRequest;
+  if (!api || !subscribe) {
+    return;
+  }
+  subscribe((payload) => {
+    const deviceId = typeof payload?.id === 'string' ? payload.id : '';
+    if (!deviceId) return;
+    void store.runOperation('zcam.camera.pages.main.devices', 'device-interaction', 'device.switch', { value: deviceId });
+  });
+}
+
 function mapCameraSnapshot(snapshot: any): CameraState | null {
   if (!snapshot) return null;
   const camera = snapshot.camera ?? snapshot;
@@ -168,6 +184,23 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
     if (typeof camera.exposure.aeEnabled !== 'undefined') {
       next.exposure.aeEnabled = Boolean(camera.exposure.aeEnabled);
     }
+    const normalizeShutterMode = (raw: unknown): 'Speed' | 'Angle' => {
+      const text = String(raw ?? '').trim().toLowerCase();
+      return text === 'angle' ? 'Angle' : 'Speed';
+    };
+    const shutterModeEntry = camera.exposure.shutterOperation
+      ?? camera.exposure.sht_operation
+      ?? camera['sht_operation'];
+    const shutterMode = normalizeShutterMode(
+      typeof shutterModeEntry === 'object' && shutterModeEntry
+        ? (shutterModeEntry.value ?? shutterModeEntry.view ?? shutterModeEntry)
+        : shutterModeEntry
+    );
+    next.exposure.shutterOperation = {
+      value: shutterMode,
+      view: shutterMode,
+      options: ['Speed', 'Angle'],
+    };
     const mapShutter = (entry: any) => {
       const value = entry?.value ?? entry;
       const view = entry?.view ?? String(value);
@@ -176,8 +209,13 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
       const isValid = (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && value.length > 0);
       return isValid ? { value, view, options } : undefined;
     };
-    if (camera.exposure.shutter) {
-      const shutter = mapShutter(camera.exposure.shutter);
+    const shutterTimeEntry = camera.exposure.shutterTime ?? camera.exposure.shutter_time ?? camera['shutter_time'];
+    const shutterAngleEntry = camera.exposure.shutterAngle ?? camera.exposure.shutter_angle ?? camera['shutter_angle'];
+    const selectedEntry = shutterMode === 'Angle'
+      ? (shutterAngleEntry ?? camera.exposure.shutter)
+      : (shutterTimeEntry ?? camera.exposure.shutter);
+    if (selectedEntry) {
+      const shutter = mapShutter(selectedEntry);
       if (shutter) next.exposure.shutter = shutter;
     }
     const mapIso = (entry: any) => {
@@ -208,11 +246,6 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
       const value = typeof tempEntry.value !== 'undefined' ? tempEntry.value : tempEntry;
       const numeric = Number(value);
 
-      console.log('[WB Mapping] tempEntry:', tempEntry);
-      console.log('[WB Mapping] tempEntry.min:', tempEntry.min);
-      console.log('[WB Mapping] tempEntry.max:', tempEntry.max);
-      console.log('[WB Mapping] tempEntry.w:', tempEntry.w);
-
       if (Number.isFinite(numeric)) {
         // Extract min/max/step from tempEntry or tempEntry.w or tempEntry.raw
         const extractNumber = (key: string) => {
@@ -225,8 +258,6 @@ function mapCameraSnapshot(snapshot: any): CameraState | null {
         const min = extractNumber('min');
         const max = extractNumber('max');
         const step = extractNumber('step');
-
-        console.log('[WB Mapping] Extracted min/max/step:', min, max, step);
 
         next.whiteBalance.temperature = {
           value: numeric,
@@ -271,6 +302,7 @@ if (rootEl) {
   } else {
     attachCameraStateBridge(pageStore);
   }
+  attachDeviceSwitchBridge(pageStore);
   attachWindowStateBridge(uiSceneStore);
   installTestHarness({ store: pageStore });
 

@@ -54,7 +54,7 @@ function MainPtzOnlyLayout() {
             defaultBounds={{ x: 0, y: 0, width: 100, height: 100 }}
             resizable
           >
-            <PtzCard />
+            <PtzCard showFloatingDevices />
           </ContainerHost>
         </div>
       </div>
@@ -116,18 +116,7 @@ function MainNormalLayout() {
             <ImageControlCard />
           </ContainerHost>
         </div>
-        <ContainerHost
-          id="group.shortcuts"
-          parentId="page.root"
-          kind="group"
-          layoutMode="flow"
-          className="zcam-main-grid-shortcuts"
-          data-path="zcam.layout.normal.shortcuts"
-          defaultBounds={NORMAL_BOUNDS.shortcuts}
-          resizable
-        >
-          <ShortcutsCard />
-        </ContainerHost>
+        
       </div>
     </div>
   );

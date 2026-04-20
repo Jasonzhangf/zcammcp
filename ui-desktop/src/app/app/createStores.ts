@@ -73,7 +73,7 @@ export function createPageStore(options?: { useMockApi?: boolean }): PageStoreBu
 export function createUiSceneStore(): UiSceneStore {
   const initial: UiSceneState = {
     windowMode: 'main',
-    layoutSize: 'normal',
+    layoutSize: 'ptz',
   };
 
   return new UiSceneStore(initial);

@@ -15,6 +15,7 @@ export interface CameraState {
   // 曝光设置
   exposure?: {
     aeEnabled?: boolean;
+    shutterOperation?: { value: string; view: string; options?: string[] };
     shutter?: { value: string | number; view: string; options?: string[] };
     iso?: { value: string; view: string; options?: string[] };
   };
@@ -50,6 +51,30 @@ export interface CameraState {
     status: 'idle' | 'streaming';
     duration: number;
     remain: number;
+  };
+
+  // SRT Status
+  srt?: {
+    url?: string;
+    status?: string;
+    bw?: number;
+    passphrase?: string;
+    pbkeyLen?: number;
+    latency?: number;
+    ttl?: number;
+    mode?: number;
+    autoRestart?: number;
+    code?: number;
+  };
+
+  // RTMP Status
+  rtmp?: {
+    url?: string;
+    key?: string;
+    bw?: number;
+    status?: string;
+    autoRestart?: number;
+    code?: number;
   };
 }
 
@@ -87,6 +112,12 @@ function mergeCameraStates(current: CameraState, next: CameraState): CameraState
   }
   if (next.recording) {
     merged.recording = { ...(current.recording ?? {}), ...next.recording };
+  }
+  if (next.srt) {
+    merged.srt = { ...(current.srt ?? {}), ...next.srt };
+  }
+  if (next.rtmp) {
+    merged.rtmp = { ...(current.rtmp ?? {}), ...next.rtmp };
   }
   if (next.devices) {
     merged.devices = next.devices;
@@ -179,6 +210,11 @@ export class PageStore {
   private readonly operations: OperationRegistry;
   private readonly cli: CliChannel;
   private readonly listeners: Set<() => void> = new Set();
+  private readonly sliderOperationInFlight: Set<string> = new Set();
+  private readonly sliderOperationPending: Map<
+    string,
+    { nodePath: string; kind: string; operationId: string; payload: OperationPayload }
+  > = new Map();
 
 
   constructor(opts: {
@@ -309,7 +345,55 @@ export class PageStore {
    */
   async runOperation(nodePath: string, kind: string, operationId: string | undefined, payload: OperationPayload): Promise<void> {
     if (!operationId) return;
+    const sliderMeta = (payload.params as Record<string, unknown> | undefined)?.['sliderMeta'];
+    if (sliderMeta && typeof sliderMeta === 'object') {
+      await this.runCoalescedSliderOperation(nodePath, kind, operationId, payload);
+      return;
+    }
+    await this.executeOperation(nodePath, kind, operationId, payload);
+  }
 
+  private async runCoalescedSliderOperation(
+    nodePath: string,
+    kind: string,
+    operationId: string,
+    payload: OperationPayload,
+  ): Promise<void> {
+    const key = `${nodePath}::${kind}::${operationId}`;
+    if (this.sliderOperationInFlight.has(key)) {
+      this.sliderOperationPending.set(key, { nodePath, kind, operationId, payload });
+      return;
+    }
+    this.sliderOperationInFlight.add(key);
+    let current: { nodePath: string; kind: string; operationId: string; payload: OperationPayload } | null = {
+      nodePath,
+      kind,
+      operationId,
+      payload,
+    };
+    try {
+      while (current) {
+        await this.executeOperation(current.nodePath, current.kind, current.operationId, current.payload);
+        const pending = this.sliderOperationPending.get(key);
+        if (pending) {
+          this.sliderOperationPending.delete(key);
+          current = pending;
+          continue;
+        }
+        current = null;
+      }
+    } finally {
+      this.sliderOperationInFlight.delete(key);
+      this.sliderOperationPending.delete(key);
+    }
+  }
+
+  private async executeOperation(
+    nodePath: string,
+    kind: string,
+    operationId: string,
+    payload: OperationPayload,
+  ): Promise<void> {
     const ctx: OperationContext = {
       pagePath: this.path,
       nodePath,

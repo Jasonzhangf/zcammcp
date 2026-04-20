@@ -254,9 +254,7 @@ export const ptzOperations: OperationDefinition[] = [
         };
       }
 
-      const fzSpeed = ctx.uiState.fzSpeed ?? 50;
-      const normalizedMax = Math.max(0.01, Math.min(1, fzSpeed / 100));
-      const speed = Math.max(0.01, Math.min(1, abs * normalizedMax));
+      const speed = Math.max(0.01, Math.min(1, abs));
       const action = v > 0 ? 'zoomin' : 'zoomout';
 
       return {
@@ -354,13 +352,8 @@ export const ptzOperations: OperationDefinition[] = [
     id: 'ptz.stop',
     cliCommand: 'control.ptz.stop',
     async handler(ctx: OperationContext): Promise<OperationResult> {
-      return {
-        cliRequest: {
-          id: `ptz.stop.${Date.now()}`,
-          command: 'control',
-          args: ['control', 'ptz', 'stop']
-        }
-      };
+      ptzManager.scheduleStop();
+      return {};
     },
   },
   {

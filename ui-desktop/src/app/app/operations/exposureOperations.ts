@@ -17,27 +17,32 @@ export const exposureOperations: OperationDefinition[] = [
     },
   },
   {
+    id: 'exposure.setShutterOperation',
+    cliCommand: 'exposure.shutterOperation',
+    async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
+      const raw = String(payload.value ?? 'Speed').trim();
+      const mode = raw.toLowerCase() === 'angle' ? 'Angle' : 'Speed';
+      void ctx;
+      return {
+        cliRequest: buildUvcCliRequest('sht_operation', mode, { meta: extractSliderMeta(payload) }),
+      };
+    },
+  },
+  {
     id: 'exposure.setShutter',
     cliCommand: 'exposure.shutter',
     async handler(ctx: OperationContext, payload: OperationPayload): Promise<OperationResult> {
       const value = payload.value;
-      // Allow string values (e.g. "1/100") directly. Only clamp if it's purely numeric.
       let finalValue = String(value);
-
       if (typeof value === 'number' && Number.isFinite(value)) {
-        // Existing numeric logic (clamping if needed, but usually shutter is string or specific numbers)
-        // Actually, for Z CAM, shutter can be angles (numbers) or time (fractions).
-        // If it's a number, we pass it. If string, we pass it.
         finalValue = String(value);
       }
-
-      void ctx;
+      const modeFromPayload = String((payload.params as Record<string, unknown> | undefined)?.['mode'] ?? '').trim();
+      const modeFromState = String(ctx.cameraState.exposure?.shutterOperation?.value ?? '').trim();
+      const mode = (modeFromPayload || modeFromState).toLowerCase() === 'angle' ? 'Angle' : 'Speed';
+      const shutterKey = mode === 'Angle' ? 'shutter_angle' : 'shutter_time';
       return {
-        cliRequest: {
-          id: `image-shutter-${Date.now()}`,
-          command: `image adjust shutter_time ${finalValue}`,
-          args: ['image', 'adjust', 'shutter_time', finalValue],
-        },
+        cliRequest: buildUvcCliRequest(shutterKey, finalValue, { meta: extractSliderMeta(payload) }),
       };
     },
   },

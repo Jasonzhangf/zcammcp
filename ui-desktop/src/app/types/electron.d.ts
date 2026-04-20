@@ -72,9 +72,32 @@ export interface ElectronAPI {
   pushState?: (channel: string, payload: unknown) => Promise<void>;
   runCliCommand?: (payload: CliBridgeRequest) => Promise<CliBridgeResult>;
   sendUvcRequest?: (request: UvcRequest) => Promise<UvcResponse>;
+  refreshCameraState?: (payload?: { keys?: string[] }) => Promise<{ ok: boolean; state?: CameraStateSnapshot | null; error?: string }>;
+  restartImvtService?: () => Promise<{ ok: boolean; running?: boolean; error?: string }>;
+  toggleDevicePanel?: () => Promise<{ ok: boolean; open: boolean }>;
+  hideDevicePanel?: () => Promise<{ ok: boolean; open: boolean }>;
+  updateDevicePanel?: (payload: {
+    devices: Array<{ id: string; name?: string; serialPort?: string }>;
+    activeDeviceId: string | null;
+  }) => Promise<{ ok: boolean }>;
+    togglePresetPanel?: () => Promise<{ ok: boolean; open: boolean }>;
+    hidePresetPanel?: () => Promise<{ ok: boolean; open: boolean }>;
+    updatePresetPanel?: (payload: {
+      presets?: Array<{
+        id: string;
+        name?: string;
+        subtitle?: string;
+        previewUrl?: string;
+        controls?: { recall?: boolean; store?: boolean; menu?: boolean };
+      }>;
+      activePresetId?: string | null;
+    }) => Promise<{ ok: boolean }>;
   devReport?: (report: unknown) => void;
   onWindowState?: (callback: (state: WindowStatePayload) => void) => () => void;
   onCameraState?: (callback: (snapshot: CameraStateSnapshot) => void) => () => void;
+  onDeviceSwitchRequest?: (callback: (payload: { id?: string }) => void) => () => void;
+  onDevicePanelState?: (callback: (payload: { open?: boolean }) => void) => () => void;
+  onPresetPanelState?: (callback: (payload: { open?: boolean }) => void) => () => void;
   registerTestHandler?: (handler: (command: TestCommandMessage) => Promise<TestHandlerResult> | TestHandlerResult) => () => void;
 }
 

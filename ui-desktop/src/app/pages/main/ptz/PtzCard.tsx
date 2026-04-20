@@ -9,6 +9,7 @@ import { usePageStore, useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
 import { useUiSceneState } from '../../../hooks/useUiSceneStore.js';
 import { focusGroupNode, FocusGroup, focusSliderConfig } from './FocusGroup.js';
+import { DeviceListCard } from '../devices/DeviceListCard.js';
 import { PTZ_FOCUS_RANGE, PTZ_PAN_RANGE, PTZ_TILT_RANGE, PTZ_ZOOM_RANGE } from '../../../app/operations/ptzOperations.js';
 import {
   Direction,
@@ -155,10 +156,15 @@ interface AxisStepMeta {
   direction: 1 | -1;
 }
 
-export function PtzCard() {
+interface PtzCardProps {
+  showFloatingDevices?: boolean;
+}
+
+export function PtzCard({ showFloatingDevices = false }: PtzCardProps) {
   const store = usePageStore();
   const view = useViewState();
   const uiScene = useUiSceneState();
+  const electronAPI = typeof window !== 'undefined' ? window.electronAPI : undefined;
   const containerState = useContainerState('group.ptz');
   const controlsLocked = Boolean(containerState?.data?.['lockControls']);
   const zoomVal = view.camera.ptz?.zoom?.value ?? PTZ_ZOOM_RANGE.min;
@@ -167,6 +173,7 @@ export function PtzCard() {
   const tiltVal = view.camera.ptz?.tilt?.value ?? 0;
   const [activeDirection, setActiveDirection] = useState<DpadDirection | null>(null);
   const [viewMode, setViewMode] = useState<'pad' | 'wheel'>('wheel');
+  const [restartingService, setRestartingService] = useState(false);
   // Local state for simulation display to ensuring ABSOLUTE isolation from backend updates
   const [simState, setSimState] = useState<{ pan?: number; tilt?: number; zoom?: number } | null>(null);
 
@@ -174,6 +181,16 @@ export function PtzCard() {
   const tiltDisplay = (simState?.tilt !== undefined) ? Math.round(simState.tilt) : Math.round(tiltVal);
   const zoomDisplay = (simState?.zoom !== undefined) ? Math.round(simState.zoom) : Math.round(zoomVal);
   const focusDisplay = Math.round(focusVal);
+
+  const handleRestartImvtService = useCallback(async () => {
+    if (!electronAPI?.restartImvtService || restartingService) return;
+    setRestartingService(true);
+    try {
+      await electronAPI.restartImvtService();
+    } finally {
+      setRestartingService(false);
+    }
+  }, [electronAPI, restartingService]);
 
   const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const holdDirectionRef = useRef<DpadDirection | null>(null);
@@ -544,7 +561,7 @@ export function PtzCard() {
     setViewMode(prev => prev === 'pad' ? 'wheel' : 'pad');
   }, []);
 
-  const handleHome = useCallback(() => {
+  const handleHome = useCallback(async () => {
     if (isInteractionDisabled) return;
 
     stopSimulation();
@@ -566,28 +583,42 @@ export function PtzCard() {
     panTargetRef.current = 0;
     tiltTargetRef.current = 0;
 
-    setSimState({ pan: 0, tilt: 0, zoom: 0 });
+    setSimState((prev) => ({ ...(prev || {}), pan: 0, tilt: 0 , zoom: 0}));
     store.applyCameraState({
       ptz: {
         pan: { value: 0, view: '0' },
         tilt: { value: 0, view: '0' },
-        zoom: { value: 0, view: '0' },
       },
     });
 
-    void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.stop', 'ptz.stop', {});
-    void store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {});
+    try {
+      await store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.zoom', 'lens.zoomStop', {});
+    } catch {}
+    try {
+      await store.runOperation('zcam.camera.pages.main.ptz.home', 'ptz.home', 'ptz.home', {});
+    } catch {}
 
     startKeeper();
   }, [isInteractionDisabled, startKeeper, stopKeeper, stopSimulation, store]);
 
   return (
     <div className="zcam-card" data-path="zcam.camera.pages.main.ptz">
-      <div className="zcam-card-header">
-        <span className="zcam-card-title">PTZ</span>
-        <span className="zcam-card-header-right">
-          <span className="zcam-control-select" data-path="zcam.camera.pages.main.ptz.shortcutSelect" />
-        </span>
+      <div className="zcam-card-header zcam-ptz-header-with-device">
+        {showFloatingDevices ? (
+          <div className="zcam-ptz-device-dock-anchor">
+            <DeviceListCard mode="ptzFloating" />
+          </div>
+        ) : null}
+        {showFloatingDevices ? (
+          <span className="zcam-card-header-right zcam-ptz-header-right">
+            <span className="zcam-card-title">PTZ</span>
+          </span>
+        ) : (
+          <>
+            <span className="zcam-card-title">PTZ</span>
+            <span className="zcam-card-header-right zcam-ptz-header-right" />
+          </>
+        )}
       </div>
       <div className="zcam-card-body">
         <div className="zcam-ptz-layout" data-path="zcam.camera.pages.main.ptz.layout">

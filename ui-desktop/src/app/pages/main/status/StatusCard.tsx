@@ -1,7 +1,7 @@
 // StatusCard.tsx
 // 映射路径: zcam.camera.pages.main.status
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { ContainerNode } from '../../../framework/container/ContainerNode.js';
 import { useViewState } from '../../../hooks/usePageStore.js';
 import { useContainerData, useContainerState } from '../../../hooks/useContainerStore.js';
@@ -14,6 +14,22 @@ export const statusCardNode: ContainerNode = {
   selectable: true,
   children: [],
 };
+
+function useStableValue<T>(value: T, delay: number = 200): T {
+  const [stableValue, setStableValue] = useState(value);
+
+  useEffect(() => {
+    if (value === stableValue) return;
+    const handler = setTimeout(() => {
+      setStableValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay, stableValue]);
+
+  return stableValue;
+}
 
 export function StatusCard() {
   const view = useViewState();
@@ -28,9 +44,15 @@ export function StatusCard() {
 
   const wbText = cam.whiteBalance?.temperature?.view ?? '---';
   const awbMode = cam.whiteBalance?.awbEnabled ? 'AWB' : 'MANUAL';
-  const zoomVal = cam.ptz?.zoom?.value;
-  const panVal = cam.ptz?.pan?.value;
-  const tiltVal = cam.ptz?.tilt?.value;
+  
+  // Use stable values to prevent jumping due to conflict between polling (1.5s) and optimistic updates (100ms)
+  const rawZoom = cam.ptz?.zoom?.value;
+  const rawPan = cam.ptz?.pan?.value;
+  const rawTilt = cam.ptz?.tilt?.value;
+
+  const zoomVal = useStableValue(rawZoom);
+  const panVal = useStableValue(rawPan);
+  const tiltVal = useStableValue(rawTilt);
 
   const panDisplay = typeof panVal === 'number' ? Math.round(panVal) : '--';
   const tiltDisplay = typeof tiltVal === 'number' ? Math.round(tiltVal) : '--';
@@ -42,6 +64,7 @@ export function StatusCard() {
     desc: recording duration (s). If "0", not recording.
     msg: remaining time (s).
   */
+ /*
   const recordingState = useMemo(() => {
     const status = cam.recording?.status;
     const durationSec = cam.recording?.duration;
@@ -60,7 +83,7 @@ export function StatusCard() {
     }
 
     return { isRecording, durationText, remainingText };
-  }, [cam.recording?.status, cam.recording?.duration, cam.recording?.remain]);
+  }, [cam.recording?.status, cam.recording?.duration, cam.recording?.remain]);*/
 
   const containerData = useMemo(
     () => ({
@@ -74,13 +97,8 @@ export function StatusCard() {
         tilt: cam.ptz?.tilt?.value ?? null,
         zoom: cam.ptz?.zoom?.value ?? null,
       },
-      recording: {
-        isRecording: recordingState.isRecording,
-        duration: recordingState.durationText,
-        remaining: recordingState.remainingText
-      }
     }),
-    [awbMode, cam.ptz?.pan?.value, cam.ptz?.tilt?.value, cam.ptz?.zoom?.value, exposureText, wbText, recordingState],
+    [awbMode, cam.ptz?.pan?.value, cam.ptz?.tilt?.value, cam.ptz?.zoom?.value, exposureText, wbText],
   );
   useContainerData('group.status', containerData);
 
@@ -90,8 +108,8 @@ export function StatusCard() {
       data-path="zcam.camera.pages.main.status.card"
     >
       <div className="zcam-card-header">
-        <span className="zcam-card-title">状态</span>
-        <span style={{ fontSize: 10, color: '#777' }}>实时相机参数</span>
+        <span className="zcam-card-title">Status</span>
+        <span style={{ fontSize: 10, color: '#777' }}>Live Camera Parameters</span>
       </div>
       <div className="zcam-card-body">
         <div className="zcam-status-grid" data-path="zcam.camera.pages.main.status.summary">
@@ -167,32 +185,6 @@ export function StatusCard() {
             </div>
           </div>
 
-          {/* row 4: 文件 / 推流 / 录制 状态 */}
-          <div className="zcam-status-grid-row zcam-status-grid-row-wide">
-            <div
-              className="zcam-status-chip-group"
-              data-path="zcam.camera.pages.main.status.recording"
-            >
-              <span 
-                className={`zcam-chip ${recordingState.isRecording ? 'zcam-chip-active' : ''}`}
-                style={recordingState.isRecording ? { color: '#ef4444' } : undefined}
-              >
-                <span className={recordingState.isRecording ? 'zcam-chip-label-active' : ''}>REC ●</span>
-                {' '}
-                {recordingState.isRecording ? recordingState.durationText : '--:--:--'}
-              </span>
-              <span className="zcam-chip" style={{ opacity: 1 }}>剩余 {recordingState.remainingText}</span>
-            </div>
-            <div
-              className="zcam-status-chip-group zcam-status-chip-group-right"
-              data-path="zcam.camera.pages.main.status.streaming"
-            >
-              <span className="zcam-chip zcam-chip-active">
-                <span className="zcam-chip-label-active">STREAM ●</span> RTMP
-              </span>
-              <span className="zcam-chip">1080p60 / 8Mbps</span>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -215,4 +207,3 @@ function formatRemain(minutes: number): string {
   }
   return `${m}min`;
 }
-

@@ -1,6 +1,5 @@
 import React from 'react';
 import { WindowControls } from './WindowControls.js';
-import { DebugControls } from './DebugControls.js';
 import type { SceneConfig } from '../framework/ui/LayoutConfig.js';
 import { useRootScale } from '../hooks/useRootScale.js';
 
@@ -20,10 +19,9 @@ export function PageShell({ scene }: { scene: SceneConfig }) {
       <div className="zcam-header" data-path="ui.window.header">
         <div className="zcam-header-left">
           <div className="zcam-badge">Z</div>
-          <div className="zcam-title">ZCAM 相机控制</div>
+          <div className="zcam-title">Z CAM PTZ Controller</div>
         </div>
         <div className="zcam-header-right">
-          <DebugControls />
           <WindowControls />
         </div>
       </div>

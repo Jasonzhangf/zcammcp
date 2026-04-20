@@ -8,18 +8,50 @@
 
 const http = require('http');
 const { URL } = require('url');
-const WebSocket = require('ws');
+const path = require('path');
+let WebSocket = null;
+try {
+  const wsModule = require('ws');
+  WebSocket = wsModule && wsModule.default ? wsModule.default : wsModule;
+} catch {
+  const tryPaths = [
+    path.resolve(__dirname, '..', '..', 'app.asar', 'node_modules', 'ws'),
+    path.resolve(__dirname, '..', '..', 'app.asar.unpacked', 'node_modules', 'ws'),
+  ];
+  for (const p of tryPaths) {
+    try {
+      const wsModule = require(p);
+      WebSocket = wsModule && wsModule.default ? wsModule.default : wsModule;
+      break;
+    } catch {
+    }
+  }
+}
+let Bonjour = null;
+try {
+  const bonjourModule = require('bonjour-service');
+  Bonjour = bonjourModule && bonjourModule.Bonjour ? bonjourModule.Bonjour : null;
+} catch {
+  Bonjour = null;
+}
 
 const CAMERA_STATE_HOST = process.env.ZCAM_CAMERA_STATE_HOST || '127.0.0.1';
 const CAMERA_STATE_PORT = parseInt(process.env.ZCAM_CAMERA_STATE_PORT || '6292', 10);
-const CAMERA_STATE_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_INTERVAL || '0', 10);
+const CAMERA_STATE_BG_POLL_INTERVAL = parseInt(process.env.ZCAM_CAMERA_STATE_BG_INTERVAL || '0', 10);
 const UVC_BASE_URL = process.env.ZCAM_UVC_BASE || 'http://127.0.0.1:17988';
 const UVC_WS_URL = process.env.ZCAM_UVC_WS || 'ws://127.0.0.1:17988/ws';
 const WS_RECONNECT_INTERVAL = 3000;
+const DEVICE_LIST_RETRY_INTERVAL = 1200;
+const DEVICE_STALE_MS = parseInt(process.env.ZCAM_DEVICE_STALE_MS || '30000', 10);
+const BONJOUR_ENABLED = process.env.ZCAM_BONJOUR_ENABLED !== '0';
+const BONJOUR_TYPES = (process.env.ZCAM_BONJOUR_TYPES || '_http._tcp,_zcam._tcp')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean);
 
 const DEFAULT_KEYS = (
   process.env.ZCAM_CAMERA_STATE_KEYS ||
-  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,shutter_time,wb,mwb,brightness,contrast,saturation,remain,stream_status'
+  'pan,tilt,lens_zoom_pos,lens_focus_pos,focus,exposure,gain,iso,sht_operation,shutter_time,shutter_angle,wb,mwb,brightness,contrast,saturation'
 )
   .split(',')
   .map((k) => k.trim())
@@ -39,6 +71,12 @@ let pollingTimer = null;
 let wsClient = null;
 let recordingPollTimer = null;
 let wsReconnectTimer = null;
+let deviceListFetchInFlight = null;
+let lastDeviceListFetchAt = 0;
+let bonjourInstance = null;
+const bonjourBrowsers = [];
+const ipDeviceMap = new Map();
+let usbDeviceState = { activeDeviceId: null, list: [], updatedAt: null };
 
 function ensureFetch() {
   if (typeof globalThis.fetch === 'function') {
@@ -52,9 +90,43 @@ function ensureFetch() {
   }
 }
 
-const fetchImpl = ensureFetch();
+const rawFetch = ensureFetch();
+
+async function fetchImpl(url, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const startedAt = Date.now();
+  console.log(`[CameraState] -> ${method} ${url}`);
+  try {
+    const response = await rawFetch(url, options);
+    const elapsed = Date.now() - startedAt;
+    console.log(`[CameraState] <- ${method} ${url} ${response.status} (${elapsed}ms)`);
+    return response;
+  } catch (err) {
+    const elapsed = Date.now() - startedAt;
+    console.error(`[CameraState] xx ${method} ${url} (${elapsed}ms)`, err?.message || err);
+    throw err;
+  }
+}
 
 async function fetchProperty(key) {
+  if (key === 'srt' || key === 'rtmp') {
+    const url = new URL(`/ctrl/${key}`, UVC_BASE_URL);
+    url.searchParams.set('action', 'query');
+    try {
+      const res = await fetchImpl(url.toString(), { method: 'GET' });
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = { raw: text };
+      }
+      return normalizeValue(key, data);
+    } catch (err) {
+      return normalizeValue(key, { error: err.message });
+    }
+  }
+
   if (key === 'remain') {
     const url = new URL('/ctrl/rec', UVC_BASE_URL);
     url.searchParams.set('action', 'remain');
@@ -110,15 +182,153 @@ async function fetchDeviceList() {
     const data = await res.json();
 
     if (data.success) {
-      state.devices = {
-        activeDeviceId: data.activeDeviceId,
-        list: data.devices || [],
+      usbDeviceState = {
+        activeDeviceId: data.activeDeviceId || null,
+        list: Array.isArray(data.devices) ? data.devices : [],
         updatedAt: Date.now(),
       };
-      console.log('[CameraState] Device list updated:', state.devices.list.length, 'devices');
+      rebuildDeviceState(data.activeDeviceId || null);
+      console.log('[CameraState] USB device list updated:', usbDeviceState.list.length, 'devices');
     }
   } catch (err) {
     console.error('[CameraState] Failed to fetch device list:', err.message);
+  }
+}
+
+async function ensureDeviceListAvailable(force = false) {
+  const hasDevices = Array.isArray(state.devices?.list) && state.devices.list.length > 0;
+  if (hasDevices && !force) {
+    return;
+  }
+  if (deviceListFetchInFlight) {
+    return deviceListFetchInFlight;
+  }
+  const now = Date.now();
+  if (!force && now - lastDeviceListFetchAt < DEVICE_LIST_RETRY_INTERVAL) {
+    return;
+  }
+  lastDeviceListFetchAt = now;
+  deviceListFetchInFlight = fetchDeviceList()
+    .catch((err) => {
+      console.error('[CameraState] ensure device list failed:', err.message || err);
+    })
+    .finally(() => {
+      deviceListFetchInFlight = null;
+    });
+  return deviceListFetchInFlight;
+}
+
+function normalizeBonjourType(typeToken) {
+  const match = typeToken.match(/^_?([^._]+)\._(tcp|udp)$/i);
+  if (!match) return null;
+  return { type: match[1], protocol: match[2].toLowerCase() };
+}
+
+async function probeNetworkCamera(address, port) {
+  try {
+    const probeUrl = new URL(`http://${address}:${port}/ctrl/get`);
+    probeUrl.searchParams.set('k', 'iso');
+    const response = await fetchImpl(probeUrl.toString(), { method: 'GET' });
+    if (!response.ok) return false;
+    const text = await response.text();
+    if (!text) return false;
+    try {
+      const payload = JSON.parse(text);
+      if (payload && typeof payload === 'object') return true;
+    } catch {
+      if (text.includes('iso') || text.includes('value')) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function rebuildDeviceState(preferredActiveId = null) {
+  const now = Date.now();
+  const usbList = (usbDeviceState.list || []).map((item) => ({
+    id: String(item.id || ''),
+    name: String(item.name || item.id || 'USB Camera'),
+    serialPort: String(item.serialPort || ''),
+    active: false,
+    transport: 'usb',
+    controlIp: '127.0.0.1:17988',
+  })).filter((item) => item.id.length > 0);
+  const ipList = Array.from(ipDeviceMap.values())
+    .filter((item) => now - item.lastSeenAt <= DEVICE_STALE_MS)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      serialPort: '',
+      active: false,
+      transport: 'ip',
+      ip: item.ip,
+      controlIp: item.controlIp,
+    }));
+  const merged = [...usbList, ...ipList];
+  const currentActiveId = preferredActiveId || state.devices.activeDeviceId || usbDeviceState.activeDeviceId || null;
+  const hasCurrent = currentActiveId ? merged.some((item) => item.id === currentActiveId) : false;
+  const activeDeviceId = hasCurrent ? currentActiveId : (merged[0]?.id || null);
+  for (const item of merged) {
+    item.active = item.id === activeDeviceId;
+  }
+  state.devices = {
+    activeDeviceId,
+    list: merged,
+    updatedAt: now,
+  };
+}
+
+async function upsertNetworkDeviceFromBonjour(service) {
+  const addresses = Array.isArray(service?.addresses) ? service.addresses : [];
+  const ipv4 = addresses.find((addr) => typeof addr === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(addr));
+  if (!ipv4) return;
+  const port = Number(service.port) || 80;
+  if (!(await probeNetworkCamera(ipv4, port))) {
+    return;
+  }
+  const id = `ip:${ipv4}:${port}`;
+  ipDeviceMap.set(id, {
+    id,
+    ip: ipv4,
+    controlIp: `${ipv4}:${port}`,
+    name: service.name || `Network Camera ${ipv4}`,
+    lastSeenAt: Date.now(),
+  });
+  rebuildDeviceState();
+}
+
+function startBonjourDiscovery() {
+  if (!Bonjour || !BONJOUR_ENABLED) {
+    return;
+  }
+  bonjourInstance = new Bonjour();
+  for (const token of BONJOUR_TYPES) {
+    const spec = normalizeBonjourType(token);
+    if (!spec) continue;
+    const browser = bonjourInstance.find({ type: spec.type, protocol: spec.protocol }, (service) => {
+      void upsertNetworkDeviceFromBonjour(service);
+    });
+    bonjourBrowsers.push(browser);
+  }
+}
+
+function stopBonjourDiscovery() {
+  while (bonjourBrowsers.length > 0) {
+    const browser = bonjourBrowsers.pop();
+    try {
+      browser?.stop?.();
+    } catch {
+      // ignore
+    }
+  }
+  if (bonjourInstance) {
+    try {
+      bonjourInstance.destroy();
+    } catch {
+      // ignore
+    }
+    bonjourInstance = null;
   }
 }
 
@@ -281,7 +491,16 @@ function projectCameraState(values) {
       exposure: projectValue('exposure'),
       gain: projectValue('gain'),
       iso: projectValue('iso'),
-      shutter: projectValue('shutter_time'),
+      shutterOperation: projectValue('sht_operation'),
+      shutterTime: projectValue('shutter_time'),
+      shutterAngle: projectValue('shutter_angle'),
+      shutter: (() => {
+        const mode = String(values['sht_operation']?.value || 'Speed').toLowerCase();
+        if (mode === 'angle') {
+          return projectValue('shutter_angle') || projectValue('shutter_time');
+        }
+        return projectValue('shutter_time') || projectValue('shutter_angle');
+      })(),
     },
     whiteBalance: (() => {
       const wbEntry = projectValue('wb');
@@ -351,6 +570,8 @@ function projectCameraState(values) {
 
       return { status, duration, remain };
     })(),
+    srt: values['srt']?.raw || null,
+    rtmp: values['rtmp']?.raw || null,
   };
 }
 
@@ -394,7 +615,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && req.url?.startsWith('/state')) {
+      await ensureDeviceListAvailable();
       return respondJson(res, { ok: true, state: getStateSnapshot() });
+    }
+
+    if (req.method === 'GET' && req.url?.startsWith('/devices')) {
+      await ensureDeviceListAvailable();
+      return respondJson(res, { ok: true, devices: state.devices });
     }
 
     if (req.method === 'POST' && req.url === '/refresh') {
@@ -452,18 +679,25 @@ async function initialRefresh() {
 }
 
 function startPolling() {
-  if (CAMERA_STATE_POLL_INTERVAL <= 0) {
+  if (CAMERA_STATE_BG_POLL_INTERVAL <= 0) {
     console.log('[CameraState] background polling disabled (interval <= 0)');
     return;
   }
   pollingTimer = setInterval(() => {
-    refreshKeys(DEFAULT_KEYS).catch((err) => {
-      console.error('[CameraState] background refresh failed', err);
+    // refreshKeys(DEFAULT_KEYS).catch((err) => {
+    //   console.error('[CameraState] background refresh failed', err);
+    // });
+    ensureDeviceListAvailable().catch((err) => {
+      console.error('[CameraState] background device refresh failed', err);
     });
-  }, CAMERA_STATE_POLL_INTERVAL);
+  }, CAMERA_STATE_BG_POLL_INTERVAL);
 }
 
 function connectWebSocket() {
+  if (!WebSocket) {
+    console.warn('[CameraState] ws module not found, websocket sync disabled');
+    return;
+  }
   if (wsClient) {
     try {
       wsClient.close();
@@ -578,8 +812,7 @@ function handleWebSocketMessage(msg) {
 
     // Update active device ID
     if (msg.activeDeviceId) {
-      state.devices.activeDeviceId = msg.activeDeviceId;
-      state.devices.updatedAt = Date.now();
+      rebuildDeviceState(String(msg.activeDeviceId));
     }
 
     // Refresh all camera properties for the new device
@@ -611,6 +844,7 @@ function stopWebSocket() {
 }
 
 function shutdown() {
+  stopBonjourDiscovery();
   stopWebSocket();
   if (pollingTimer) {
     clearInterval(pollingTimer);
@@ -626,3 +860,4 @@ startServer();
 initialRefresh();
 startPolling();
 connectWebSocket();
+startBonjourDiscovery();

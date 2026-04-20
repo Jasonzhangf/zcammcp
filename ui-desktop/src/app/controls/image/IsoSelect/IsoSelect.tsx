@@ -54,7 +54,7 @@ export function IsoSelect({ config = defaultIsoSelectConfig }: IsoSelectProps) {
 
   return (
     <>
-      <label className="zcam-select" data-path={config.nodePath}>
+      <label className="zcam-select zcam-select-compact" data-path={config.nodePath}>
         <span className="zcam-select-label">ISO</span>
         <button
           type="button"

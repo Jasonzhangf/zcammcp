@@ -48,34 +48,40 @@ export function WindowControls() {
     pushWindowPatch({ mode: isBall ? 'main' : 'ball' });
   };
 
-  const handleLayoutToggle = () => {
-    applyWindowCommand(store, 'toggleSize');
-    sendElectronCommand('toggleSize');
-    pushWindowPatch({ layoutSize: store.state.layoutSize });
-  };
-
   const handleSwitchToPtz = () => {
     applyWindowCommand(store, 'switchToPtz');
     sendElectronCommand('switchToPtz');
     pushWindowPatch({ layoutSize: 'ptz' });
   };
 
-  const handleClose = () => {
-    if (typeof window === 'undefined') return;
-    if (window.electronAPI?.close) {
-      void window.electronAPI.close();
-    } else {
-      window.close();
-    }
+  const handleSwitchToNormal = () => {
+    if (scene.layoutSize === 'normal') return;
+    applyWindowCommand(store, 'toggleSize');
+    sendElectronCommand('toggleSize');
+    pushWindowPatch({ layoutSize: 'normal' });
   };
-
-  const layoutLabel = scene.layoutSize === 'normal' ? 'A' : scene.layoutSize === 'studio' ? 'B' : 'P';
-  const layoutTitle =
-    scene.layoutSize === 'normal' ? '布局方案 A' : scene.layoutSize === 'studio' ? '布局方案 B' : '布局方案 P（PTZ）';
-  const toggleTitle = isBall ? '恢复主窗口' : '缩小成球';
+  const isPtzLayout = scene.layoutSize === 'ptz';
+  const layoutToggleTitle = isPtzLayout ? 'Switch to A Mode' : 'Switch to C Mode';
+  const handleLayoutModeToggle = () => {
+    if (isPtzLayout) {
+      handleSwitchToNormal();
+      return;
+    }
+    handleSwitchToPtz();
+  };
+  const toggleTitle = isBall ? 'Restore Main Window' : 'Minimize to Ball';
 
   return (
     <div className="window-controls" data-path="ui.window.controls">
+      <button
+        type="button"
+        className="control-btn"
+        title={layoutToggleTitle}
+        aria-label={layoutToggleTitle}
+        onClick={handleLayoutModeToggle}
+      >
+        {isPtzLayout ? 'C' : 'A'}
+      </button>
       <button
         type="button"
         className="control-btn"
@@ -84,33 +90,6 @@ export function WindowControls() {
         onClick={handleModeToggle}
       >
         {isBall ? '▢' : '⚪'}
-      </button>
-      <button
-        type="button"
-        className="control-btn"
-        title="切换到PTZ模式"
-        aria-label="切换到PTZ模式"
-        onClick={handleSwitchToPtz}
-      >
-        C
-      </button>
-      <button
-        type="button"
-        className="control-btn"
-        title={layoutTitle}
-        aria-label={`切换${layoutTitle}`}
-        onClick={handleLayoutToggle}
-      >
-        {layoutLabel}
-      </button>
-      <button
-        type="button"
-        className="control-btn control-btn-close"
-        title="关闭应用"
-        aria-label="关闭应用"
-        onClick={handleClose}
-      >
-        ×
       </button>
     </div>
   );

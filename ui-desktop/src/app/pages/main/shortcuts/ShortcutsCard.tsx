@@ -14,7 +14,7 @@ export const shortcutsCardNode: ContainerNode = {
 };
 
 export function ShortcutsCard() {
-  const demoShortcuts = useMemo(() => ['快捷1', '快捷2', '快捷3'], []);
+  const demoShortcuts = useMemo(() => ['Shortcut 1', 'Shortcut 2', 'Shortcut 3'], []);
   const containerData = useMemo(() => ({ shortcuts: demoShortcuts }), [demoShortcuts]);
   useContainerData('group.shortcuts', containerData);
   const containerState = useContainerState('group.shortcuts');
@@ -26,9 +26,9 @@ export function ShortcutsCard() {
       data-path="zcam.camera.pages.main.shortcuts.card"
     >
       <div className="zcam-card-header">
-        <span className="zcam-card-title">快捷方式</span>
+        <span className="zcam-card-title">Shortcuts</span>
         <span className="zcam-card-header-right">
-          <span style={{ fontSize: 10, color: '#555' }}>编辑</span>
+          <span style={{ fontSize: 10, color: '#555' }}>Edit</span>
           <span
             className={`zcam-toggle ${editMode ? 'zcam-toggle-on' : 'zcam-toggle-off'}`}
             data-path="zcam.camera.pages.main.shortcuts.editToggle"
@@ -50,7 +50,7 @@ export function ShortcutsCard() {
           >
             <div className="zcam-card-header" style={{ padding: 0, border: 'none' }}>
               <span className="zcam-card-title" style={{ fontSize: 10 }}>
-                控制
+                Control
               </span>
             </div>
             <div className="zcam-card-body" style={{ gap: 4 }}>
@@ -58,13 +58,13 @@ export function ShortcutsCard() {
                 className="zcam-shortcut-btn"
                 data-path="zcam.camera.pages.main.shortcuts.addFromSelection"
               >
-                从选择区域添加
+                Add From Selection
               </button>
               <button
                 className="zcam-shortcut-btn"
                 data-path="zcam.camera.pages.main.shortcuts.deleteSelected"
               >
-                删除选中
+                Delete Selected
               </button>
             </div>
           </div>
@@ -77,21 +77,21 @@ export function ShortcutsCard() {
           >
             <div className="zcam-card-header" style={{ padding: 0, border: 'none' }}>
               <span className="zcam-card-title" style={{ fontSize: 10 }}>
-                快捷
+                Shortcuts
               </span>
             </div>
             <div
               className="zcam-shortcut-grid"
               data-path="zcam.camera.pages.main.shortcuts.buttons"
             >
-              <button className="zcam-shortcut-btn">快捷1</button>
-              <button className="zcam-shortcut-btn">快捷2</button>
-              <button className="zcam-shortcut-btn">快捷3</button>
+              <button className="zcam-shortcut-btn">Shortcut 1</button>
+              <button className="zcam-shortcut-btn">Shortcut 2</button>
+              <button className="zcam-shortcut-btn">Shortcut 3</button>
               <button
                 className="zcam-shortcut-btn zcam-shortcut-add"
                 data-path="zcam.camera.pages.main.shortcuts.addButton"
               >
-                + 添加
+                + Add
               </button>
             </div>
           </div>

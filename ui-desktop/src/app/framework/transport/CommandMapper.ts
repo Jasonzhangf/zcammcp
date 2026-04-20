@@ -31,6 +31,8 @@ export class CommandMapper {
                 return this.mapImageCommand(rest);
             case 'device':
                 return this.mapDeviceCommand(rest);
+            case 'preset':
+                return this.mapPresetCommand(rest);
             default:
                 throw new Error(`Unknown command: ${command}`);
         }
@@ -137,9 +139,30 @@ export class CommandMapper {
         // uvc set <key> <value>
         // API: /ctrl/set?{key}={value}
         if (action === 'set') {
-            const value = params[0];
+            let value = params[0];
+            let auto: string | undefined;
+            for (let i = 0; i < params.length; i += 1) {
+                const token = params[i];
+                if (token === '--value' && typeof params[i + 1] !== 'undefined') {
+                    value = params[i + 1];
+                    i += 1;
+                    continue;
+                }
+                if (token === '--auto') {
+                    auto = typeof params[i + 1] === 'undefined' ? 'true' : params[i + 1];
+                    if (typeof params[i + 1] !== 'undefined') {
+                        i += 1;
+                    }
+                }
+            }
+            if (typeof auto !== 'undefined') {
+                return {
+                    url: `/ctrl/set?${encodeURIComponent(key)}=${encodeURIComponent(auto === 'true' ? 'Auto' : 'Manual')}`,
+                    method: 'GET',
+                };
+            }
             return {
-                url: `/ctrl/set?${key}=${value}`,
+                url: `/ctrl/set?${encodeURIComponent(key)}=${encodeURIComponent(String(value ?? ''))}`,
                 method: 'GET',
             };
         }
@@ -223,5 +246,66 @@ export class CommandMapper {
         }
 
         throw new Error(`Unknown device command: ${subcommand}`);
+    }
+
+    /**
+     * 映射 preset 命令
+     * 例如:
+     * preset get-info 0
+     * preset recall 0
+     * preset set 0
+     * preset del 0
+     * preset set-name 0 "Preset 1"
+     * preset speed 0 14
+     * preset speed-unit 0 1
+     * preset thumbnail 0
+     */
+    private static mapPresetCommand(args: string[]): UvcRequest {
+        if (args.length === 0) {
+            throw new Error('Preset command requires action');
+        }
+        const [action, ...params] = args;
+        const index = Number.parseInt(String(params[0] ?? '0'), 10);
+        const safeIndex = Number.isFinite(index) && index >= 0 ? index : 0;
+        const no = String(safeIndex).padStart(3, '0');
+
+        if (action === 'get-info') {
+            return { url: `/ctrl/preset?action=get_info&index=${safeIndex}`, method: 'GET' };
+        }
+        if (action === 'recall') {
+            return { url: `/ctrl/preset?action=recall&index=${safeIndex}`, method: 'GET' };
+        }
+        if (action === 'set') {
+            return { url: `/ctrl/preset?action=set&index=${safeIndex}`, method: 'GET' };
+        }
+        if (action === 'del') {
+            return { url: `/ctrl/preset?action=del&index=${safeIndex}`, method: 'GET' };
+        }
+        if (action === 'set-name') {
+            const rawName = String(params[1] ?? '').trim();
+            if (!rawName) throw new Error('Preset name required');
+            return {
+                url: `/ctrl/preset?action=set_name&index=${safeIndex}&new_name=${encodeURIComponent(rawName)}`,
+                method: 'GET',
+            };
+        }
+        if (action === 'speed') {
+            const speed = Number.parseInt(String(params[1] ?? ''), 10);
+            if (!Number.isFinite(speed) || speed < 1 || speed > 60) throw new Error('Invalid preset speed');
+            return { url: `/ctrl/preset?action=preset_speed&index=${safeIndex}&preset_speed=${speed}`, method: 'GET' };
+        }
+        if (action === 'speed-unit') {
+            const unitValue = Number.parseInt(String(params[1] ?? ''), 10);
+            if (!Number.isFinite(unitValue)) throw new Error('Invalid preset speed unit');
+            return {
+                url: `/ctrl/preset?action=preset_speed&index=${safeIndex}&preset_speed_unit=${unitValue}`,
+                method: 'GET',
+            };
+        }
+        if (action === 'thumbnail') {
+            return { url: `/app_data/preset/thm_${no}.jpg?act=thm`, method: 'GET' };
+        }
+
+        throw new Error(`Unknown preset action: ${action}`);
     }
 }

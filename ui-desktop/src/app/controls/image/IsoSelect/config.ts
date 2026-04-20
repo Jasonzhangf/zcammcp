@@ -22,7 +22,7 @@ export const defaultIsoSelectConfig: IsoSelectConfig = {
   nodePath: 'zcam.camera.pages.main.exposure.iso',
   kind: 'exposure.iso',
   operationId: 'exposure.setIso',
-  title: 'ISO 感光度',
+  title: 'ISO',
   // Dynamic options from state, fallback to defaults if not ready
   // Logic moved to component or we can try to read dynamic here?
   // Config definition allows static options. We need to handle dynamic options in the Component.

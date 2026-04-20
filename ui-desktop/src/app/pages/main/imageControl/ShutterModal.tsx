@@ -16,19 +16,20 @@ interface ShutterModalProps {
   open: boolean;
   current?: string | number;
   options?: OptionItem[];
+  title?: string;
   anchorRef?: React.RefObject<HTMLElement>;
   onClose: () => void;
   onSelect: (value: string | number) => void;
 }
 
-export const ShutterModal: React.FC<ShutterModalProps> = ({ open, current, options, anchorRef, onClose, onSelect }) => {
+export const ShutterModal: React.FC<ShutterModalProps> = ({ open, current, options, title, anchorRef, onClose, onSelect }) => {
   // If options passed, use them. Otherwise assume legacy "1/v" numbers.
   const displayOptions: OptionItem[] = options?.length
     ? options
     : SHUTTER_OPTIONS.map(v => ({ label: `1/${v}`, value: v })); // Legacy behavior: value is int, label is 1/v
 
   return (
-    <Modal open={open} title="快门速度" anchorRef={anchorRef} onClose={onClose}>
+    <Modal open={open} title={title || 'Shutter Speed'} anchorRef={anchorRef} onClose={onClose}>
       <div className="zcam-option-grid">
         {displayOptions.map((opt) => (
           <button
@@ -46,7 +47,7 @@ export const ShutterModal: React.FC<ShutterModalProps> = ({ open, current, optio
       </div>
       <div style={{ marginTop: 8, textAlign: 'center' }}>
         <button type="button" className="zcam-modal-btn" onClick={onClose}>
-          取消
+          Cancel
         </button>
       </div>
     </Modal>
